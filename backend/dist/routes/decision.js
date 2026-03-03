@@ -7,7 +7,6 @@ const portfolioDecisionEngine_1 = require("../services/portfolioDecisionEngine")
 const auth_1 = require("../middleware/auth");
 const tenant_1 = require("../middleware/tenant");
 const router = (0, express_1.Router)();
-// Enforce authentication + tenant isolation
 router.use(auth_1.authenticateJWT, tenant_1.enforceTenantScope);
 // ============================================================
 // POST /api/decision/run
@@ -19,36 +18,30 @@ router.post("/run", async (req, res) => {
         if (!opportunityId || !clientCompanyId) {
             return res.status(400).json({
                 success: false,
-                error: "opportunityId and clientCompanyId are required"
+                error: "opportunityId and clientCompanyId are required",
             });
         }
-        // Ensure opportunity belongs to tenant
         const opportunity = await database_1.prisma.opportunity.findFirst({
-            where: {
-                id: opportunityId,
-                consultingFirmId
-            }
+            where: { id: opportunityId, consultingFirmId },
         });
         if (!opportunity) {
-            return res.status(404).json({
-                success: false,
-                error: "Opportunity not found"
-            });
+            return res.status(404).json({ success: false, error: "Opportunity not found" });
         }
         const decision = await (0, decisionEngine_1.evaluateBidDecision)(opportunityId, clientCompanyId);
-        // ----------------------------------------------------------
-        // Executive Projection Layer
-        // ----------------------------------------------------------
-        const winProbabilityPercent = Math.round(decision.winProbability * 100);
-        const roiMultiple = decision.roiRatio.toFixed(1) + "x";
+        const winProb = decision.winProbability ?? 0;
+        const roiRatio = decision.roiRatio ?? 0;
+        const riskScore = decision.riskScore ?? 0;
+        const winProbabilityPercent = Math.round(winProb * 100);
+        const roiMultiple = roiRatio.toFixed(1) + "x";
         let riskLevel = "LOW";
-        if (decision.riskScore >= 20)
+        if (riskScore >= 20)
             riskLevel = "HIGH";
-        else if (decision.riskScore >= 10)
+        else if (riskScore >= 10)
             riskLevel = "MODERATE";
-        const decisionScore = Math.min(Math.round((decision.winProbability * 0.4 +
-            Math.min(decision.roiRatio / 20, 1) * 0.3 +
-            (1 - decision.riskScore / 100) * 0.3) * 100), 99);
+        const decisionScore = Math.min(Math.round((winProb * 0.4 +
+            Math.min(roiRatio / 20, 1) * 0.3 +
+            (1 - riskScore / 100) * 0.3) *
+            100), 99);
         let deadlineSummary = null;
         if (decision.explanationJson &&
             typeof decision.explanationJson === "object" &&
@@ -68,19 +61,16 @@ router.post("/run", async (req, res) => {
                 roiMultiple,
                 riskLevel,
                 complianceStatus: decision.complianceStatus,
-                recommendation: decision.recommendation.replace("_", " "),
+                recommendation: (decision.recommendation ?? "NO_BID").replace("_", " "),
                 expectedRevenue: decision.expectedRevenue,
                 netExpectedValue: decision.netExpectedValue,
-                deadlineSummary
-            }
+                deadlineSummary,
+            },
         });
     }
     catch (error) {
         console.error("Decision engine error:", error.message);
-        return res.status(500).json({
-            success: false,
-            error: "Decision evaluation failed"
-        });
+        return res.status(500).json({ success: false, error: "Decision evaluation failed" });
     }
 });
 // ============================================================
@@ -90,17 +80,11 @@ router.post("/run-all", async (req, res) => {
     try {
         const consultingFirmId = (0, tenant_1.getTenantId)(req);
         const results = await (0, portfolioDecisionEngine_1.runPortfolioEvaluation)(consultingFirmId);
-        return res.status(200).json({
-            success: true,
-            data: results
-        });
+        return res.status(200).json({ success: true, data: results });
     }
     catch (error) {
         console.error("Portfolio decision error:", error.message);
-        return res.status(500).json({
-            success: false,
-            error: "Portfolio evaluation failed"
-        });
+        return res.status(500).json({ success: false, error: "Portfolio evaluation failed" });
     }
 });
 // ============================================================
@@ -110,11 +94,7 @@ router.get("/", async (req, res) => {
     try {
         const consultingFirmId = (0, tenant_1.getTenantId)(req);
         const { clientCompanyId, recommendation, complianceStatus, sortBy = "createdAt", order = "desc" } = req.query;
-        const where = {
-            opportunity: {
-                consultingFirmId
-            }
-        };
+        const where = { opportunity: { consultingFirmId } };
         if (clientCompanyId)
             where.clientCompanyId = String(clientCompanyId);
         if (recommendation)
@@ -123,26 +103,14 @@ router.get("/", async (req, res) => {
             where.complianceStatus = String(complianceStatus);
         const decisions = await database_1.prisma.bidDecision.findMany({
             where,
-            orderBy: {
-                [String(sortBy)]: order === "asc" ? "asc" : "desc"
-            },
-            include: {
-                opportunity: true,
-                clientCompany: true
-            }
+            orderBy: { [String(sortBy)]: order === "asc" ? "asc" : "desc" },
+            include: { opportunity: true, clientCompany: true },
         });
-        return res.status(200).json({
-            success: true,
-            count: decisions.length,
-            data: decisions
-        });
+        return res.status(200).json({ success: true, count: decisions.length, data: decisions });
     }
     catch (error) {
         console.error("Decision fetch error:", error.message);
-        return res.status(500).json({
-            success: false,
-            error: "Failed to fetch decisions"
-        });
+        return res.status(500).json({ success: false, error: "Failed to fetch decisions" });
     }
 });
 // ============================================================
@@ -152,11 +120,7 @@ router.get("/metrics", async (req, res) => {
     try {
         const consultingFirmId = (0, tenant_1.getTenantId)(req);
         const decisions = await database_1.prisma.bidDecision.findMany({
-            where: {
-                opportunity: {
-                    consultingFirmId
-                }
-            }
+            where: { opportunity: { consultingFirmId } },
         });
         if (decisions.length === 0) {
             return res.status(200).json({
@@ -169,18 +133,18 @@ router.get("/metrics", async (req, res) => {
                     averageWinProbability: 0,
                     averageROI: 0,
                     totalExpectedRevenue: 0,
-                    totalNetExpectedValue: 0
-                }
+                    totalNetExpectedValue: 0,
+                },
             });
         }
         const totalEvaluated = decisions.length;
-        const totalPrime = decisions.filter(d => d.recommendation === "BID_PRIME").length;
-        const totalSub = decisions.filter(d => d.recommendation === "BID_SUB").length;
-        const totalNoBid = decisions.filter(d => d.recommendation === "NO_BID").length;
-        const averageWinProbability = decisions.reduce((sum, d) => sum + d.winProbability, 0) / totalEvaluated;
-        const averageROI = decisions.reduce((sum, d) => sum + d.roiRatio, 0) / totalEvaluated;
-        const totalExpectedRevenue = decisions.reduce((sum, d) => sum + d.expectedRevenue, 0);
-        const totalNetExpectedValue = decisions.reduce((sum, d) => sum + d.netExpectedValue, 0);
+        const totalPrime = decisions.filter((d) => d.recommendation === "BID_PRIME").length;
+        const totalSub = decisions.filter((d) => d.recommendation === "BID_SUB").length;
+        const totalNoBid = decisions.filter((d) => d.recommendation === "NO_BID").length;
+        const averageWinProbability = decisions.reduce((sum, d) => sum + (d.winProbability ?? 0), 0) / totalEvaluated;
+        const averageROI = decisions.reduce((sum, d) => sum + (d.roiRatio ?? 0), 0) / totalEvaluated;
+        const totalExpectedRevenue = decisions.reduce((sum, d) => sum + (d.expectedRevenue ?? 0), 0);
+        const totalNetExpectedValue = decisions.reduce((sum, d) => sum + (d.netExpectedValue ?? 0), 0);
         return res.status(200).json({
             success: true,
             data: {
@@ -191,16 +155,13 @@ router.get("/metrics", async (req, res) => {
                 averageWinProbability: Number((averageWinProbability * 100).toFixed(1)) + "%",
                 averageROI: Number(averageROI.toFixed(2)) + "x",
                 totalExpectedRevenue,
-                totalNetExpectedValue
-            }
+                totalNetExpectedValue,
+            },
         });
     }
     catch (error) {
         console.error("Decision metrics error:", error.message);
-        return res.status(500).json({
-            success: false,
-            error: "Failed to compute metrics"
-        });
+        return res.status(500).json({ success: false, error: "Failed to compute metrics" });
     }
 });
 exports.default = router;

@@ -12,19 +12,12 @@ const logger_1 = require("../utils/logger");
 const errors_1 = require("../utils/errors");
 /**
  * Determines whether a submission was on time.
- *
- * wasOnTime = submittedAt ≤ responseDeadline
  */
 function evaluateOnTime(submittedAt, responseDeadline) {
     return submittedAt.getTime() <= responseDeadline.getTime();
 }
 /**
  * Calculates penalty amount based on firm configuration.
- *
- * Priority:
- * 1. Flat late fee (if configured)
- * 2. Percentage of estimated value (if flat fee not set)
- * 3. Zero (if neither configured)
  */
 function calculatePenalty(config, estimatedValue) {
     if (config.flatLateFee != null && config.flatLateFee > 0) {
@@ -50,27 +43,29 @@ function calculatePenalty(config, estimatedValue) {
 }
 /**
  * Records a penalty in the database.
- * Called within a transaction alongside the submission record creation.
  */
 async function enforceAndLogPenalty(params) {
     try {
-        // Fetch firm penalty configuration
         const firm = await database_1.prisma.consultingFirm.findUnique({
             where: { id: params.consultingFirmId },
             select: { flatLateFee: true, penaltyPercent: true },
         });
         if (!firm)
             throw new errors_1.AppError('Consulting firm not found', 404);
-        const calc = calculatePenalty(firm, params.estimatedValue);
+        // Convert Prisma Decimal to number safely
+        const config = {
+            flatLateFee: firm.flatLateFee != null ? Number(firm.flatLateFee) : null,
+            penaltyPercent: firm.penaltyPercent != null ? Number(firm.penaltyPercent) : null,
+        };
+        const calc = calculatePenalty(config, params.estimatedValue ?? null);
         if (calc.amount > 0) {
             await database_1.prisma.financialPenalty.create({
                 data: {
                     consultingFirmId: params.consultingFirmId,
                     clientCompanyId: params.clientCompanyId,
                     submissionRecordId: params.submissionRecordId,
-                    penaltyType: calc.penaltyType,
                     amount: calc.amount,
-                    calculationBasis: calc.calculationBasis,
+                    reason: calc.calculationBasis,
                 },
             });
             logger_1.logger.info('Penalty logged', {

@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 // =============================================================
-// Opportunities Routes (Production Version)
+// Opportunities Routes - Stable Demo Version
 // =============================================================
 const express_1 = require("express");
 const zod_1 = require("zod");
@@ -18,24 +18,8 @@ const logger_1 = require("../utils/logger");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticateJWT, tenant_1.enforceTenantScope);
 // -------------------------------------------------------------
-// Validation Schemas
+// INGEST VALIDATION
 // -------------------------------------------------------------
-const SearchSchema = zod_1.z.object({
-    naicsCode: zod_1.z.string().optional(),
-    agency: zod_1.z.string().optional(),
-    marketCategory: zod_1.z.string().optional(),
-    setAsideType: zod_1.z.string().optional(),
-    estimatedValueMin: zod_1.z.coerce.number().optional(),
-    estimatedValueMax: zod_1.z.coerce.number().optional(),
-    daysUntilDeadline: zod_1.z.coerce.number().int().positive().optional(),
-    probabilityMin: zod_1.z.coerce.number().min(0).max(1).optional(),
-    probabilityMax: zod_1.z.coerce.number().min(0).max(1).optional(),
-    status: zod_1.z.enum(["ACTIVE", "AWARDED", "CANCELLED", "ARCHIVED"]).optional().default("ACTIVE"),
-    sortBy: zod_1.z.enum(["deadline", "probability", "expectedValue", "createdAt"]).optional().default("deadline"),
-    sortOrder: zod_1.z.enum(["asc", "desc"]).optional().default("asc"),
-    page: zod_1.z.coerce.number().int().positive().optional().default(1),
-    limit: zod_1.z.coerce.number().int().min(1).max(100).optional().default(25),
-});
 const IngestSchema = zod_1.z.object({
     naicsCode: zod_1.z.string().optional(),
     agency: zod_1.z.string().optional(),
@@ -43,57 +27,47 @@ const IngestSchema = zod_1.z.object({
     limit: zod_1.z.number().int().min(1).max(100).optional().default(25),
 });
 // -------------------------------------------------------------
-// GET /api/opportunities
+// GET ALL OPPORTUNITIES
 // -------------------------------------------------------------
 router.get("/", async (req, res, next) => {
     try {
         const consultingFirmId = (0, tenant_1.getTenantId)(req);
-        const params = SearchSchema.parse(req.query);
-        const { page, limit, sortBy, sortOrder } = params;
-        const skip = (page - 1) * limit;
-        const where = { consultingFirmId, status: params.status };
-        if (params.naicsCode)
-            where.naicsCode = { contains: params.naicsCode };
-        if (params.agency)
-            where.agency = { contains: params.agency, mode: "insensitive" };
-        if (params.marketCategory)
-            where.marketCategory = params.marketCategory;
-        if (params.setAsideType)
-            where.setAsideType = params.setAsideType;
-        if (params.probabilityMin != null || params.probabilityMax != null) {
-            where.probabilityScore = {};
-            if (params.probabilityMin != null)
-                where.probabilityScore.gte = params.probabilityMin;
-            if (params.probabilityMax != null)
-                where.probabilityScore.lte = params.probabilityMax;
-        }
-        const orderByMap = {
-            deadline: { responseDeadline: sortOrder },
-            probability: { probabilityScore: sortOrder },
-            expectedValue: { expectedValue: sortOrder },
-            createdAt: { createdAt: sortOrder },
-        };
-        const [opportunities, total] = await Promise.all([
-            database_1.prisma.opportunity.findMany({
-                where,
-                orderBy: orderByMap[sortBy],
-                skip,
-                take: limit,
-            }),
-            database_1.prisma.opportunity.count({ where }),
-        ]);
+        const opportunities = await database_1.prisma.opportunity.findMany({
+            where: { consultingFirmId },
+            orderBy: { responseDeadline: "asc" },
+        });
         const enriched = opportunities.map((opp) => ({
             ...opp,
-            deadline: (0, deadlinePriority_1.classifyDeadline)(opp.responseDeadline),
+            deadlineClassification: (0, deadlinePriority_1.classifyDeadline)(opp.responseDeadline),
         }));
+        res.json({ success: true, data: enriched });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+// -------------------------------------------------------------
+// GET SINGLE OPPORTUNITY
+// -------------------------------------------------------------
+router.get("/:id", async (req, res, next) => {
+    try {
+        const consultingFirmId = (0, tenant_1.getTenantId)(req);
+        const { id } = req.params;
+        const opportunity = await database_1.prisma.opportunity.findFirst({
+            where: { id, consultingFirmId },
+            include: {
+                documents: true,
+                amendments: true,
+                awardHistory: true,
+            },
+        });
+        if (!opportunity)
+            throw new errors_1.NotFoundError("Opportunity not found");
         res.json({
             success: true,
-            data: enriched,
-            meta: {
-                page,
-                limit,
-                total,
-                totalPages: Math.ceil(total / limit),
+            data: {
+                ...opportunity,
+                deadlineClassification: (0, deadlinePriority_1.classifyDeadline)(opportunity.responseDeadline),
             },
         });
     }
@@ -102,20 +76,16 @@ router.get("/", async (req, res, next) => {
     }
 });
 // -------------------------------------------------------------
-// POST /api/opportunities/ingest
+// INGEST
 // -------------------------------------------------------------
 router.post("/ingest", async (req, res, next) => {
     try {
         const consultingFirmId = (0, tenant_1.getTenantId)(req);
         const params = IngestSchema.parse(req.body);
-        logger_1.logger.info("SAM.gov ingestion triggered", { consultingFirmId, params });
+        logger_1.logger.info("Ingestion triggered", { consultingFirmId, params });
         const stats = await samApi_1.samApiService.searchAndIngest(params, consultingFirmId);
         const unscoredOpps = await database_1.prisma.opportunity.findMany({
-            where: {
-                consultingFirmId,
-                status: "ACTIVE",
-                isScored: false,
-            },
+            where: { consultingFirmId, isScored: false },
             select: { id: true },
             take: 200,
         });
@@ -135,7 +105,6 @@ router.post("/ingest", async (req, res, next) => {
             data: {
                 ...stats,
                 scoringJobsQueued: unscoredOpps.length,
-                portfolioDecisionEvaluated: true,
             },
         });
     }
@@ -144,36 +113,7 @@ router.post("/ingest", async (req, res, next) => {
     }
 });
 // -------------------------------------------------------------
-// GET /api/opportunities/:id
-// -------------------------------------------------------------
-router.get("/:id", async (req, res, next) => {
-    try {
-        const consultingFirmId = (0, tenant_1.getTenantId)(req);
-        const { id } = req.params;
-        const opportunity = await database_1.prisma.opportunity.findFirst({
-            where: { id, consultingFirmId },
-            include: {
-                documents: true,
-            },
-        });
-        if (!opportunity) {
-            throw new errors_1.NotFoundError("Opportunity not found");
-        }
-        const enriched = {
-            ...opportunity,
-            deadlineClassification: (0, deadlinePriority_1.classifyDeadline)(opportunity.responseDeadline),
-        };
-        res.json({
-            success: true,
-            data: enriched,
-        });
-    }
-    catch (err) {
-        next(err);
-    }
-});
-// -------------------------------------------------------------
-// POST /api/opportunities/:id/documents
+// DOCUMENT UPLOAD
 // -------------------------------------------------------------
 router.post("/:id/documents", upload_1.upload.single("file"), async (req, res, next) => {
     try {
@@ -182,12 +122,10 @@ router.post("/:id/documents", upload_1.upload.single("file"), async (req, res, n
         const opportunity = await database_1.prisma.opportunity.findFirst({
             where: { id, consultingFirmId },
         });
-        if (!opportunity) {
+        if (!opportunity)
             throw new errors_1.NotFoundError("Opportunity not found");
-        }
-        if (!req.file) {
-            throw new errors_1.ValidationError("File is required");
-        }
+        if (!req.file)
+            throw new errors_1.ValidationError("File required");
         const document = await database_1.prisma.opportunityDocument.create({
             data: {
                 opportunityId: id,
@@ -197,10 +135,7 @@ router.post("/:id/documents", upload_1.upload.single("file"), async (req, res, n
                 isAmendment: req.body.isAmendment === "true",
             },
         });
-        res.json({
-            success: true,
-            data: document,
-        });
+        res.json({ success: true, data: document });
     }
     catch (err) {
         next(err);

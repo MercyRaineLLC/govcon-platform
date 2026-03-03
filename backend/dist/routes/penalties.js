@@ -2,15 +2,10 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 // =============================================================
 // Financial Penalties Routes
-// GET  /api/penalties              - List penalties for tenant
-// GET  /api/penalties/:id          - Get single penalty
-// PUT  /api/penalties/:id/pay      - Mark penalty as paid
-// GET  /api/penalties/summary      - Aggregate summary
 // =============================================================
 const express_1 = require("express");
 const database_1 = require("../config/database");
 const auth_1 = require("../middleware/auth");
-const auth_2 = require("../middleware/auth");
 const tenant_1 = require("../middleware/tenant");
 const errors_1 = require("../utils/errors");
 const router = (0, express_1.Router)();
@@ -40,7 +35,7 @@ router.get('/', async (req, res, next) => {
                         },
                     },
                 },
-                orderBy: { createdAt: 'desc' },
+                orderBy: { appliedAt: 'desc' },
                 skip: (pageNum - 1) * limitNum,
                 take: limitNum,
             }),
@@ -58,7 +53,6 @@ router.get('/', async (req, res, next) => {
 });
 /**
  * GET /api/penalties/summary
- * Aggregate penalty summary for tenant dashboard.
  */
 router.get('/summary', async (req, res, next) => {
     try {
@@ -85,15 +79,15 @@ router.get('/summary', async (req, res, next) => {
             data: {
                 total: {
                     count: total._count,
-                    amount: total._sum.amount || 0,
+                    amount: total._sum?.amount ?? 0,
                 },
                 paid: {
                     count: paid._count,
-                    amount: paid._sum.amount || 0,
+                    amount: paid._sum?.amount ?? 0,
                 },
                 outstanding: {
                     count: unpaid._count,
-                    amount: unpaid._sum.amount || 0,
+                    amount: unpaid._sum?.amount ?? 0,
                 },
             },
         });
@@ -125,9 +119,8 @@ router.get('/:id', async (req, res, next) => {
 });
 /**
  * PUT /api/penalties/:id/pay
- * Admin-only: Mark penalty as paid.
  */
-router.put('/:id/pay', (0, auth_2.requireRole)('ADMIN'), async (req, res, next) => {
+router.put('/:id/pay', (0, auth_1.requireRole)('ADMIN'), async (req, res, next) => {
     try {
         const consultingFirmId = (0, tenant_1.getTenantId)(req);
         const penalty = await database_1.prisma.financialPenalty.findFirst({

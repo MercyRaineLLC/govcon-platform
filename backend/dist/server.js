@@ -31,6 +31,10 @@ const penalties_1 = __importDefault(require("./routes/penalties"));
 const firm_1 = __importDefault(require("./routes/firm"));
 const decision_1 = __importDefault(require("./routes/decision"));
 const jobs_1 = __importDefault(require("./routes/jobs"));
+const documents_1 = __importDefault(require("./routes/documents"));
+const docRequirements_1 = __importDefault(require("./routes/docRequirements"));
+const clientPortal_1 = __importDefault(require("./routes/clientPortal"));
+const rewards_1 = __importDefault(require("./routes/rewards"));
 async function bootstrap() {
     const app = (0, express_1.default)();
     // -------------------------------------------------------------
@@ -67,6 +71,10 @@ async function bootstrap() {
         },
     }));
     // -------------------------------------------------------------
+    // Static uploads
+    // -------------------------------------------------------------
+    app.use('/uploads', express_1.default.static(path_1.default.join(process.cwd(), 'uploads')));
+    // -------------------------------------------------------------
     // Parsing Middleware
     // -------------------------------------------------------------
     app.use(express_1.default.json({ limit: '10mb' }));
@@ -101,6 +109,10 @@ async function bootstrap() {
     apiRouter.use('/firm', firm_1.default);
     apiRouter.use('/decision', decision_1.default);
     apiRouter.use('/jobs', jobs_1.default);
+    apiRouter.use('/documents', documents_1.default);
+    apiRouter.use('/doc-requirements', docRequirements_1.default);
+    apiRouter.use('/client-portal', clientPortal_1.default);
+    apiRouter.use('/rewards', rewards_1.default);
     app.use('/api', apiRouter);
     // -------------------------------------------------------------
     // Error Handling

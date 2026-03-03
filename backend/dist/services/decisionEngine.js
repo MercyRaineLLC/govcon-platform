@@ -5,15 +5,10 @@ const database_1 = require("../config/database");
 async function evaluateBidDecision(opportunityId, clientCompanyId) {
     const opportunity = await database_1.prisma.opportunity.findUnique({
         where: { id: opportunityId },
-        include: {
-            pscCodes: {
-                include: { psc: true }
-            }
-        }
     });
     const client = await database_1.prisma.clientCompany.findUnique({
         where: { id: clientCompanyId },
-        include: { performanceStats: true }
+        include: { performanceStats: true },
     });
     if (!opportunity || !client) {
         throw new Error('Invalid opportunity or client');
@@ -53,41 +48,12 @@ async function evaluateBidDecision(opportunityId, clientCompanyId) {
         triggeredFlags.push('Moderate time compression risk (<20 days)');
     }
     // ------------------------------------------------------------
-    // 2. PSC Matching
+    // 2. PSC Matching (using preferredPscCodes array directly)
     // ------------------------------------------------------------
-    const opportunityPscCodes = opportunity.pscCodes.map((link) => link.psc.code);
-    const pscMatch = client.preferredPscCodes?.some(code => opportunityPscCodes.includes(code)) ?? false;
-    if (pscMatch) {
-        triggeredFlags.push('PSC alignment match');
-    }
+    const pscMatch = false; // PSC density model removed — no opportunityPSC table in schema
+    // Future: add pscCodes String[] to Opportunity and match against client.preferredPscCodes
     // ------------------------------------------------------------
-    // 3. PSC Density Modeling (NEW)
-    // ------------------------------------------------------------
-    let densityPenalty = 0;
-    if (opportunityPscCodes.length > 0) {
-        const activeCount = await database_1.prisma.opportunityPSC.count({
-            where: {
-                psc: {
-                    code: { in: opportunityPscCodes }
-                },
-                opportunity: {
-                    status: 'ACTIVE'
-                }
-            }
-        });
-        if (activeCount > 15) {
-            densityPenalty = 0.08;
-            riskScore += 10;
-            triggeredFlags.push('High PSC density in active pipeline');
-        }
-        else if (activeCount > 8) {
-            densityPenalty = 0.04;
-            riskScore += 5;
-            triggeredFlags.push('Moderate PSC density in active pipeline');
-        }
-    }
-    // ------------------------------------------------------------
-    // 4. Base Win Probability Model
+    // 3. Base Win Probability Model
     // ------------------------------------------------------------
     const baseScore = 0.25;
     const naicsScore = naicsMatch ? 0.2 : 0;
@@ -95,15 +61,9 @@ async function evaluateBidDecision(opportunityId, clientCompanyId) {
     const setAsideScore = opportunity.setAsideType !== 'NONE' ? 0.15 : 0.05;
     const timeScore = daysToDeadline > 20 ? 0.15 : 0.05;
     const marketScore = 0.1;
-    let winProbability = Math.min(baseScore +
-        naicsScore +
-        pscScore +
-        setAsideScore +
-        timeScore +
-        marketScore -
-        densityPenalty, 0.9);
+    let winProbability = Math.min(baseScore + naicsScore + pscScore + setAsideScore + timeScore + marketScore, 0.9);
     // ------------------------------------------------------------
-    // 5. Performance Weighting
+    // 4. Performance Weighting
     // ------------------------------------------------------------
     const stats = client.performanceStats;
     if (stats && stats.totalSubmissions > 0) {
@@ -115,8 +75,8 @@ async function evaluateBidDecision(opportunityId, clientCompanyId) {
             ? Math.min(stats.totalPenalties / 100000, 0.2)
             : 0;
         const experienceBoost = Math.min(stats.totalSubmissions / 50, 0.15);
-        const performanceIndex = (completionFactor * 0.5) +
-            ((1 - lateRatio) * 0.3) +
+        const performanceIndex = completionFactor * 0.5 +
+            (1 - lateRatio) * 0.3 +
             experienceBoost -
             penaltyFactor;
         const multiplier = Math.min(Math.max(0.6 + performanceIndex, 0.6), 1.15);
@@ -124,7 +84,7 @@ async function evaluateBidDecision(opportunityId, clientCompanyId) {
         triggeredFlags.push('Performance-weighted scoring applied');
     }
     // ------------------------------------------------------------
-    // 6. Financial Modeling
+    // 5. Financial Modeling
     // ------------------------------------------------------------
     const estimatedValue = opportunity.estimatedValue ?? 100000;
     const proposalCostEstimate = estimatedValue * 0.05;
@@ -132,7 +92,7 @@ async function evaluateBidDecision(opportunityId, clientCompanyId) {
     const netExpectedValue = expectedValue - proposalCostEstimate;
     const roiRatio = netExpectedValue / proposalCostEstimate;
     // ------------------------------------------------------------
-    // 7. Recommendation Logic
+    // 6. Recommendation Logic
     // ------------------------------------------------------------
     let recommendation = 'NO_BID';
     if (complianceStatus === 'FAIL') {
@@ -145,17 +105,20 @@ async function evaluateBidDecision(opportunityId, clientCompanyId) {
         recommendation = 'BID_SUB';
     }
     // ------------------------------------------------------------
-    // 8. Persist Decision
+    // 7. Persist Decision
     // ------------------------------------------------------------
+    // consultingFirmId required — look it up from opportunity
+    const consultingFirmId = opportunity.consultingFirmId;
     const decision = await database_1.prisma.bidDecision.upsert({
         where: {
             opportunityId_clientCompanyId: {
                 opportunityId,
-                clientCompanyId
-            }
+                clientCompanyId,
+            },
         },
         update: {
             winProbability,
+            recommendation,
             expectedRevenue: estimatedValue,
             proposalCostEstimate,
             expectedValue,
@@ -163,19 +126,20 @@ async function evaluateBidDecision(opportunityId, clientCompanyId) {
             roiRatio,
             complianceStatus,
             riskScore,
-            recommendation,
             explanationJson: {
                 triggeredFlags,
                 requiredActions,
                 daysToDeadline,
                 naicsMatch,
-                pscMatch
-            }
+                pscMatch,
+            },
         },
         create: {
+            consultingFirmId,
             opportunityId,
             clientCompanyId,
             winProbability,
+            recommendation,
             expectedRevenue: estimatedValue,
             proposalCostEstimate,
             expectedValue,
@@ -183,15 +147,14 @@ async function evaluateBidDecision(opportunityId, clientCompanyId) {
             roiRatio,
             complianceStatus,
             riskScore,
-            recommendation,
             explanationJson: {
                 triggeredFlags,
                 requiredActions,
                 daysToDeadline,
                 naicsMatch,
-                pscMatch
-            }
-        }
+                pscMatch,
+            },
+        },
     });
     return decision;
 }
