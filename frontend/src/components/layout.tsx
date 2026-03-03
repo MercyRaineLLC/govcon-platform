@@ -9,12 +9,15 @@ import {
   Settings,
   LogOut,
   Shield,
+  ClipboardList,
+  ExternalLink,
 } from 'lucide-react';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/opportunities', icon: Search, label: 'Opportunities' },
   { to: '/clients', icon: Users, label: 'Clients' },
+  { to: '/doc-requirements', icon: ClipboardList, label: 'Doc Requirements' },
   { to: '/submissions', icon: FileText, label: 'Submissions' },
   { to: '/penalties', icon: DollarSign, label: 'Penalties' },
   { to: '/settings', icon: Settings, label: 'Settings', adminOnly: true },
@@ -67,6 +70,19 @@ export function Layout() {
             );
           })}
         </nav>
+
+        {/* Client Portal link */}
+        <div className="px-4 pb-2">
+          <a
+            href="/client-login"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 px-3 py-2 text-xs text-gray-500 hover:text-blue-400 w-full rounded-md hover:bg-gray-800 transition-colors"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+            Client Portal
+          </a>
+        </div>
 
         {/* Logout */}
         <div className="p-4 border-t border-gray-800">

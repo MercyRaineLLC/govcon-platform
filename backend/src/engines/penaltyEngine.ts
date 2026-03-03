@@ -87,8 +87,7 @@ export async function enforceAndLogPenalty(params: {
           clientCompanyId: params.clientCompanyId,
           submissionRecordId: params.submissionRecordId,
           amount: calc.amount,
-          penaltyType: calc.penaltyType,
-          calculationBasis: calc.calculationBasis,
+          reason: calc.calculationBasis,
         },
       });
 

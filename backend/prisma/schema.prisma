@@ -22,13 +22,14 @@ model ConsultingFirm {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  users              User[]
-  clientCompanies    ClientCompany[]
-  opportunities      Opportunity[]
-  financialPenalties FinancialPenalty[]
-  ingestionJobs      IngestionJob[]
-  submissionRecords  SubmissionRecord[]
-  bidDecisions       BidDecision[]
+  users                User[]
+  clientCompanies      ClientCompany[]
+  opportunities        Opportunity[]
+  financialPenalties   FinancialPenalty[]
+  ingestionJobs        IngestionJob[]
+  submissionRecords    SubmissionRecord[]
+  bidDecisions         BidDecision[]
+  documentRequirements DocumentRequirement[]
 
   @@map("consulting_firms")
 }
@@ -73,11 +74,14 @@ model ClientCompany {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  consultingFirm     ConsultingFirm     @relation(fields: [consultingFirmId], references: [id], onDelete: Cascade)
-  performanceStats   PerformanceStats?
-  submissionRecords  SubmissionRecord[]
-  financialPenalties FinancialPenalty[]
-  bidDecisions       BidDecision[]
+  consultingFirm       ConsultingFirm        @relation(fields: [consultingFirmId], references: [id], onDelete: Cascade)
+  performanceStats     PerformanceStats?
+  submissionRecords    SubmissionRecord[]
+  financialPenalties   FinancialPenalty[]
+  bidDecisions         BidDecision[]
+  documentRequirements DocumentRequirement[]
+  clientPortalUsers    ClientPortalUser[]
+  complianceRewards    ComplianceReward[]
 
   @@index([consultingFirmId])
   @@map("client_companies")
@@ -112,6 +116,7 @@ model Opportunity {
   expectedValue    Float     @default(0)
   isScored         Boolean   @default(false)
   status           String    @default("ACTIVE")
+  scoreBreakdown   Json?
 
   // Tier 2: USAspending enrichment
   isEnriched              Boolean  @default(false)
@@ -133,12 +138,13 @@ model Opportunity {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  consultingFirm    ConsultingFirm        @relation(fields: [consultingFirmId], references: [id], onDelete: Cascade)
-  documents         OpportunityDocument[]
-  amendments        Amendment[]
-  awardHistory      AwardHistory[]
-  submissionRecords SubmissionRecord[]
-  bidDecisions      BidDecision[]
+  consultingFirm       ConsultingFirm        @relation(fields: [consultingFirmId], references: [id], onDelete: Cascade)
+  documents            OpportunityDocument[]
+  amendments           Amendment[]
+  awardHistory         AwardHistory[]
+  submissionRecords    SubmissionRecord[]
+  bidDecisions         BidDecision[]
+  documentRequirements DocumentRequirement[]
 
   @@unique([consultingFirmId, samNoticeId])
   @@index([consultingFirmId])
@@ -154,14 +160,16 @@ model Opportunity {
 // =============================================================
 
 model Amendment {
-  id              String    @id @default(uuid())
-  opportunityId   String
-  amendmentNo     String?
-  amendmentNumber String?
-  title           String?
-  description     String?
-  issuedDate      DateTime?
-  postedDate      DateTime?
+  id                   String    @id @default(uuid())
+  opportunityId        String
+  amendmentNo          String?
+  amendmentNumber      String?
+  title                String?
+  description          String?
+  issuedDate           DateTime?
+  postedDate           DateTime?
+  plainLanguageSummary String?
+  interpretedAt        DateTime?
 
   opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
 
@@ -300,7 +308,6 @@ model FinancialPenalty {
   paidAt             DateTime?
   appliedAt          DateTime  @default(now())
   createdAt          DateTime  @default(now())
-}
 
   consultingFirm   ConsultingFirm    @relation(fields: [consultingFirmId], references: [id], onDelete: Cascade)
   clientCompany    ClientCompany     @relation(fields: [clientCompanyId], references: [id], onDelete: Cascade)
@@ -366,4 +373,80 @@ model BidDecision {
   @@unique([opportunityId, clientCompanyId])
   @@index([consultingFirmId])
   @@map("bid_decisions")
+}
+
+// =============================================================
+// CLIENT PORTAL USERS
+// =============================================================
+
+model ClientPortalUser {
+  id              String    @id @default(cuid())
+  clientCompanyId String
+  email           String    @unique
+  passwordHash    String
+  firstName       String
+  lastName        String
+  isActive        Boolean   @default(true)
+  lastLoginAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  clientCompany ClientCompany @relation(fields: [clientCompanyId], references: [id], onDelete: Cascade)
+
+  @@index([clientCompanyId])
+  @@map("client_portal_users")
+}
+
+// =============================================================
+// DOCUMENT REQUIREMENTS
+// =============================================================
+
+model DocumentRequirement {
+  id               String    @id @default(cuid())
+  consultingFirmId String
+  clientCompanyId  String
+  opportunityId    String?
+  title            String
+  description      String?
+  dueDate          DateTime
+  isPenaltyEnabled Boolean   @default(true)
+  penaltyAmount    Decimal?  @db.Decimal(12, 2)
+  penaltyPercent   Decimal?  @db.Decimal(5, 2)
+  status           String    @default("PENDING")
+  submittedAt      DateTime?
+  notes            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  consultingFirm ConsultingFirm @relation(fields: [consultingFirmId], references: [id], onDelete: Cascade)
+  clientCompany  ClientCompany  @relation(fields: [clientCompanyId], references: [id], onDelete: Cascade)
+  opportunity    Opportunity?   @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+
+  @@index([consultingFirmId])
+  @@index([clientCompanyId])
+  @@index([opportunityId])
+  @@map("document_requirements")
+}
+
+// =============================================================
+// COMPLIANCE REWARDS
+// =============================================================
+
+model ComplianceReward {
+  id              String    @id @default(cuid())
+  clientCompanyId String
+  rewardType      String
+  description     String
+  value           Decimal?  @db.Decimal(12, 2)
+  percentDiscount Decimal?  @db.Decimal(5, 2)
+  isRedeemed      Boolean   @default(false)
+  redeemedAt      DateTime?
+  expiresAt       DateTime?
+  triggerReason   String
+  createdAt       DateTime  @default(now())
+
+  clientCompany ClientCompany @relation(fields: [clientCompanyId], references: [id], onDelete: Cascade)
+
+  @@index([clientCompanyId])
+  @@map("compliance_rewards")
 }

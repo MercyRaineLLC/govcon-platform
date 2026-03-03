@@ -29,6 +29,10 @@ import penaltyRoutes from './routes/penalties'
 import firmRoutes from './routes/firm'
 import decisionRoutes from './routes/decision'
 import jobRoutes from './routes/jobs'
+import documentsRoutes from './routes/documents'
+import docRequirementsRoutes from './routes/docRequirements'
+import clientPortalRoutes from './routes/clientPortal'
+import rewardsRoutes from './routes/rewards'
 
 async function bootstrap(): Promise<void> {
   const app = express()
@@ -77,6 +81,11 @@ async function bootstrap(): Promise<void> {
   )
 
   // -------------------------------------------------------------
+  // Static uploads
+  // -------------------------------------------------------------
+  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')))
+
+  // -------------------------------------------------------------
   // Parsing Middleware
   // -------------------------------------------------------------
   app.use(express.json({ limit: '10mb' }))
@@ -117,6 +126,10 @@ async function bootstrap(): Promise<void> {
   apiRouter.use('/firm', firmRoutes)
   apiRouter.use('/decision', decisionRoutes)
   apiRouter.use('/jobs', jobRoutes)
+  apiRouter.use('/documents', documentsRoutes)
+  apiRouter.use('/doc-requirements', docRequirementsRoutes)
+  apiRouter.use('/client-portal', clientPortalRoutes)
+  apiRouter.use('/rewards', rewardsRoutes)
 
   app.use('/api', apiRouter)
 

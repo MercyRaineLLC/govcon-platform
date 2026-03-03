@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { clientsApi } from '../services/api';
-import { PageHeader, StatCard, Spinner, EmptyState, ErrorBanner, formatCurrency } from '../components/ui';
-import { Plus, CheckCircle, XCircle, Shield } from 'lucide-react';
+import { clientsApi, clientPortalUsersApi } from '../services/api';
+import { PageHeader, Spinner, EmptyState, ErrorBanner, formatCurrency } from '../components/ui';
+import { Plus, CheckCircle, XCircle, Shield, KeyRound, X } from 'lucide-react';
 
 export function ClientsPage() {
   const qc = useQueryClient();
@@ -13,6 +13,25 @@ export function ClientsPage() {
     sdvosb: false, wosb: false, hubzone: false, smallBusiness: true,
   });
   const [formError, setFormError] = useState('');
+
+  // Portal access state
+  const [portalClientId, setPortalClientId] = useState<string | null>(null);
+  const [portalClientName, setPortalClientName] = useState('');
+  const [portalForm, setPortalForm] = useState({ email: '', password: '', firstName: '', lastName: '' });
+  const [portalError, setPortalError] = useState('');
+  const [portalSuccess, setPortalSuccess] = useState('');
+
+  const portalMutation = useMutation({
+    mutationFn: () => clientPortalUsersApi.register({
+      clientCompanyId: portalClientId!,
+      ...portalForm,
+    }),
+    onSuccess: () => {
+      setPortalSuccess(`Portal access created for ${portalForm.email}. They can now log in at /client-login.`);
+      setPortalForm({ email: '', password: '', firstName: '', lastName: '' });
+    },
+    onError: (err: any) => setPortalError(err?.response?.data?.error || 'Failed to create portal access'),
+  });
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['clients'],
@@ -108,17 +127,82 @@ export function ClientsPage() {
         </div>
       )}
 
+      {/* Portal Access Modal */}
+      {portalClientId && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-md">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-gray-200 flex items-center gap-2">
+                <KeyRound className="w-4 h-4 text-blue-400" />
+                Client Portal Access — {portalClientName}
+              </h3>
+              <button onClick={() => { setPortalClientId(null); setPortalSuccess(''); setPortalError(''); }}
+                className="text-gray-500 hover:text-gray-300"><X className="w-4 h-4" /></button>
+            </div>
+            <p className="text-xs text-gray-500 mb-4">
+              Create login credentials for a contact at this client company. They will log in at <span className="text-blue-400">/client-login</span>.
+            </p>
+            {portalSuccess ? (
+              <div className="bg-green-900/30 border border-green-700 text-green-300 rounded-lg p-3 text-sm">{portalSuccess}</div>
+            ) : (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">First Name</label>
+                    <input className="input" value={portalForm.firstName}
+                      onChange={(e) => setPortalForm({ ...portalForm, firstName: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="label">Last Name</label>
+                    <input className="input" value={portalForm.lastName}
+                      onChange={(e) => setPortalForm({ ...portalForm, lastName: e.target.value })} />
+                  </div>
+                </div>
+                <div>
+                  <label className="label">Email</label>
+                  <input type="email" className="input" value={portalForm.email}
+                    onChange={(e) => setPortalForm({ ...portalForm, email: e.target.value })} />
+                </div>
+                <div>
+                  <label className="label">Temporary Password</label>
+                  <input type="password" className="input" value={portalForm.password}
+                    onChange={(e) => setPortalForm({ ...portalForm, password: e.target.value })} />
+                </div>
+                {portalError && <ErrorBanner message={portalError} />}
+                <button
+                  onClick={() => { setPortalError(''); portalMutation.mutate(); }}
+                  disabled={!portalForm.email || !portalForm.password || !portalForm.firstName || portalMutation.isPending}
+                  className="btn-primary w-full"
+                >
+                  {portalMutation.isPending ? 'Creating...' : 'Create Portal Access'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {isLoading && <div className="flex justify-center mt-10"><Spinner size="lg" /></div>}
       {error && <ErrorBanner message="Failed to load clients" />}
       {!isLoading && clients.length === 0 && <EmptyState message="No clients yet. Add your first client company." />}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {clients.map((client: any) => (
-          <Link
-            key={client.id}
-            to={`/clients/${client.id}`}
-            className="card hover:border-gray-600 transition-colors"
+          <div key={client.id} className="card hover:border-gray-600 transition-colors relative">
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              setPortalClientId(client.id);
+              setPortalClientName(client.name);
+              setPortalSuccess('');
+              setPortalError('');
+            }}
+            title="Grant client portal access"
+            className="absolute top-3 right-3 text-gray-600 hover:text-blue-400 transition-colors"
           >
+            <KeyRound className="w-4 h-4" />
+          </button>
+          <Link to={`/clients/${client.id}`} className="block">
             <div className="flex items-start justify-between mb-3">
               <div>
                 <h3 className="font-semibold text-gray-200">{client.name}</h3>
@@ -171,6 +255,7 @@ export function ClientsPage() {
               </div>
             )}
           </Link>
+        </div>
         ))}
       </div>
     </div>
