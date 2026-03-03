@@ -4,15 +4,10 @@ exports.recalculateClientStats = recalculateClientStats;
 exports.getFirmMetrics = getFirmMetrics;
 // =============================================================
 // Performance Stats Service
-// FR-19, FR-20: Client and firm aggregate metrics
 // =============================================================
 const database_1 = require("../config/database");
 const logger_1 = require("../utils/logger");
 const errors_1 = require("../utils/errors");
-/**
- * Recalculates and persists PerformanceStats for a given client company.
- * Should be called after every submission record creation.
- */
 async function recalculateClientStats(clientCompanyId, consultingFirmId) {
     try {
         const submissions = await database_1.prisma.submissionRecord.findMany({
@@ -26,7 +21,7 @@ async function recalculateClientStats(clientCompanyId, consultingFirmId) {
         const submissionsOnTime = submissions.filter((s) => s.wasOnTime).length;
         const submissionsLate = totalSubmissions - submissionsOnTime;
         const completionRate = totalSubmissions > 0 ? submissionsOnTime / totalSubmissions : 0;
-        const totalPenalties = submissions.reduce((sum, s) => sum + s.penaltyAmount, 0);
+        const totalPenalties = submissions.reduce((sum, s) => sum + (s.penaltyAmount || 0), 0);
         const opportunityCount = await database_1.prisma.opportunity.count({
             where: { consultingFirmId },
         });
@@ -63,10 +58,6 @@ async function recalculateClientStats(clientCompanyId, consultingFirmId) {
         throw err;
     }
 }
-/**
- * Returns aggregate metrics for a consulting firm.
- * FR-20: Consulting Firm Aggregate Metrics
- */
 async function getFirmMetrics(consultingFirmId) {
     const firm = await database_1.prisma.consultingFirm.findUnique({
         where: { id: consultingFirmId },

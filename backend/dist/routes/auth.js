@@ -13,7 +13,6 @@ const database_1 = require("../config/database");
 const auth_1 = require("../middleware/auth");
 const errors_1 = require("../utils/errors");
 const router = (0, express_1.Router)();
-// ---- Schemas ----
 const LoginSchema = zod_1.z.object({
     email: zod_1.z.string().email(),
     password: zod_1.z.string().min(1),

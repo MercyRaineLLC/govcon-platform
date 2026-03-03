@@ -2,9 +2,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 // =============================================================
 // Submission Records Routes
-// POST /api/submissions        - Log a bid submission
-// GET  /api/submissions        - List submissions for tenant
-// GET  /api/submissions/:id    - Get single submission
 // =============================================================
 const express_1 = require("express");
 const zod_1 = require("zod");
@@ -25,14 +22,11 @@ const CreateSubmissionSchema = zod_1.z.object({
 });
 /**
  * POST /api/submissions
- * FR-14, FR-15, FR-16, FR-17, FR-18
- * Creates submission record, evaluates timeliness, enforces penalties.
  */
 router.post('/', async (req, res, next) => {
     try {
         const consultingFirmId = (0, tenant_1.getTenantId)(req);
         const body = CreateSubmissionSchema.parse(req.body);
-        // Validate client and opportunity belong to tenant
         const [client, opportunity] = await Promise.all([
             database_1.prisma.clientCompany.findFirst({
                 where: { id: body.clientCompanyId, consultingFirmId },
@@ -47,21 +41,19 @@ router.post('/', async (req, res, next) => {
         if (!opportunity)
             throw new errors_1.NotFoundError('Opportunity');
         const wasOnTime = (0, penaltyEngine_1.evaluateOnTime)(body.submittedAt, opportunity.responseDeadline);
-        // Create submission + enforce penalty in a single transaction
         const submission = await database_1.prisma.$transaction(async (tx) => {
             const record = await tx.submissionRecord.create({
                 data: {
                     consultingFirmId,
                     clientCompanyId: body.clientCompanyId,
                     opportunityId: body.opportunityId,
-                    submittedById: req.user.userId,
+                    submittedById: req.user?.userId || '',
                     submittedAt: body.submittedAt,
                     wasOnTime,
-                    penaltyAmount: 0, // Will be updated below
+                    penaltyAmount: 0,
                     notes: body.notes,
                 },
             });
-            // If late, calculate and log penalty
             if (!wasOnTime) {
                 const penaltyResult = await (0, penaltyEngine_1.enforceAndLogPenalty)({
                     consultingFirmId,
@@ -74,12 +66,11 @@ router.post('/', async (req, res, next) => {
                         where: { id: record.id },
                         data: { penaltyAmount: penaltyResult.amount },
                     });
-                    record.penaltyAmount = penaltyResult.amount;
+                    return { ...record, penaltyAmount: penaltyResult.amount };
                 }
             }
             return record;
         });
-        // Async stats recalculation (non-blocking)
         (0, performanceStats_1.recalculateClientStats)(body.clientCompanyId, consultingFirmId).catch((err) => {
             logger_1.logger.error('Stats recalculation failed', { error: err });
         });
@@ -94,7 +85,8 @@ router.post('/', async (req, res, next) => {
                 ...submission,
                 wasOnTime,
                 lateMessage: !wasOnTime
-                    ? `Submission was ${Math.ceil((body.submittedAt.getTime() - opportunity.responseDeadline.getTime()) / (1000 * 60 * 60 * 24))} day(s) late`
+                    ? `Submission was ${Math.ceil((body.submittedAt.getTime() - opportunity.responseDeadline.getTime()) /
+                        (1000 * 60 * 60 * 24))} day(s) late`
                     : null,
             },
         });
@@ -124,7 +116,9 @@ router.get('/', async (req, res, next) => {
                 where,
                 include: {
                     clientCompany: { select: { id: true, name: true } },
-                    opportunity: { select: { id: true, title: true, agency: true, responseDeadline: true } },
+                    opportunity: {
+                        select: { id: true, title: true, agency: true, responseDeadline: true },
+                    },
                     submittedBy: { select: { id: true, firstName: true, lastName: true } },
                     financialPenalty: true,
                 },

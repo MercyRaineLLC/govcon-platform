@@ -135,4 +135,46 @@ export const firmApi = {
     api.put('/firm/penalty-config', data).then((r) => r.data),
   users: () =>
     api.get('/firm/users').then((r) => r.data),
+  seedDemo: () =>
+    api.post('/firm/seed-demo').then((r) => r.data),
+};
+
+// ---- Doc Requirements ----
+export const docRequirementsApi = {
+  list: (params?: any) =>
+    api.get('/doc-requirements', { params }).then((r) => r.data),
+  create: (data: any) =>
+    api.post('/doc-requirements', data).then((r) => r.data),
+  update: (id: string, data: any) =>
+    api.put(`/doc-requirements/${id}`, data).then((r) => r.data),
+  delete: (id: string) =>
+    api.delete(`/doc-requirements/${id}`).then((r) => r.data),
+  forClient: (clientId: string) =>
+    api.get(`/doc-requirements/client/${clientId}`).then((r) => r.data),
+};
+
+// ---- Rewards ----
+export const rewardsApi = {
+  list: (params?: any) =>
+    api.get('/rewards', { params }).then((r) => r.data),
+  create: (data: any) =>
+    api.post('/rewards', data).then((r) => r.data),
+  evaluate: (clientCompanyId: string) =>
+    api.post(`/rewards/evaluate/${clientCompanyId}`).then((r) => r.data),
+  redeem: (id: string) =>
+    api.put(`/rewards/${id}/redeem`).then((r) => r.data),
+};
+
+// ---- Score / Amendment ----
+export const scoreApi = {
+  getBreakdown: (opportunityId: string) =>
+    api.get(`/opportunities/${opportunityId}/score-breakdown`).then((r) => r.data),
+  interpretAmendment: (opportunityId: string, amendmentId: string) =>
+    api.post(`/opportunities/${opportunityId}/amendments/${amendmentId}/interpret`).then((r) => r.data),
+};
+
+// ---- Client Portal Users (created by consultants) ----
+export const clientPortalUsersApi = {
+  register: (data: { clientCompanyId: string; email: string; password: string; firstName: string; lastName: string }) =>
+    api.post('/client-portal/auth/register', data).then((r) => r.data),
 };

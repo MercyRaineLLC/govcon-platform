@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { firmApi } from '../services/api'
 import {
@@ -10,9 +11,25 @@ import {
   ErrorBanner
 } from '../components/ui'
 import { Link } from 'react-router-dom'
-import { TrendingUp, AlertTriangle, DollarSign, Users } from 'lucide-react'
+import { TrendingUp, AlertTriangle, DollarSign, Users, Database, CheckCircle } from 'lucide-react'
 
 export default function Dashboard() {
+  const [seeding, setSeeding] = useState(false)
+  const [seedResult, setSeedResult] = useState<string | null>(null)
+
+  const handleSeedDemo = async () => {
+    setSeeding(true)
+    setSeedResult(null)
+    try {
+      const res = await firmApi.seedDemo()
+      setSeedResult(`Seeded ${res.data.created} opportunities (${res.data.skipped} already existed). Run scoring to update probabilities.`)
+    } catch (err: any) {
+      setSeedResult('Seed failed: ' + (err?.response?.data?.error || err.message))
+    } finally {
+      setSeeding(false)
+    }
+  }
+
   const { data, isLoading, error } = useQuery({
     queryKey: ['dashboard'],
     queryFn: () => firmApi.dashboard(),
@@ -39,7 +56,28 @@ export default function Dashboard() {
       <PageHeader
         title="Advisory Dashboard"
         subtitle="Real-time intelligence overview"
-      />
+      >
+        <button
+          onClick={handleSeedDemo}
+          disabled={seeding}
+          className="btn-secondary flex items-center gap-2 text-sm"
+          title="Load 8 realistic demo opportunities for testing"
+        >
+          {seeding ? <Spinner size="sm" /> : <Database className="w-4 h-4" />}
+          {seeding ? 'Seeding...' : 'Load Demo Data'}
+        </button>
+      </PageHeader>
+
+      {seedResult && (
+        <div className={`flex items-start gap-2 text-sm rounded-lg px-4 py-3 mb-4 ${
+          seedResult.startsWith('Seed failed')
+            ? 'bg-red-900/30 border border-red-700 text-red-300'
+            : 'bg-green-900/20 border border-green-700 text-green-300'
+        }`}>
+          <CheckCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+          {seedResult}
+        </div>
+      )}
 
       {/* KPI Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">

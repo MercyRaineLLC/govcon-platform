@@ -7,7 +7,6 @@ exports.samApiService = void 0;
 const axios_1 = __importDefault(require("axios"));
 const database_1 = require("../config/database");
 const logger_1 = require("../utils/logger");
-const client_1 = require("@prisma/client");
 const SAM_BASE_URL = "https://api.sam.gov/opportunities/v2/search";
 function formatSamDate(date) {
     const mm = String(date.getMonth() + 1).padStart(2, "0");
@@ -17,21 +16,21 @@ function formatSamDate(date) {
 }
 function mapSetAside(value) {
     if (!value)
-        return client_1.SetAsideType.NONE;
+        return "NONE";
     const normalized = value.toUpperCase();
     if (normalized.includes("SDVOSB"))
-        return client_1.SetAsideType.SDVOSB;
+        return "SDVOSB";
     if (normalized.includes("WOSB"))
-        return client_1.SetAsideType.WOSB;
+        return "WOSB";
     if (normalized.includes("HUBZONE"))
-        return client_1.SetAsideType.HUBZONE;
+        return "HUBZONE";
     if (normalized.includes("8A"))
-        return client_1.SetAsideType.SBA_8A;
+        return "SBA_8A";
     if (normalized.includes("TOTAL SMALL"))
-        return client_1.SetAsideType.TOTAL_SMALL_BUSINESS;
+        return "TOTAL_SMALL_BUSINESS";
     if (normalized.includes("SMALL"))
-        return client_1.SetAsideType.SMALL_BUSINESS;
-    return client_1.SetAsideType.NONE;
+        return "SMALL_BUSINESS";
+    return "NONE";
 }
 exports.samApiService = {
     async searchAndIngest(params, consultingFirmId) {
@@ -51,6 +50,9 @@ exports.samApiService = {
             const postedTo = formatSamDate(now);
             let offset = 0;
             const pageSize = params.limit ?? 25;
+            let totalFound = 0;
+            let totalIngested = 0;
+            let totalErrors = 0;
             while (true) {
                 const response = await axios_1.default.get(SAM_BASE_URL, {
                     params: {
@@ -61,106 +63,104 @@ exports.samApiService = {
                         limit: pageSize,
                         offset,
                     },
+                    timeout: 30000,
                 });
                 const records = response.data.opportunitiesData ?? [];
                 if (records.length === 0)
                     break;
+                totalFound += records.length;
                 for (const record of records) {
-                    const existing = await database_1.prisma.opportunity.findUnique({
-                        where: {
-                            consultingFirmId_samNoticeId: {
-                                consultingFirmId,
-                                samNoticeId: record.noticeId,
+                    try {
+                        const existing = await database_1.prisma.opportunity.findUnique({
+                            where: {
+                                consultingFirmId_samNoticeId: {
+                                    consultingFirmId,
+                                    samNoticeId: record.noticeId,
+                                },
                             },
-                        },
-                        include: { amendments: true },
-                    });
-                    const mappedData = {
-                        title: record.title ?? "Untitled Opportunity",
-                        agency: record.fullParentPathName ??
-                            record.organizationType ??
-                            "Unknown Agency",
-                        naicsCode: record.naicsCode ?? "000000",
-                        setAsideType: mapSetAside(record.typeOfSetAside),
-                        postedDate: record.postedDate
-                            ? new Date(record.postedDate)
-                            : null,
-                        responseDeadline: record.responseDeadLine
-                            ? new Date(record.responseDeadLine)
-                            : now,
-                        archiveDate: record.archiveDate
-                            ? new Date(record.archiveDate)
-                            : null,
-                        sourceUrl: record.uiLink ?? null,
-                    };
-                    if (!existing) {
-                        await database_1.prisma.opportunity.create({
-                            data: {
-                                consultingFirmId,
-                                samNoticeId: record.noticeId,
-                                ...mappedData,
-                                marketCategory: client_1.MarketCategory.SERVICES,
-                                status: client_1.OpportunityStatus.ACTIVE,
-                                probabilityScore: 0,
-                                expectedValue: 0,
-                                isScored: false,
-                            },
+                            include: { amendments: true },
                         });
-                    }
-                    else {
-                        const changed = existing.responseDeadline.getTime() !==
-                            (mappedData.responseDeadline?.getTime() ?? 0) ||
-                            existing.setAsideType !== mappedData.setAsideType ||
-                            existing.title !== mappedData.title;
-                        if (changed) {
-                            await database_1.prisma.opportunity.update({
-                                where: { id: existing.id },
+                        const mappedData = {
+                            title: record.title ?? "Untitled Opportunity",
+                            agency: record.fullParentPathName ??
+                                record.organizationType ??
+                                "Unknown Agency",
+                            naicsCode: record.naicsCode ?? "000000",
+                            setAsideType: mapSetAside(record.typeOfSetAside),
+                            postedDate: record.postedDate ? new Date(record.postedDate) : null,
+                            responseDeadline: record.responseDeadLine
+                                ? new Date(record.responseDeadLine)
+                                : now,
+                            archiveDate: record.archiveDate ? new Date(record.archiveDate) : null,
+                            sourceUrl: record.uiLink ?? null,
+                        };
+                        if (!existing) {
+                            await database_1.prisma.opportunity.create({
                                 data: {
+                                    consultingFirmId,
+                                    samNoticeId: record.noticeId,
                                     ...mappedData,
+                                    marketCategory: "SERVICES",
+                                    status: "ACTIVE",
+                                    probabilityScore: 0,
+                                    expectedValue: 0,
                                     isScored: false,
                                 },
                             });
+                            totalIngested++;
                         }
-                    }
-                    // ------------------------
-                    // Amendment Persistence
-                    // ------------------------
-                    if (record.modifications?.length) {
-                        const opportunityId = existing?.id ??
-                            (await database_1.prisma.opportunity.findUnique({
-                                where: {
-                                    consultingFirmId_samNoticeId: {
-                                        consultingFirmId,
-                                        samNoticeId: record.noticeId,
-                                    },
-                                },
-                            }))?.id;
-                        if (opportunityId) {
-                            for (const mod of record.modifications) {
-                                await database_1.prisma.amendment.upsert({
-                                    where: {
-                                        id: `${record.noticeId}_${mod.modNumber}`,
-                                    },
-                                    update: {
-                                        title: mod.modTitle ?? null,
-                                        description: mod.modDescription ?? null,
-                                        postedDate: mod.modDate
-                                            ? new Date(mod.modDate)
-                                            : null,
-                                    },
-                                    create: {
-                                        id: `${record.noticeId}_${mod.modNumber}`,
-                                        opportunityId,
-                                        amendmentNumber: mod.modNumber,
-                                        title: mod.modTitle ?? null,
-                                        description: mod.modDescription ?? null,
-                                        postedDate: mod.modDate
-                                            ? new Date(mod.modDate)
-                                            : null,
-                                    },
+                        else {
+                            const changed = existing.responseDeadline.getTime() !==
+                                (mappedData.responseDeadline?.getTime() ?? 0) ||
+                                existing.setAsideType !== mappedData.setAsideType ||
+                                existing.title !== mappedData.title;
+                            if (changed) {
+                                await database_1.prisma.opportunity.update({
+                                    where: { id: existing.id },
+                                    data: { ...mappedData, isScored: false },
                                 });
                             }
                         }
+                        // Amendment persistence
+                        if (record.modifications?.length) {
+                            const opportunityId = existing?.id ??
+                                (await database_1.prisma.opportunity.findUnique({
+                                    where: {
+                                        consultingFirmId_samNoticeId: {
+                                            consultingFirmId,
+                                            samNoticeId: record.noticeId,
+                                        },
+                                    },
+                                }))?.id;
+                            if (opportunityId) {
+                                for (const mod of record.modifications) {
+                                    await database_1.prisma.amendment.upsert({
+                                        where: { id: `${record.noticeId}_${mod.modNumber}` },
+                                        update: {
+                                            title: mod.modTitle ?? null,
+                                            description: mod.modDescription ?? null,
+                                            postedDate: mod.modDate ? new Date(mod.modDate) : null,
+                                        },
+                                        create: {
+                                            id: `${record.noticeId}_${mod.modNumber}`,
+                                            opportunityId,
+                                            amendmentNo: mod.modNumber,
+                                            amendmentNumber: mod.modNumber,
+                                            title: mod.modTitle ?? null,
+                                            description: mod.modDescription ?? null,
+                                            postedDate: mod.modDate ? new Date(mod.modDate) : null,
+                                        },
+                                    });
+                                }
+                            }
+                        }
+                    }
+                    catch (recordErr) {
+                        logger_1.logger.warn("Failed to process SAM record", {
+                            noticeId: record.noticeId,
+                            error: recordErr.message,
+                        });
+                        totalErrors++;
                     }
                 }
                 offset += pageSize;
@@ -171,12 +171,16 @@ exports.samApiService = {
                 where: { id: consultingFirmId },
                 data: { lastIngestedAt: now },
             });
-            return { success: true };
+            logger_1.logger.info("SAM ingestion complete", {
+                consultingFirmId,
+                found: totalFound,
+                ingested: totalIngested,
+                errors: totalErrors,
+            });
+            return { success: true, found: totalFound, ingested: totalIngested, errors: totalErrors };
         }
         catch (error) {
-            logger_1.logger.error("SAM ingestion failed", {
-                error: error.message,
-            });
+            logger_1.logger.error("SAM ingestion failed", { error: error.message });
             throw new Error("SAM.gov API unavailable");
         }
     },
