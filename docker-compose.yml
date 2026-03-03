@@ -1,0 +1,95 @@
+version: "3.9"
+
+services:
+
+  # ----------------------------
+  # PostgreSQL Database
+  # ----------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: govcon_postgres
+    environment:
+      POSTGRES_USER: govcon_user
+      POSTGRES_PASSWORD: govcon_pass
+      POSTGRES_DB: govcon_platform
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U govcon_user -d govcon_platform"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ----------------------------
+  # Redis Cache + Queue
+  # ----------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: govcon_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ----------------------------
+  # Backend API (Stable Build)
+  # ----------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: govcon_backend
+
+    env_file:
+      - ./backend/.env
+
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DATABASE_URL: postgresql://govcon_user:govcon_pass@postgres:5432/govcon_platform
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: dev-secret-change-in-production
+
+    ports:
+      - "3001:3001"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    # 🚫 No bind mounts
+    # 🚫 No ts-node-dev
+    command: npm start
+
+  # ----------------------------
+  # Frontend (Vite Dev)
+  # ----------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: govcon_frontend
+    environment:
+      VITE_API_URL: http://localhost:3001
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm run dev -- --host
+
+volumes:
+  postgres_data:
+  redis_data:
