@@ -5,11 +5,18 @@ import { Router, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/database';
 import { authenticateJWT } from '../middleware/auth';
+import { requireRole } from '../middleware/auth';
 import { enforceTenantScope, getTenantId } from '../middleware/tenant';
 import { AuthenticatedRequest } from '../types';
-import { NotFoundError } from '../utils/errors';
+import { NotFoundError, ValidationError } from '../utils/errors';
 import { evaluateOnTime, enforceAndLogPenalty } from '../engines/penaltyEngine';
 import { recalculateClientStats } from '../services/performanceStats';
+import {
+  isSubmissionBlocked,
+  transitionSubmissionStatus,
+  isValidTransition,
+  ComplianceStatus,
+} from '../services/complianceStateMachine';
 import { logger } from '../utils/logger';
 
 const router = Router();
@@ -20,6 +27,11 @@ const CreateSubmissionSchema = z.object({
   opportunityId: z.string().uuid(),
   submittedAt: z.string().datetime().transform((s) => new Date(s)),
   notes: z.string().optional(),
+});
+
+const StatusTransitionSchema = z.object({
+  status: z.enum(['PENDING', 'APPROVED', 'BLOCKED', 'REJECTED']),
+  reason: z.string().optional(),
 });
 
 /**
@@ -43,6 +55,17 @@ router.post('/', async (req: AuthenticatedRequest, res: Response, next: NextFunc
     if (!client) throw new NotFoundError('ClientCompany');
     if (!opportunity) throw new NotFoundError('Opportunity');
 
+    // Compliance gate: reject if the BidDecision for this pair is BLOCKED
+    const gate = await isSubmissionBlocked(body.opportunityId, body.clientCompanyId);
+    if (gate.blocked) {
+      return res.status(422).json({
+        success: false,
+        error: 'Submission blocked by compliance review',
+        code: 'COMPLIANCE_BLOCKED',
+        detail: gate.reason,
+      });
+    }
+
     const wasOnTime = evaluateOnTime(body.submittedAt, opportunity.responseDeadline);
 
     const submission = await prisma.$transaction(async (tx) => {
@@ -56,6 +79,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response, next: NextFunc
           wasOnTime,
           penaltyAmount: 0,
           notes: body.notes,
+          status: 'PENDING',
         },
       });
 
@@ -64,7 +88,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response, next: NextFunc
           consultingFirmId,
           clientCompanyId: body.clientCompanyId,
           submissionRecordId: record.id,
-          estimatedValue: opportunity.estimatedValue,
+          estimatedValue: opportunity.estimatedValue ? Number(opportunity.estimatedValue) : null,
         });
 
         if (penaltyResult.amount > 0) {
@@ -132,7 +156,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response, next: NextFunct
             select: { id: true, title: true, agency: true, responseDeadline: true },
           },
           submittedBy: { select: { id: true, firstName: true, lastName: true } },
-          financialPenalty: true,
+          financialPenalties: true,
         },
         orderBy: { submittedAt: 'desc' },
         skip: (pageNum - 1) * limitNum,
@@ -163,7 +187,7 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response, next: NextFu
         clientCompany: true,
         opportunity: true,
         submittedBy: { select: { id: true, firstName: true, lastName: true, email: true } },
-        financialPenalty: true,
+        financialPenalties: true,
       },
     });
 
@@ -173,5 +197,40 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response, next: NextFu
     next(err);
   }
 });
+
+/**
+ * PATCH /api/submissions/:id/status  (ADMIN only)
+ * Manually transition a submission's compliance status.
+ */
+router.patch(
+  '/:id/status',
+  requireRole('ADMIN'),
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const consultingFirmId = getTenantId(req);
+      const { status, reason } = StatusTransitionSchema.parse(req.body);
+
+      const result = await transitionSubmissionStatus({
+        submissionId: req.params.id,
+        toStatus: status as ComplianceStatus,
+        consultingFirmId,
+        triggeredBy: req.user?.userId,
+        reason,
+      });
+
+      if (!result.success) {
+        return res.status(422).json({
+          success: false,
+          error: result.error,
+          code: 'INVALID_TRANSITION',
+        });
+      }
+
+      res.json({ success: true, data: { id: req.params.id, status } });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
 
 export default router;

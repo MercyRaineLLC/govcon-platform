@@ -22,7 +22,7 @@ export async function recalculateClientStats(
     const submissionsOnTime = submissions.filter((s) => s.wasOnTime).length;
     const submissionsLate = totalSubmissions - submissionsOnTime;
     const completionRate = totalSubmissions > 0 ? submissionsOnTime / totalSubmissions : 0;
-    const totalPenalties = submissions.reduce((sum, s) => sum + (s.penaltyAmount || 0), 0);
+    const totalPenalties = submissions.reduce((sum, s) => sum + Number(s.penaltyAmount || 0), 0);
 
     const opportunityCount = await prisma.opportunity.count({
       where: { consultingFirmId },
@@ -32,7 +32,7 @@ export async function recalculateClientStats(
       where: { clientCompanyId },
       update: {
         totalOpportunities: opportunityCount,
-        totalSubmissions,
+        totalSubmitted: totalSubmissions,
         submissionsOnTime,
         submissionsLate,
         completionRate,
@@ -43,7 +43,7 @@ export async function recalculateClientStats(
       create: {
         clientCompanyId,
         totalOpportunities: opportunityCount,
-        totalSubmissions,
+        totalSubmitted: totalSubmissions,
         submissionsOnTime,
         submissionsLate,
         completionRate,
@@ -81,10 +81,10 @@ export async function getFirmMetrics(consultingFirmId: string) {
     .map((c) => c.performanceStats)
     .filter((s): s is NonNullable<typeof s> => s !== null);
 
-  const totalSubmissions = stats.reduce((sum, s) => sum + s.totalSubmissions, 0);
+  const totalSubmissions = stats.reduce((sum, s) => sum + s.totalSubmitted, 0);
   const totalOnTime = stats.reduce((sum, s) => sum + s.submissionsOnTime, 0);
   const aggregateCompletionRate = totalSubmissions > 0 ? totalOnTime / totalSubmissions : 0;
-  const totalPenaltiesGenerated = stats.reduce((sum, s) => sum + s.totalPenalties, 0);
+  const totalPenaltiesGenerated = stats.reduce((sum, s) => sum + Number(s.totalPenalties), 0);
 
   return {
     totalClients,

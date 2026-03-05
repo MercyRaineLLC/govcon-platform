@@ -77,7 +77,7 @@ export function startScoringWorker(): Worker<ScoringJobData> {
         const result = scoreOpportunityForClient({
           opportunityNaics: opportunity.naicsCode,
           opportunitySetAside: opportunity.setAsideType,
-          opportunityEstimatedValue: opportunity.estimatedValue,
+          opportunityEstimatedValue: opportunity.estimatedValue ? Number(opportunity.estimatedValue) : null,
           opportunityAgency: opportunity.agency,
           clientNaics: client.naicsCodes,
           clientProfile: {

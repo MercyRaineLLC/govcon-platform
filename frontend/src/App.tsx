@@ -9,6 +9,9 @@ import { SubmissionsPage } from "./pages/Submissions"
 import { PenaltiesPage } from "./pages/Penalties"
 import { SettingsPage } from "./pages/Settings"
 import { DocRequirementsPage } from "./pages/DocRequirements"
+import AnalyticsPage from "./pages/Analytics"
+import DecisionsPage from "./pages/Decisions"
+import ComplianceLogsPage from "./pages/ComplianceLogs"
 import { Layout } from "./components/layout"
 import ClientPortalLogin from "./pages/ClientPortalLogin"
 import ClientPortalDashboard from "./pages/ClientPortalDashboard"
@@ -29,9 +32,12 @@ export default function App() {
         <Route path="/opportunities" element={<OpportunitiesPage />} />
         <Route path="/opportunities/:id" element={<OpportunityDetail />} />
         <Route path="/clients" element={<ClientsPage />} />
+        <Route path="/decisions" element={<DecisionsPage />} />
         <Route path="/doc-requirements" element={<DocRequirementsPage />} />
         <Route path="/submissions" element={<SubmissionsPage />} />
         <Route path="/penalties" element={<PenaltiesPage />} />
+        <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/compliance" element={<ComplianceLogsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
     </Routes>

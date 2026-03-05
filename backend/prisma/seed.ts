@@ -30,7 +30,6 @@ async function main() {
     data: {
       name: "Aspetto Inc",
       uei: "SAMPLE_UEI_001",
-      naicsCodes: ["484121", "484122", "541614"],
       sdvosb: true,
       smallBusiness: true,
       consultingFirmId: firm.id
@@ -46,7 +45,9 @@ async function main() {
       marketCategory: "LOGISTICS",
       estimatedValue: 2500000,
       responseDeadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      consultingFirmId: firm.id
+      consultingFirm: {
+        connect: { id: firm.id }
+      }
     }
   })
 

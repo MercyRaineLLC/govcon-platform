@@ -10,7 +10,7 @@
 import { Router, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/database';
-import { authenticateJWT } from '../middleware/auth';
+import { authenticateJWT, requireRole } from '../middleware/auth';
 import { enforceTenantScope, getTenantId } from '../middleware/tenant';
 import { AuthenticatedRequest } from '../types';
 import { NotFoundError } from '../utils/errors';
@@ -129,9 +129,9 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response, next: NextFu
 });
 
 /**
- * PUT /api/clients/:id
+ * PUT /api/clients/:id  (ADMIN only)
  */
-router.put('/:id', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.put('/:id', requireRole('ADMIN'), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const consultingFirmId = getTenantId(req);
     const existing = await prisma.clientCompany.findFirst({
@@ -152,9 +152,9 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response, next: NextFu
 });
 
 /**
- * DELETE /api/clients/:id (soft delete)
+ * DELETE /api/clients/:id (soft delete, ADMIN only)
  */
-router.delete('/:id', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.delete('/:id', requireRole('ADMIN'), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const consultingFirmId = getTenantId(req);
     const existing = await prisma.clientCompany.findFirst({

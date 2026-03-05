@@ -87,6 +87,7 @@ export async function enforceAndLogPenalty(params: {
           clientCompanyId: params.clientCompanyId,
           submissionRecordId: params.submissionRecordId,
           amount: calc.amount,
+          penaltyType: 'LATE_SUBMISSION',
           reason: calc.calculationBasis,
         },
       });

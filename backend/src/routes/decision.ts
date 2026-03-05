@@ -1,11 +1,21 @@
 import { Router } from "express"
+import { z } from "zod"
 import { prisma } from "../config/database"
 import { evaluateBidDecision } from "../services/decisionEngine"
 import { runPortfolioEvaluation } from "../services/portfolioDecisionEngine"
 import { Prisma } from "@prisma/client"
-import { authenticateJWT } from "../middleware/auth"
+import { authenticateJWT, requireRole } from "../middleware/auth"
 import { enforceTenantScope, getTenantId } from "../middleware/tenant"
 import { AuthenticatedRequest } from "../types"
+import {
+  transitionBidDecisionStatus,
+  ComplianceStatus,
+} from "../services/complianceStateMachine"
+
+const StatusTransitionSchema = z.object({
+  status: z.enum(["PENDING", "APPROVED", "BLOCKED", "REJECTED"]),
+  reason: z.string().optional(),
+})
 
 const router = Router()
 router.use(authenticateJWT, enforceTenantScope)
@@ -176,10 +186,10 @@ router.get("/metrics", async (req: AuthenticatedRequest, res) => {
       decisions.reduce((sum, d) => sum + (d.roiRatio ?? 0), 0) / totalEvaluated
 
     const totalExpectedRevenue =
-      decisions.reduce((sum, d) => sum + (d.expectedRevenue ?? 0), 0)
+      decisions.reduce((sum, d) => sum + Number(d.expectedRevenue ?? 0), 0)
 
     const totalNetExpectedValue =
-      decisions.reduce((sum, d) => sum + (d.netExpectedValue ?? 0), 0)
+      decisions.reduce((sum, d) => sum + Number(d.netExpectedValue ?? 0), 0)
 
     return res.status(200).json({
       success: true,
@@ -197,6 +207,38 @@ router.get("/metrics", async (req: AuthenticatedRequest, res) => {
   } catch (error: any) {
     console.error("Decision metrics error:", error.message)
     return res.status(500).json({ success: false, error: "Failed to compute metrics" })
+  }
+})
+
+// ============================================================
+// PATCH /api/decision/:id/status  (ADMIN only)
+// Manually transition a BidDecision compliance status.
+// ============================================================
+
+router.patch("/:id/status", requireRole("ADMIN"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const consultingFirmId = getTenantId(req)
+    const { status, reason } = StatusTransitionSchema.parse(req.body)
+
+    const result = await transitionBidDecisionStatus({
+      decisionId: req.params.id,
+      toStatus: status as ComplianceStatus,
+      consultingFirmId,
+      triggeredBy: req.user?.userId,
+      reason,
+    })
+
+    if (!result.success) {
+      return res.status(422).json({
+        success: false,
+        error: result.error,
+        code: "INVALID_TRANSITION",
+      })
+    }
+
+    return res.json({ success: true, data: { id: req.params.id, status } })
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: "Status transition failed" })
   }
 })
 

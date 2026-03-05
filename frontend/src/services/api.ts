@@ -139,6 +139,32 @@ export const firmApi = {
     api.post('/firm/seed-demo').then((r) => r.data),
 };
 
+// ---- Analytics ----
+export const analyticsApi = {
+  trends: (params?: { months?: number }) =>
+    api.get('/analytics/trends', { params }).then((r) => r.data),
+  pipeline: () =>
+    api.get('/analytics/pipeline').then((r) => r.data),
+  marketIntelligence: () =>
+    api.get('/analytics/market-intelligence').then((r) => r.data),
+  predictions: () =>
+    api.get('/analytics/predictions').then((r) => r.data),
+  portfolioHealth: () =>
+    api.get('/analytics/portfolio-health').then((r) => r.data),
+  complianceLogs: (params?: { entityType?: string; entityId?: string; page?: number; limit?: number }) =>
+    api.get('/analytics/compliance-logs', { params }).then((r) => r.data),
+};
+
+// ---- Decisions ----
+export const decisionsApi = {
+  list: (params?: any) =>
+    api.get('/decision', { params }).then((r) => r.data),
+  run: (opportunityId: string, clientCompanyId: string) =>
+    api.post('/decision/run', { opportunityId, clientCompanyId }).then((r) => r.data),
+  metrics: () =>
+    api.get('/decision/metrics').then((r) => r.data),
+};
+
 // ---- Doc Requirements ----
 export const docRequirementsApi = {
   list: (params?: any) =>

@@ -148,8 +148,10 @@ router.post(
         data: {
           opportunityId: id,
           fileName: req.file.originalname,
+          storageKey: req.file.filename,
           fileUrl: `/uploads/${req.file.filename}`,
           fileType: req.file.mimetype,
+          fileSize: req.file.size,
           isAmendment: req.body.isAmendment === "true",
         },
       })

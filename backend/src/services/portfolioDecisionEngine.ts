@@ -1,49 +1,70 @@
 import { prisma } from "../config/database"
 import { evaluateBidDecision } from "./decisionEngine"
+import { logger } from "../utils/logger"
+
+const CONCURRENCY_LIMIT = 5
+
+/**
+ * Simple concurrency limiter (avoids needing p-limit dependency).
+ * Runs async tasks with bounded parallelism.
+ */
+async function runWithConcurrency<T>(
+  tasks: (() => Promise<T>)[],
+  concurrency: number
+): Promise<T[]> {
+  const results: T[] = []
+  let index = 0
+
+  async function worker() {
+    while (index < tasks.length) {
+      const i = index++
+      results[i] = await tasks[i]()
+    }
+  }
+
+  const workers = Array.from(
+    { length: Math.min(concurrency, tasks.length) },
+    () => worker()
+  )
+  await Promise.all(workers)
+  return results
+}
 
 export async function runPortfolioEvaluation(consultingFirmId: string) {
-  // ------------------------------------------------------------
-  // 1. Fetch Active Opportunities
-  // ------------------------------------------------------------
-
   const opportunities = await prisma.opportunity.findMany({
     where: {
       consultingFirmId,
-      status: "ACTIVE"
-    }
+      status: "ACTIVE",
+    },
+    select: { id: true },
   })
-
-  // ------------------------------------------------------------
-  // 2. Fetch Active Clients
-  // ------------------------------------------------------------
 
   const clients = await prisma.clientCompany.findMany({
     where: {
       consultingFirmId,
-      isActive: true
-    }
+      isActive: true,
+    },
+    select: { id: true },
   })
 
-  let totalEvaluations = 0
-  let createdOrUpdated = 0
+  // Build task list for all pairs
+  const tasks = opportunities.flatMap((opp) =>
+    clients.map((client) => () => evaluateBidDecision(opp.id, client.id))
+  )
 
-  for (const opportunity of opportunities) {
-    for (const client of clients) {
-      totalEvaluations++
+  logger.info("Portfolio evaluation starting", {
+    opportunities: opportunities.length,
+    clients: clients.length,
+    totalPairs: tasks.length,
+    concurrency: CONCURRENCY_LIMIT,
+  })
 
-      await evaluateBidDecision(
-        opportunity.id,
-        client.id
-      )
-
-      createdOrUpdated++
-    }
-  }
+  const results = await runWithConcurrency(tasks, CONCURRENCY_LIMIT)
 
   return {
     totalOpportunities: opportunities.length,
     totalClients: clients.length,
-    totalEvaluations,
-    decisionsCreatedOrUpdated: createdOrUpdated
+    totalEvaluations: tasks.length,
+    decisionsCreatedOrUpdated: results.length,
   }
 }

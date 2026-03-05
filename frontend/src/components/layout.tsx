@@ -11,15 +11,21 @@ import {
   Shield,
   ClipboardList,
   ExternalLink,
+  BarChart3,
+  Scale,
+  ShieldCheck,
 } from 'lucide-react';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/opportunities', icon: Search, label: 'Opportunities' },
   { to: '/clients', icon: Users, label: 'Clients' },
+  { to: '/decisions', icon: Scale, label: 'Decisions' },
   { to: '/doc-requirements', icon: ClipboardList, label: 'Doc Requirements' },
   { to: '/submissions', icon: FileText, label: 'Submissions' },
   { to: '/penalties', icon: DollarSign, label: 'Penalties' },
+  { to: '/analytics', icon: BarChart3, label: 'Analytics' },
+  { to: '/compliance', icon: ShieldCheck, label: 'Compliance', adminOnly: true },
   { to: '/settings', icon: Settings, label: 'Settings', adminOnly: true },
 ];
 
