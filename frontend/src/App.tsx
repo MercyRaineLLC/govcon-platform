@@ -12,6 +12,7 @@ import { DocRequirementsPage } from "./pages/DocRequirements"
 import AnalyticsPage from "./pages/Analytics"
 import DecisionsPage from "./pages/Decisions"
 import ComplianceLogsPage from "./pages/ComplianceLogs"
+import StateMunicipalPage from "./pages/StateMunicipal"
 import { Layout } from "./components/layout"
 import ClientPortalLogin from "./pages/ClientPortalLogin"
 import ClientPortalDashboard from "./pages/ClientPortalDashboard"
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="/submissions" element={<SubmissionsPage />} />
         <Route path="/penalties" element={<PenaltiesPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/state-municipal" element={<StateMunicipalPage />} />
         <Route path="/compliance" element={<ComplianceLogsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>

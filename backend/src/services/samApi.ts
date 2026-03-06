@@ -3,6 +3,7 @@ import { prisma } from "../config/database"
 import { logger } from "../utils/logger"
 
 const SAM_BASE_URL = "https://api.sam.gov/opportunities/v2/search"
+const MAX_PAGE_SIZE = 100
 
 function formatSamDate(date: Date): string {
   const mm = String(date.getMonth() + 1).padStart(2, "0")
@@ -23,11 +24,35 @@ function mapSetAside(value?: string | null) {
   return "NONE"
 }
 
+interface IngestParams {
+  naicsCode?: string
+  limit?: number
+  jobId?: string
+  isInitialPull?: boolean
+  triggeredBy?: "MANUAL" | "SCHEDULED"
+}
+
+async function updateJobProgress(
+  jobId: string | undefined,
+  phase: string,
+  current: number,
+  total: number | null,
+  extra?: Record<string, any>
+) {
+  if (!jobId) return
+  await prisma.ingestionJob.update({
+    where: { id: jobId },
+    data: {
+      progressPhase: phase,
+      progressCurrent: current,
+      progressTotal: total,
+      ...extra,
+    },
+  }).catch(() => {})
+}
+
 export const samApiService = {
-  async searchAndIngest(
-    params: { naicsCode?: string; limit?: number },
-    consultingFirmId: string
-  ) {
+  async searchAndIngest(params: IngestParams, consultingFirmId: string) {
     try {
       if (!process.env.SAM_API_KEY) {
         throw new Error("SAM API key not configured")
@@ -40,18 +65,32 @@ export const samApiService = {
       if (!firm) throw new Error("Consulting firm not found")
 
       const now = new Date()
-      const postedFrom = firm.lastIngestedAt
-        ? formatSamDate(firm.lastIngestedAt)
-        : `01/01/${now.getFullYear()}`
+
+      // Initial pull goes back 1 year, delta pulls only since last ingest
+      let postedFrom: string
+      if (params.isInitialPull || !firm.lastIngestedAt) {
+        const ninetyDaysAgo = new Date(now)
+        ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
+        postedFrom = formatSamDate(ninetyDaysAgo)
+      } else {
+        postedFrom = formatSamDate(firm.lastIngestedAt)
+      }
       const postedTo = formatSamDate(now)
 
       let offset = 0
-      const pageSize = params.limit ?? 25
+      const pageSize = Math.min(params.limit ?? MAX_PAGE_SIZE, MAX_PAGE_SIZE)
       let totalFound = 0
       let totalIngested = 0
+      let totalUpdated = 0
       let totalErrors = 0
 
+      await updateJobProgress(params.jobId, "FETCHING", 0, null)
+
       while (true) {
+        await updateJobProgress(params.jobId, "FETCHING", totalFound, null, {
+          opportunitiesFound: totalFound,
+        })
+
         const response = await axios.get(SAM_BASE_URL, {
           params: {
             api_key: process.env.SAM_API_KEY,
@@ -66,10 +105,22 @@ export const samApiService = {
 
         const records = response.data.opportunitiesData ?? []
         if (records.length === 0) break
+
+        const totalRecords = response.data.totalRecords ?? null
         totalFound += records.length
 
-        for (const record of records) {
+        await updateJobProgress(params.jobId, "PROCESSING", 0, totalRecords ?? totalFound, {
+          opportunitiesFound: totalFound,
+        })
+
+        for (let i = 0; i < records.length; i++) {
+          const record = records[i]
           try {
+            // Update progress every 5 records
+            if (i % 5 === 0) {
+              await updateJobProgress(params.jobId, "PROCESSING", offset + i, totalRecords ?? totalFound)
+            }
+
             const existing = await prisma.opportunity.findUnique({
               where: {
                 consultingFirmId_samNoticeId: {
@@ -94,6 +145,13 @@ export const samApiService = {
                 : now,
               archiveDate: record.archiveDate ? new Date(record.archiveDate) : null,
               sourceUrl: record.uiLink ?? null,
+              description: record.description ?? null,
+              placeOfPerformance: record.placeOfPerformance
+                ? [record.placeOfPerformance.city, record.placeOfPerformance.state].filter(Boolean).join(", ")
+                : null,
+              estimatedValue: record.estimatedValue?.amount ?? null,
+              estimatedValueMin: record.estimatedValue?.minAmount ?? null,
+              estimatedValueMax: record.estimatedValue?.maxAmount ?? null,
             }
 
             if (!existing) {
@@ -122,6 +180,7 @@ export const samApiService = {
                   where: { id: existing.id },
                   data: { ...mappedData, isScored: false },
                 })
+                totalUpdated++
               }
             }
 
@@ -184,12 +243,13 @@ export const samApiService = {
         consultingFirmId,
         found: totalFound,
         ingested: totalIngested,
+        updated: totalUpdated,
         errors: totalErrors,
       })
 
-      return { success: true, found: totalFound, ingested: totalIngested, errors: totalErrors }
+      return { success: true, found: totalFound, ingested: totalIngested, updated: totalUpdated, errors: totalErrors }
     } catch (error: any) {
-      logger.error("SAM ingestion failed", { error: error.message })
+      logger.error("SAM ingestion failed", { error: error.message, status: error.response?.status, responseData: JSON.stringify(error.response?.data)?.substring(0, 500) })
       throw new Error("SAM.gov API unavailable")
     }
   },

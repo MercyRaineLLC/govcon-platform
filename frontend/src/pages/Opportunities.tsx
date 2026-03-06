@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { opportunitiesApi, jobsApi } from '../services/api';
+import { useExportCsv } from '../hooks/useExportCsv';
 import {
   PageHeader, DeadlineBadge, ProbabilityBar, formatCurrency,
   Spinner, EmptyState, ErrorBanner
@@ -29,27 +30,60 @@ interface JobState {
   status: PipelineStatus;
   message: string;
   detail: string;
+  progressCurrent: number;
+  progressTotal: number;
+  progressPhase: string;
+  eta: string;
+  startedAt: number;
 }
 
 const defaultJobState = (): JobState => ({
   jobId: null, status: 'idle', message: '', detail: '',
+  progressCurrent: 0, progressTotal: 0, progressPhase: '', eta: '', startedAt: 0,
 });
 
-function StatusBanner({ state, label }: { state: JobState; label: string }) {
+function ProgressBanner({ state, label }: { state: JobState; label: string }) {
   if (state.status === 'idle') return null;
   const configs = {
     running: { bg: 'bg-blue-900/30 border-blue-700', text: 'text-blue-300', icon: <Loader className="w-4 h-4 animate-spin flex-shrink-0 mt-0.5" /> },
     success: { bg: 'bg-green-900/30 border-green-700', text: 'text-green-300', icon: <CheckCircle className="w-4 h-4 flex-shrink-0 mt-0.5" /> },
     error:   { bg: 'bg-red-900/30 border-red-700',   text: 'text-red-300',   icon: <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" /> },
   };
-  const c = configs[state.status as keyof typeof configs];
-  if (!c) return null;
+  const cfg = configs[state.status as keyof typeof configs];
+  if (!cfg) return null;
+  const pct = state.progressTotal > 0
+    ? Math.min(Math.round((state.progressCurrent / state.progressTotal) * 100), 100)
+    : null;
+
   return (
-    <div className={`flex items-start gap-3 border ${c.bg} ${c.text} text-sm rounded px-4 py-3 mb-3`}>
-      {c.icon}
-      <div>
-        <p className="font-medium">{label}: {state.message}</p>
-        {state.detail && <p className="text-xs opacity-75 mt-0.5">{state.detail}</p>}
+    <div className={`border ${cfg.bg} ${cfg.text} text-sm rounded px-4 py-3 mb-3`}>
+      <div className="flex items-start gap-3">
+        {cfg.icon}
+        <div className="flex-1">
+          <div className="flex items-center justify-between">
+            <p className="font-medium">{label}: {state.message}</p>
+            {state.eta && <p className="text-xs opacity-75">{state.eta}</p>}
+          </div>
+          {state.detail && <p className="text-xs opacity-75 mt-0.5">{state.detail}</p>}
+          {state.status === 'running' && pct !== null && (
+            <div className="mt-2">
+              <div className="flex justify-between text-xs mb-1">
+                <span>{state.progressPhase === 'FETCHING' ? 'Fetching from SAM.gov' : 'Processing records'}</span>
+                <span>{pct}% ({state.progressCurrent.toLocaleString()}/{state.progressTotal.toLocaleString()})</span>
+              </div>
+              <div className="w-full bg-gray-700 rounded-full h-2">
+                <div className="bg-blue-500 h-2 rounded-full transition-all duration-500" style={{ width: pct + '%' }} />
+              </div>
+            </div>
+          )}
+          {state.status === 'running' && pct === null && (
+            <div className="mt-2">
+              <div className="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
+                <div className="bg-blue-500 h-2 rounded-full w-1/3 animate-pulse" />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -93,6 +127,21 @@ export function OpportunitiesPage() {
           pollRef.current = null;
           onComplete(job);
           qc.invalidateQueries({ queryKey: ['opportunities'] });
+        } else if (job.status === 'RUNNING') {
+          const current = job.progressCurrent || 0;
+          const total = job.progressTotal || 0;
+          const phase = job.progressPhase || '';
+          setState((prev) => {
+            let eta = '';
+            if (total > 0 && current > 0 && prev.startedAt > 0) {
+              const elapsed = (Date.now() - prev.startedAt) / 1000;
+              const rate = current / elapsed;
+              const remaining = Math.ceil((total - current) / rate);
+              if (remaining < 60) eta = remaining + 's remaining';
+              else eta = Math.ceil(remaining / 60) + 'm remaining';
+            }
+            return { ...prev, progressCurrent: current, progressTotal: total, progressPhase: phase, eta };
+          });
         } else if (job.status === 'FAILED') {
           clearInterval(pollRef.current!);
           pollRef.current = null;
@@ -109,39 +158,57 @@ export function OpportunitiesPage() {
     };
   }, []);
 
+  const { exportCsv } = useExportCsv()
+
+  const handleExport = () => {
+    const rows = (data?.opportunities || []).map((o: any) => ({
+      Title: o.title,
+      Agency: o.agency,
+      NAICS: o.naicsCode,
+      'Set-Aside': o.setAsideType,
+      'Win Prob': o.probabilityScore != null ? Math.round(o.probabilityScore * 100) + '%' : '',
+      'Expected Value': o.expectedValue ?? '',
+      'Posted Date': o.postedDate ? o.postedDate.slice(0, 10) : '',
+      'Response Deadline': o.responseDeadline ? o.responseDeadline.slice(0, 10) : '',
+      Status: o.status,
+      Source: o.sourceUrl ?? '',
+    }))
+    exportCsv('opportunities.csv', rows)
+  }
+
   const handleIngest = async () => {
-    setIngestState({ jobId: null, status: 'running', message: 'Contacting SAM.gov...', detail: '' });
+    setIngestState({ ...defaultJobState(), status: 'running', message: 'Contacting SAM.gov...', startedAt: Date.now() });
     try {
       const res = await jobsApi.triggerIngest({ naicsCode: filters.naicsCode || undefined, limit: 25 });
       const jobId = res.data.jobId;
-      setIngestState((s) => ({ ...s, jobId, message: 'Ingesting opportunities...' }));
+      setIngestState((s) => ({ ...s, jobId, message: 'Ingesting opportunities...', startedAt: Date.now() }));
       pollJob(jobId, setIngestState, ingestPollRef, (job) => {
-        setIngestState({ jobId, status: 'success', message: 'Ingest complete', detail: `${job.opportunitiesNew || 0} new · ${job.scoringJobsQueued || 0} scoring queued · ${job.errors || 0} errors` });
+        setIngestState({ ...defaultJobState(), jobId, status: 'success', message: 'Ingest complete', detail: `${job.opportunitiesNew || 0} new · ${job.scoringJobsQueued || 0} scoring queued · ${job.errors || 0} errors` });
         setTimeout(() => setIngestState(defaultJobState()), 12000);
       });
     } catch (err: any) {
-      setIngestState({ jobId: null, status: 'error', message: 'Ingest failed', detail: err?.response?.data?.error || 'SAM.gov unavailable' });
+      setIngestState({ ...defaultJobState(), jobId: null, status: 'error', message: 'Ingest failed', detail: err?.response?.data?.error || 'SAM.gov unavailable' });
     }
   };
 
   const handleEnrich = async () => {
-    setEnrichState({ jobId: null, status: 'running', message: 'Querying USAspending...', detail: '' });
+    setEnrichState({ ...defaultJobState(), status: 'running', message: 'Querying USAspending...', startedAt: Date.now() });
     try {
       const res = await jobsApi.triggerEnrich();
       const jobId = res.data.jobId;
       if (!jobId) {
-        setEnrichState({ jobId: null, status: 'success', message: res.data.message || 'All enriched', detail: '' });
+        setEnrichState({ ...defaultJobState(), jobId: null, status: 'success', message: res.data.message || 'All enriched', detail: '' });
         setTimeout(() => setEnrichState(defaultJobState()), 8000);
         return;
       }
       const toEnrich = res.data.opportunitiesToEnrich || 0;
       setEnrichState((s) => ({ ...s, jobId, message: `Enriching ${toEnrich.toLocaleString()} opportunities...`, detail: 'Pulling historical award data from USAspending' }));
       pollJob(jobId, setEnrichState, enrichPollRef, (job) => {
-        setEnrichState({ jobId, status: 'success', message: 'Enrichment complete', detail: `${job.enrichedCount || 0} opportunities enriched with award history` });
+        setEnrichState({ ...defaultJobState(), jobId, status: 'success', message: 'Enrichment complete', detail: `${job.enrichedCount || 0} opportunities enriched with award history` });
         setTimeout(() => setEnrichState(defaultJobState()), 12000);
       });
     } catch (err: any) {
-      setEnrichState({ jobId: null, status: 'error', message: 'Enrichment failed', detail: err?.response?.data?.error || 'USAspending API unavailable' });
+      setEnrichState({ ...defaultJobState(), jobId: null, status: 'error', message: 'Enrichment failed', detail: err?.response?.data?.error || 'USAspending API unavailable' });
     }
   };
 
@@ -159,6 +226,10 @@ export function OpportunitiesPage() {
             {ingestState.status === 'running' ? <Loader className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
             {ingestState.status === 'running' ? 'Ingesting...' : 'Ingest SAM.gov'}
           </button>
+          <button onClick={handleExport} className="btn-secondary flex items-center gap-2">
+            <Download className="w-4 h-4" />
+            Export CSV
+          </button>
           <button onClick={handleEnrich} disabled={enrichState.status === 'running'} className="btn-secondary flex items-center gap-2">
             {enrichState.status === 'running' ? <Loader className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
             {enrichState.status === 'running' ? 'Enriching...' : 'Enrich with Award Data'}
@@ -166,8 +237,8 @@ export function OpportunitiesPage() {
         </div>
       </PageHeader>
 
-      <StatusBanner state={ingestState} label="Ingest" />
-      <StatusBanner state={enrichState} label="Enrichment" />
+      <ProgressBanner state={ingestState} label="Ingest" />
+      <ProgressBanner state={enrichState} label="Enrichment" />
 
       {/* Filters */}
       <div className="card mb-6">

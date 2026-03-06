@@ -62,7 +62,9 @@ model ConsultingFirm {
   submissionRecords    SubmissionRecord[]
   bidDecisions         BidDecision[]
   documentRequirements DocumentRequirement[]
-  complianceLogs       ComplianceLog[]
+  complianceLogs                ComplianceLog[]
+  stateMunicipalSubscription    StateMunicipalSubscription?
+  stateMunicipalOpportunities   StateMunicipalOpportunity[]
 
   @@map("consulting_firms")
 }
@@ -322,6 +324,12 @@ model IngestionJob {
   errors             Int?
   errorDetail        String?
 
+  // Progress tracking for real-time UI
+  progressCurrent Int?
+  progressTotal   Int?
+  progressPhase   String?
+  triggeredBy     String    @default("MANUAL")
+
   startedAt   DateTime?
   completedAt DateTime?
   createdAt   DateTime  @default(now())
@@ -539,4 +547,71 @@ model ComplianceLog {
   @@index([entityId])
   @@index([consultingFirmId])
   @@map("compliance_logs")
+}
+
+//////////////////////////////////////////////////////////////
+// STATE & MUNICIPAL CONTRACTS (Paid Add-on)
+//////////////////////////////////////////////////////////////
+
+enum ContractLevel {
+  FEDERAL
+  STATE
+  MUNICIPAL
+  COUNTY
+}
+
+model StateMunicipalSubscription {
+  id               String   @id @default(cuid())
+  consultingFirmId String   @unique
+  tier             String   @default("NONE") // NONE, STATE_ONLY, FULL (state + municipal)
+  monthlyPrice     Decimal  @db.Decimal(10, 2)
+  isActive         Boolean  @default(false)
+  activatedAt      DateTime?
+  cancelledAt      DateTime?
+  trialEndsAt      DateTime?
+  statesEnabled    String[] @default([]) // e.g. ["VA", "MD", "DC"]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  consultingFirm ConsultingFirm @relation(fields: [consultingFirmId], references: [id], onDelete: Cascade)
+
+  @@map("state_municipal_subscriptions")
+}
+
+model StateMunicipalOpportunity {
+  id               String        @id @default(cuid())
+  consultingFirmId String
+  contractLevel    ContractLevel @default(STATE)
+  state            String        // e.g. "VA", "MD"
+  jurisdiction     String?       // e.g. "City of Richmond", "Fairfax County"
+  sourcePortal     String?       // e.g. "eVA", "eMMA"
+  externalId       String?       // ID from source portal
+  title            String
+  agency           String
+  description      String?
+  naicsCode        String        @default("")
+  setAsideType     String        @default("NONE")
+  estimatedValue   Decimal?      @db.Decimal(14, 2)
+  postedDate       DateTime?
+  responseDeadline DateTime
+  sourceUrl        String?
+  contactName      String?
+  contactEmail     String?
+  status           OpportunityStatus @default(ACTIVE)
+
+  probabilityScore Float    @default(0)
+  expectedValue    Decimal? @db.Decimal(14, 2)
+  isScored         Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  consultingFirm ConsultingFirm @relation(fields: [consultingFirmId], references: [id], onDelete: Cascade)
+
+  @@unique([consultingFirmId, externalId])
+  @@index([consultingFirmId])
+  @@index([state])
+  @@index([contractLevel])
+  @@index([responseDeadline])
+  @@map("state_municipal_opportunities")
 }

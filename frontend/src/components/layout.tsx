@@ -1,4 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { OnboardingWizard } from './OnboardingWizard';
 import { useAuth } from '../hooks/useAuth';
 import {
   LayoutDashboard,
@@ -14,6 +16,7 @@ import {
   BarChart3,
   Scale,
   ShieldCheck,
+  MapPin,
 } from 'lucide-react';
 
 const navItems = [
@@ -25,7 +28,8 @@ const navItems = [
   { to: '/submissions', icon: FileText, label: 'Submissions' },
   { to: '/penalties', icon: DollarSign, label: 'Penalties' },
   { to: '/analytics', icon: BarChart3, label: 'Analytics' },
-  { to: '/compliance', icon: ShieldCheck, label: 'Compliance', adminOnly: true },
+  { to: '/compliance', icon: ShieldCheck,
+  MapPin, label: 'Compliance', adminOnly: true },
   { to: '/settings', icon: Settings, label: 'Settings', adminOnly: true },
 ];
 

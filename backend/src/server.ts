@@ -19,6 +19,7 @@ import { logger } from './utils/logger'
 import { errorHandler, notFoundHandler } from './middleware/errorHandler'
 import { startScoringWorker } from './workers/scoringWorker'
 import { startEnrichmentWorker } from './workers/enrichmentWorker'
+import { startScheduledIngest, stopScheduledIngest } from './services/scheduledIngest'
 
 // Route imports
 import authRoutes from './routes/auth'
@@ -33,6 +34,8 @@ import documentsRoutes from './routes/documents'
 import docRequirementsRoutes from './routes/docRequirements'
 import clientPortalRoutes from './routes/clientPortal'
 import rewardsRoutes from './routes/rewards'
+import analyticsRoutes from './routes/analytics'
+import stateMunicipalRoutes from './routes/stateMunicipal'
 
 async function bootstrap(): Promise<void> {
   const app = express()
@@ -130,6 +133,8 @@ async function bootstrap(): Promise<void> {
   apiRouter.use('/doc-requirements', docRequirementsRoutes)
   apiRouter.use('/client-portal', clientPortalRoutes)
   apiRouter.use('/rewards', rewardsRoutes)
+  apiRouter.use('/analytics', analyticsRoutes)
+  apiRouter.use('/state-municipal', stateMunicipalRoutes)
 
   app.use('/api', apiRouter)
 
@@ -147,6 +152,9 @@ async function bootstrap(): Promise<void> {
 
   const scoringWorker = startScoringWorker()
   const enrichmentWorker = startEnrichmentWorker()
+
+  // Start scheduled SAM.gov ingest (7am, 1pm, 4:30pm ET)
+  const scheduledTasks = startScheduledIngest()
 
   // -------------------------------------------------------------
   // Start HTTP Server

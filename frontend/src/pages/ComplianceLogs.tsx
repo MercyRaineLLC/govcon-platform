@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { analyticsApi } from '../services/api'
+import { useExportCsv } from '../hooks/useExportCsv'
 import {
   PageHeader,
   Spinner,
   ErrorBanner,
 } from '../components/ui'
-import { ShieldCheck, ArrowRight } from 'lucide-react'
+import { ShieldCheck, ArrowRight, Download } from 'lucide-react'
 
 const statusColor: Record<string, string> = {
   APPROVED: 'bg-green-900 text-green-300',
@@ -17,6 +18,23 @@ const statusColor: Record<string, string> = {
 
 export function ComplianceLogsPage() {
   const [entityType, setEntityType] = useState<string>('')
+  const { exportCsv } = useExportCsv()
+
+  const handleExportReport = async () => {
+    const result = await analyticsApi.complianceReport({})
+    const report = result?.report
+    if (!report) return
+    const rows = report.complianceLogs.map((l: any) => ({
+      ID: l.id,
+      'Entity Type': l.entityType,
+      'Entity ID': l.entityId,
+      Action: l.action,
+      Reason: l.reason,
+      'Triggered By': l.triggeredBy,
+      Timestamp: l.timestamp,
+    }))
+    exportCsv('compliance-audit-report.csv', rows)
+  }
   const [page, setPage] = useState(1)
 
   const { data, isLoading, error } = useQuery({
@@ -39,7 +57,12 @@ export function ComplianceLogsPage() {
       <PageHeader
         title="Compliance Audit Log"
         subtitle="Track all compliance state transitions with full audit trail"
-      />
+      >
+        <button onClick={handleExportReport} className="btn-secondary flex items-center gap-2">
+          <Download className="w-4 h-4" />
+          Export Report
+        </button>
+      </PageHeader>
 
       {/* Filters */}
       <div className="flex items-center gap-4 mb-6">

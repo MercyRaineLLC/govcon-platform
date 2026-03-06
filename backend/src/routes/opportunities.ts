@@ -29,23 +29,56 @@ const IngestSchema = z.object({
 })
 
 // -------------------------------------------------------------
-// GET ALL OPPORTUNITIES
+// GET ALL OPPORTUNITIES (with filtering, sorting, pagination)
 // -------------------------------------------------------------
 router.get("/", async (req: AuthenticatedRequest, res, next) => {
   try {
     const consultingFirmId = getTenantId(req)
 
-    const opportunities = await prisma.opportunity.findMany({
-      where: { consultingFirmId },
-      orderBy: { responseDeadline: "asc" },
+    const page = Math.max(1, parseInt(req.query.page as string) || 1)
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 25))
+    const skip = (page - 1) * limit
+
+    // Build where clause from filters
+    const where: any = { consultingFirmId }
+    if (req.query.naicsCode) where.naicsCode = { contains: req.query.naicsCode as string }
+    if (req.query.agency) where.agency = { contains: req.query.agency as string, mode: 'insensitive' }
+    if (req.query.setAsideType) where.setAsideType = req.query.setAsideType as string
+    if (req.query.daysUntilDeadline) {
+      const maxDays = parseInt(req.query.daysUntilDeadline as string)
+      if (!isNaN(maxDays)) {
+        const maxDate = new Date()
+        maxDate.setDate(maxDate.getDate() + maxDays)
+        where.responseDeadline = { lte: maxDate, gte: new Date() }
+      }
+    }
+
+    // Build orderBy from sort params
+    const sortBy = (req.query.sortBy as string) || 'probability'
+    const sortOrder = (req.query.sortOrder as string) === 'asc' ? 'asc' : 'desc'
+    const orderByMap: Record<string, any> = {
+      probability: { probabilityScore: sortOrder },
+      deadline: { responseDeadline: sortOrder === 'desc' ? 'asc' : 'desc' },
+      expectedValue: { expectedValue: sortOrder },
+      createdAt: { createdAt: sortOrder },
+    }
+    const orderBy = orderByMap[sortBy] || { probabilityScore: 'desc' }
+
+    const [opportunities, total] = await Promise.all([
+      prisma.opportunity.findMany({ where, orderBy, skip, take: limit }),
+      prisma.opportunity.count({ where }),
+    ])
+
+    const enriched = opportunities.map((opp) => {
+      const deadline = classifyDeadline(opp.responseDeadline)
+      return { ...opp, deadline }
     })
 
-    const enriched = opportunities.map((opp) => ({
-      ...opp,
-      deadlineClassification: classifyDeadline(opp.responseDeadline),
-    }))
-
-    res.json({ success: true, data: enriched })
+    res.json({
+      success: true,
+      data: enriched,
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    })
   } catch (err) {
     next(err)
   }
@@ -74,7 +107,7 @@ router.get("/:id", async (req: AuthenticatedRequest, res, next) => {
       success: true,
       data: {
         ...opportunity,
-        deadlineClassification: classifyDeadline(opportunity.responseDeadline),
+        deadline: classifyDeadline(opportunity.responseDeadline),
       },
     })
   } catch (err) {

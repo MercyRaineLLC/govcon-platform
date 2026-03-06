@@ -256,4 +256,88 @@ router.get(
   }
 )
 
+
+// GET /api/analytics/compliance-report
+// Returns a CSV-ready compliance audit report for the firm
+router.get(
+  '/compliance-report',
+  authenticateJWT,
+  enforceTenantScope,
+  async (req: AuthenticatedRequest, res, next) => {
+    try {
+      const consultingFirmId = getTenantId(req)
+      const startDate = req.query.startDate ? new Date(req.query.startDate as string) : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
+      const endDate = req.query.endDate ? new Date(req.query.endDate as string) : new Date()
+
+      const [logs, penalties, submissions] = await Promise.all([
+        prisma.complianceLog.findMany({
+          where: { consultingFirmId, createdAt: { gte: startDate, lte: endDate } },
+          orderBy: { createdAt: 'desc' },
+          take: 500,
+        }),
+        prisma.financialPenalty.findMany({
+          where: { consultingFirmId, appliedAt: { gte: startDate, lte: endDate } },
+          include: { clientCompany: { select: { name: true } } },
+          orderBy: { appliedAt: 'desc' },
+          take: 200,
+        }),
+        prisma.submissionRecord.findMany({
+          where: { consultingFirmId, submittedAt: { gte: startDate, lte: endDate } },
+          include: {
+            clientCompany: { select: { name: true } },
+            opportunity: { select: { title: true, agency: true } },
+          },
+          orderBy: { submittedAt: 'desc' },
+          take: 200,
+        }),
+      ])
+
+      const report = {
+        generatedAt: new Date().toISOString(),
+        period: { startDate: startDate.toISOString(), endDate: endDate.toISOString() },
+        summary: {
+          totalComplianceEvents: logs.length,
+          totalPenalties: penalties.length,
+          totalPenaltyAmount: penalties.reduce((sum, p) => sum + Number(p.amount), 0),
+          paidPenalties: penalties.filter((p) => p.isPaid).length,
+          unpaidPenalties: penalties.filter((p) => !p.isPaid).length,
+          totalSubmissions: submissions.length,
+          lateSubmissions: submissions.filter((s) => !s.wasOnTime).length,
+        },
+        complianceLogs: logs.map((l) => ({
+          id: l.id,
+          entityType: l.entityType,
+          entityId: l.entityId,
+          action: (l.fromStatus || 'N/A') + ' -> ' + (l.toStatus || 'N/A'),
+          reason: l.reason,
+          triggeredBy: l.triggeredBy,
+          timestamp: l.createdAt.toISOString(),
+        })),
+        penalties: penalties.map((p) => ({
+          id: p.id,
+          client: p.clientCompany.name,
+          type: p.penaltyType,
+          amount: Number(p.amount),
+          isPaid: p.isPaid,
+          appliedAt: p.appliedAt.toISOString(),
+          reason: p.reason,
+        })),
+        submissions: submissions.map((s) => ({
+          id: s.id,
+          client: s.clientCompany.name,
+          opportunity: s.opportunity?.title || 'N/A',
+          agency: s.opportunity?.agency || 'N/A',
+          status: s.status,
+          wasOnTime: s.wasOnTime,
+          submittedAt: s.submittedAt?.toISOString() || 'N/A',
+        })),
+      }
+
+      res.json({ success: true, report })
+    } catch (err) {
+      next(err)
+    }
+  }
+)
+
 export default router

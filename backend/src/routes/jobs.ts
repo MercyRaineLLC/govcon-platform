@@ -51,7 +51,7 @@ router.post('/ingest', async (req: AuthenticatedRequest, res: Response, next: Ne
 
     setImmediate(async () => {
       try {
-        const stats = await samApiService.searchAndIngest(params, consultingFirmId) as any;
+        const stats = await samApiService.searchAndIngest({ ...params, jobId: job.id }, consultingFirmId) as any;
         const scoringCount = await enqueueAllOpportunitiesForScoring(consultingFirmId);
 
         await prisma.ingestionJob.update({

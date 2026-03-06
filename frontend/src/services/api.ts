@@ -153,6 +153,8 @@ export const analyticsApi = {
     api.get('/analytics/portfolio-health').then((r) => r.data),
   complianceLogs: (params?: { entityType?: string; entityId?: string; page?: number; limit?: number }) =>
     api.get('/analytics/compliance-logs', { params }).then((r) => r.data),
+  complianceReport: (params?: { startDate?: string; endDate?: string }) =>
+    api.get('/analytics/compliance-report', { params }).then((r) => r.data),
 };
 
 // ---- Decisions ----
@@ -204,3 +206,14 @@ export const clientPortalUsersApi = {
   register: (data: { clientCompanyId: string; email: string; password: string; firstName: string; lastName: string }) =>
     api.post('/client-portal/auth/register', data).then((r) => r.data),
 };
+// ---- State / Municipal ----
+export const stateMunicipalApi = {
+  subscription: () =>
+    api.get('/state-municipal/subscription').then((r) => r.data),
+  opportunities: (params?: any) =>
+    api.get('/state-municipal/opportunities', { params }).then((r) => r.data),
+  getById: (id: string) =>
+    api.get(`/state-municipal/opportunities/${id}`).then((r) => r.data),
+  stats: () =>
+    api.get('/state-municipal/stats').then((r) => r.data),
+}

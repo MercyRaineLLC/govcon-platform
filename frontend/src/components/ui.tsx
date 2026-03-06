@@ -50,6 +50,12 @@ export function ProbabilityBar({ probability }: ProbabilityBarProps) {
         />
       </div>
       <span className="text-xs font-mono text-gray-300 w-8">{pct}%</span>
+      <span
+        className="text-xs text-gray-500 border border-gray-700 rounded px-1 cursor-help"
+        title="Win probability is a statistical estimate based on historical award patterns, set-aside alignment, competition count, and penalty history. It is not a guarantee of award."
+      >
+        est.
+      </span>
     </div>
   );
 }
