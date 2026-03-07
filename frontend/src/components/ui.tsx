@@ -125,9 +125,11 @@ export function PageHeader({ title, subtitle, children }: { title: string; subti
 }
 
 // ---- Currency formatter ----
-export function formatCurrency(value: number | null | undefined): string {
-  if (value == null) return 'N/A';
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(0)}K`;
-  return `$${value.toFixed(0)}`;
+export function formatCurrency(value: number | string | null | undefined): string {
+  if (value == null || value === '') return 'N/A';
+  const n = typeof value === 'string' ? parseFloat(value) : value;
+  if (isNaN(n)) return 'N/A';
+  if (n >= 1_000_000) return '$' + (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000) return '$' + (n / 1_000).toFixed(0) + 'K';
+  return '$' + n.toFixed(0);
 }
