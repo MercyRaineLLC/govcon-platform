@@ -96,7 +96,8 @@ export const samApiService = {
             api_key: process.env.SAM_API_KEY,
             postedFrom,
             postedTo,
-            naicsCode: params.naicsCode,
+            ptype: 'o,k,p,r',
+            naicsCode: params.naicsCode || undefined,
             limit: pageSize,
             offset,
           },
@@ -145,13 +146,35 @@ export const samApiService = {
                 : now,
               archiveDate: record.archiveDate ? new Date(record.archiveDate) : null,
               sourceUrl: record.uiLink ?? null,
-              description: record.description ?? null,
+              // Discard URL-only descriptions — SAM.gov often returns an API link instead of text
+              description: record.description && !String(record.description).trim().startsWith('http')
+                ? String(record.description).trim()
+                : null,
+              // city/state are objects { code, name } — extract the name string
               placeOfPerformance: record.placeOfPerformance
-                ? [record.placeOfPerformance.city, record.placeOfPerformance.state].filter(Boolean).join(", ")
+                ? [
+                    record.placeOfPerformance.city?.name ?? (typeof record.placeOfPerformance.city === 'string' ? record.placeOfPerformance.city : null),
+                    record.placeOfPerformance.state?.name ?? record.placeOfPerformance.state?.code ?? (typeof record.placeOfPerformance.state === 'string' ? record.placeOfPerformance.state : null),
+                  ].filter((s): s is string => typeof s === 'string' && s.trim().length > 0).join(', ') || null
                 : null,
               estimatedValue: record.estimatedValue?.amount ?? null,
               estimatedValueMin: record.estimatedValue?.minAmount ?? null,
               estimatedValueMax: record.estimatedValue?.maxAmount ?? null,
+              // Point of Contact — prefer primary, fall back to first entry
+              ...(Array.isArray(record.pointOfContact) && record.pointOfContact.length > 0
+                ? (() => {
+                    const poc = record.pointOfContact.find((p: any) => p.type === 'primary') ?? record.pointOfContact[0]
+                    // Only use fullName if it looks like a person's name (short, no newlines)
+                    const rawName = poc.fullName ?? null
+                    const cleanName = rawName && rawName.length < 80 && !rawName.includes('\n') ? rawName.trim() : null
+                    return {
+                      pocName: cleanName,
+                      pocEmail: poc.email ?? null,
+                      pocPhone: poc.phone ? String(poc.phone).replace(/[^\d\s().+-]/g, '').trim() : null,
+                      pocTitle: poc.title && poc.title.length < 100 ? poc.title.trim() : null,
+                    }
+                  })()
+                : {}),
             }
 
             if (!existing) {
@@ -173,7 +196,8 @@ export const samApiService = {
                 existing.responseDeadline.getTime() !==
                   (mappedData.responseDeadline?.getTime() ?? 0) ||
                 existing.setAsideType !== mappedData.setAsideType ||
-                existing.title !== mappedData.title
+                existing.title !== mappedData.title ||
+                existing.pocEmail === null
 
               if (changed) {
                 await prisma.opportunity.update({

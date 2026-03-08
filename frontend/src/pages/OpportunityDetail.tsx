@@ -1,12 +1,15 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { opportunitiesApi, jobsApi, documentsApi, scoreApi } from '../services/api'
+import { opportunitiesApi, jobsApi, documentsApi, scoreApi, clientsApi, decisionsApi } from '../services/api'
+import { useQuery } from '@tanstack/react-query'
 import { ScoreBreakdown } from '../components/ScoreBreakdown'
 import {
   Upload, FileText, Loader, CheckCircle, AlertCircle,
   ExternalLink, Trophy, Users, TrendingUp, Shield,
-  Languages, ChevronDown, ChevronUp, Download, ArrowLeft,
+  Languages, ChevronDown, ChevronUp, Download, ArrowLeft, BookOpen, Send, Mail, ClipboardList,
+  UserCheck, ChevronDown as ChevDown, BarChart3,
 } from 'lucide-react'
+import { parseSubmissionInstructions } from '../utils/parseSubmission'
 
 interface Amendment {
   id: string
@@ -33,6 +36,7 @@ interface Document {
 
 interface OpportunityDetail {
   id: string
+  samNoticeId?: string
   title: string
   agency: string
   naicsCode: string
@@ -60,6 +64,10 @@ interface OpportunityDetail {
   recompeteFlag?: boolean
   incumbentSignalDetected?: boolean
   deadlineClassification?: { priority: string; daysUntilDeadline: number; label: string }
+  pocName?: string
+  pocEmail?: string
+  pocPhone?: string
+  pocTitle?: string
 }
 
 export default function OpportunityDetail() {
@@ -76,6 +84,10 @@ export default function OpportunityDetail() {
   const [expandedAmendmentId, setExpandedAmendmentId] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [selectedClientId, setSelectedClientId] = useState<string>('')
+  const [clientScore, setClientScore] = useState<any>(null)
+  const [scoringClient, setScoringClient] = useState(false)
+  const [scoreError, setScoreError] = useState('')
 
   const fetchOpportunity = async () => {
     if (!id) return
@@ -93,6 +105,27 @@ export default function OpportunityDetail() {
     fetchOpportunity()
     return () => { if (pollRef.current) clearInterval(pollRef.current) }
   }, [id])
+
+  const { data: clientsData } = useQuery({
+    queryKey: ['clients-list'],
+    queryFn: () => clientsApi.list({ limit: 200 }),
+  })
+  const clients: any[] = clientsData?.data ?? []
+
+  const runClientScore = async (clientId: string) => {
+    if (!clientId || !id) return
+    setScoringClient(true)
+    setScoreError('')
+    setClientScore(null)
+    try {
+      const res = await decisionsApi.run(id, clientId)
+      setClientScore(res.data ?? res)
+    } catch (err: any) {
+      setScoreError(err?.response?.data?.error || 'Scoring failed')
+    } finally {
+      setScoringClient(false)
+    }
+  }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -166,6 +199,20 @@ export default function OpportunityDetail() {
     ? `${fmt(data.estimatedValueMin)} – ${fmt(data.estimatedValueMax)}`
     : 'TBD'
 
+  const subInfo = parseSubmissionInstructions(data.description ?? "")
+  // Prefer POC email/name from SAM.gov over anything parsed from description text
+  if (data.pocEmail && !subInfo.email) {
+    subInfo.email = data.pocEmail
+    if (!subInfo.method || subInfo.method === 'See solicitation for details') {
+      subInfo.method = 'Email submission'
+    }
+  }
+  if (data.pocName && !subInfo.contactName) subInfo.contactName = data.pocName
+
+  const samUrl = data.sourceUrl
+    || (data.samNoticeId ? `https://sam.gov/opp/${data.samNoticeId}/view` : null)
+    || `https://sam.gov/search/?index=opp&keywords=${encodeURIComponent(data.title)}`
+
   return (
     <div className="space-y-6 pb-12">
       {/* Back */}
@@ -238,18 +285,45 @@ export default function OpportunityDetail() {
           )}
         </div>
 
-        {/* SAM.gov CTA — primary action */}
-        {data.sourceUrl && (
-          <a
-            href={data.sourceUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-          >
-            <ExternalLink className="w-4 h-4" />
-            Open Full Solicitation on SAM.gov
-          </a>
+        {/* Point of Contact */}
+        {(data.pocName || data.pocEmail) && (
+          <div className="mb-4 flex items-start gap-3 bg-blue-950/20 border border-blue-900/40 rounded-lg px-4 py-3">
+            <Mail className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs text-gray-500 mb-0.5">Contracting Officer / Point of Contact</p>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                {data.pocName && <p className="text-sm font-medium text-gray-200">{data.pocName}</p>}
+                {data.pocTitle && <p className="text-xs text-gray-500">{data.pocTitle}</p>}
+                {data.pocEmail && (
+                  <a href={"mailto:" + data.pocEmail} className="text-sm text-blue-400 hover:text-blue-300 font-mono">
+                    {data.pocEmail}
+                  </a>
+                )}
+                {data.pocPhone && <p className="text-sm text-gray-400 font-mono">{data.pocPhone}</p>}
+              </div>
+            </div>
+          </div>
         )}
+
+        {/* SAM.gov CTA — primary action */}
+        {(() => {
+          const subInfo = parseSubmissionInstructions(data.description ?? "")
+
+  const samUrl = data.sourceUrl
+            || (data.samNoticeId ? `https://sam.gov/opp/${data.samNoticeId}/view` : null)
+            || `https://sam.gov/search/?index=opp&keywords=${encodeURIComponent(data.title)}`
+          return (
+            <a
+              href={samUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            >
+              <ExternalLink className="w-4 h-4" />
+              View on SAM.gov
+            </a>
+          )
+        })()}
 
         {/* Description */}
         {data.description && (
@@ -260,12 +334,252 @@ export default function OpportunityDetail() {
         )}
       </div>
 
+      
+      {/* CLIENT SCORING CONTEXT */}
+      <div className="card border-blue-800/50">
+        <h2 className="text-base font-semibold text-gray-200 mb-3 flex items-center gap-2">
+          <UserCheck className="w-4 h-4 text-blue-400" />
+          Score for a Specific Client
+        </h2>
+        <div className="flex flex-wrap gap-3 items-end">
+          <div className="flex-1 min-w-[200px]">
+            <label className="text-gray-500 text-xs mb-1 block">Select Client Company</label>
+            <select
+              className="input w-full text-sm"
+              value={selectedClientId}
+              onChange={(e) => { setSelectedClientId(e.target.value); setClientScore(null); setScoreError('') }}
+            >
+              <option value="">-- Choose a client --</option>
+              {clients.map((c: any) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+          <button
+            onClick={() => runClientScore(selectedClientId)}
+            disabled={!selectedClientId || scoringClient}
+            className="btn-primary flex items-center gap-2 text-sm"
+          >
+            {scoringClient ? <Loader className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
+            {scoringClient ? 'Analyzing...' : 'Run Analysis'}
+          </button>
+        </div>
+        {scoreError && <p className="text-red-400 text-xs mt-2">{scoreError}</p>}
+        {clientScore && (
+          <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 border-t border-gray-800 pt-4">
+            <div>
+              <p className="text-gray-500 text-xs mb-0.5">Win Probability</p>
+              <p className="text-2xl font-bold font-mono text-green-400">{clientScore.winProbabilityPercent}</p>
+            </div>
+            <div>
+              <p className="text-gray-500 text-xs mb-0.5">Recommendation</p>
+              <span className={'text-sm font-semibold px-2 py-0.5 rounded ' + (
+                clientScore.recommendation === 'BID PRIME' ? 'bg-green-900/40 text-green-300' :
+                clientScore.recommendation === 'BID SUB' ? 'bg-blue-900/40 text-blue-300' :
+                'bg-red-900/40 text-red-300'
+              )}>
+                {clientScore.recommendation}
+              </span>
+            </div>
+            <div>
+              <p className="text-gray-500 text-xs mb-0.5">ROI Multiple</p>
+              <p className="text-xl font-bold font-mono text-blue-300">{clientScore.roiMultiple}</p>
+            </div>
+            <div>
+              <p className="text-gray-500 text-xs mb-0.5">Risk Level</p>
+              <span className={'text-sm font-semibold px-2 py-0.5 rounded ' + (
+                clientScore.riskLevel === 'LOW' ? 'bg-green-900/40 text-green-300' :
+                clientScore.riskLevel === 'MODERATE' ? 'bg-yellow-900/40 text-yellow-300' :
+                'bg-red-900/40 text-red-300'
+              )}>
+                {clientScore.riskLevel}
+              </span>
+            </div>
+            {clientScore.netExpectedValue != null && (
+              <div>
+                <p className="text-gray-500 text-xs mb-0.5">Net Expected Value</p>
+                <p className="text-sm font-mono text-green-400">{fmt(Number(clientScore.netExpectedValue))}</p>
+              </div>
+            )}
+            {clientScore.deadlineSummary && (
+              <div>
+                <p className="text-gray-500 text-xs mb-0.5">Deadline</p>
+                <p className="text-sm text-gray-300">{clientScore.deadlineSummary}</p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── AT A GLANCE — PLAIN ENGLISH SUMMARY ──────────────── */}
+      <div className="card">
+        <h2 className="text-lg font-semibold text-gray-200 mb-4 flex items-center gap-2">
+          <BookOpen className="w-5 h-5 text-blue-400" />
+          What Is This Contract?
+        </h2>
+        <div className="space-y-3 text-sm">
+          {/* What they want */}
+          <div className="flex gap-3">
+            <span className="text-blue-400 flex-shrink-0 mt-0.5">{'•'}</span>
+            <p className="text-gray-300">
+              <span className="text-gray-400">What they are buying: </span>
+              {data.description
+                ? data.description.split(/[.\n]/)[0].trim() + '.'
+                : `Services under NAICS ${data.naicsCode}${data.naicsDescription ? ` (${data.naicsDescription})` : ''}.`}
+            </p>
+          </div>
+          {/* Who can bid */}
+          <div className="flex gap-3">
+            <span className="text-blue-400 flex-shrink-0 mt-0.5">{'•'}</span>
+            <p className="text-gray-300">
+              <span className="text-gray-400">Who can bid: </span>
+              {data.setAsideType && data.setAsideType !== 'NONE'
+                ? `This is a set-aside contract restricted to ${data.setAsideType} businesses. Only eligible firms may submit a proposal.`
+                : 'This is an open competition — any qualified business may submit a proposal.'}
+            </p>
+          </div>
+          {/* Contract value */}
+          <div className="flex gap-3">
+            <span className="text-blue-400 flex-shrink-0 mt-0.5">{'•'}</span>
+            <p className="text-gray-300">
+              <span className="text-gray-400">Estimated value: </span>
+              {estValueDisplay === 'TBD'
+                ? 'The government has not yet published an estimated contract value.'
+                : `The government estimates this contract is worth approximately ${estValueDisplay}.`}
+            </p>
+          </div>
+          {/* Deadline */}
+          <div className="flex gap-3">
+            <span className="text-blue-400 flex-shrink-0 mt-0.5">{'•'}</span>
+            <p className="text-gray-300">
+              <span className="text-gray-400">Proposal deadline: </span>
+              {new Date(data.responseDeadline).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+              {dl ? ` — ${dl.daysUntilDeadline} days from today.` : '.'}
+            </p>
+          </div>
+          {/* Place of performance */}
+          {data.placeOfPerformance && (
+            <div className="flex gap-3">
+              <span className="text-blue-400 flex-shrink-0 mt-0.5">{'•'}</span>
+              <p className="text-gray-300">
+                <span className="text-gray-400">Where the work happens: </span>
+                {data.placeOfPerformance}.
+              </p>
+            </div>
+          )}
+          {/* Win probability plain-language */}
+          <div className="flex gap-3">
+            <span className={probColor + ' flex-shrink-0 mt-0.5'}>{'•'}</span>
+            <p className="text-gray-300">
+              <span className="text-gray-400">Your estimated chances: </span>
+              {prob >= 0.65
+                ? `Strong fit — our model gives you a ${Math.round(prob * 100)}% win probability based on your firm profile, NAICS alignment, and agency history.`
+                : prob >= 0.40
+                ? `Moderate fit — ${Math.round(prob * 100)}% win probability. Review the set-aside requirements and agency preference history before committing.`
+                : `Low fit — ${Math.round(prob * 100)}% win probability. Consider whether the investment in proposal preparation is justified.`}
+            </p>
+          </div>
+        </div>
+      </div>
+
+
+      {/* ── HOW TO SUBMIT ────────────────────────────────────── */}
+      <div className="card">
+        <h2 className="text-lg font-semibold text-gray-200 mb-4 flex items-center gap-2">
+          <Send className="w-5 h-5 text-blue-400" />
+          How to Submit
+          {subInfo.rawFound && (
+            <span className="text-xs bg-green-900/40 text-green-400 border border-green-800 px-1.5 py-0.5 rounded font-normal ml-1">
+              extracted
+            </span>
+          )}
+        </h2>
+
+        {(subInfo.rawFound || subInfo.email || subInfo.documents.length > 0 || subInfo.steps.length > 0) ? (
+        <div className="space-y-4">
+          {/* Submission method + contact */}
+          <div className="flex flex-wrap gap-4">
+            <div className="flex-1 min-w-[200px]">
+              <p className="text-gray-500 text-xs mb-1 flex items-center gap-1">
+                <Mail className="w-3 h-3" /> Submission Method
+              </p>
+              <p className="text-gray-200 text-sm font-medium">{subInfo.method}</p>
+              {subInfo.email && (
+                <a
+                  href={"mailto:" + subInfo.email}
+                  className="text-blue-400 hover:text-blue-300 text-sm font-mono mt-1 block"
+                >
+                  {subInfo.email}
+                </a>
+              )}
+              {subInfo.contactName && (
+                <p className="text-xs text-gray-500 mt-0.5">Contact: {subInfo.contactName}</p>
+              )}
+            </div>
+            {subInfo.subjectLine && (
+              <div className="flex-1 min-w-[200px]">
+                <p className="text-gray-500 text-xs mb-1">Email Subject Line</p>
+                <p className="text-yellow-300 text-xs font-mono bg-gray-900 px-3 py-2 rounded border border-gray-800">
+                  {subInfo.subjectLine}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Documents required */}
+          {subInfo.documents.length > 0 && (
+            <div>
+              <p className="text-gray-500 text-xs mb-2 flex items-center gap-1">
+                <ClipboardList className="w-3 h-3" /> Documents / Volumes Required
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {subInfo.documents.map((doc, i) => (
+                  <span key={i} className="text-xs bg-blue-900/30 text-blue-300 border border-blue-800 px-2 py-1 rounded">
+                    {doc}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Step-by-step instructions */}
+          {subInfo.steps.length > 0 && (
+            <div>
+              <p className="text-gray-500 text-xs mb-2">Key Submission Steps</p>
+              <ol className="space-y-1.5">
+                {subInfo.steps.map((step, i) => (
+                  <li key={i} className="flex gap-2 text-sm text-gray-300">
+                    <span className="text-blue-500 font-mono text-xs mt-0.5 flex-shrink-0">{i + 1}.</span>
+                    {step}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+
+        </div>
+        ) : (
+          <div className="flex items-start gap-3 bg-gray-900/50 border border-gray-800 rounded-lg px-4 py-3">
+            <Upload className="w-4 h-4 text-gray-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm text-gray-400 font-medium">Submission details not yet available</p>
+              <p className="text-xs text-gray-600 mt-1">
+                The SAM.gov synopsis does not contain submission instructions. Upload the full solicitation
+                package (SOW, RFQ, or RFP) in the Documents section below and the system will automatically
+                extract the contact email, required volumes, and key submission steps.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* ── WIN PROBABILITY SCORE BREAKDOWN ─────────────────── */}
       <ScoreBreakdown
         breakdown={data.scoreBreakdown}
         probability={prob}
         estimatedValue={data.estimatedValue}
         expectedValue={data.expectedValue}
+        samUrl={samUrl}
       />
 
       {/* ── AWARD HISTORY INTELLIGENCE (USASpending) ────────── */}

@@ -129,7 +129,7 @@ router.post('/enrich', async (req: AuthenticatedRequest, res: Response, next: Ne
         await enqueueEnrichmentJobs(consultingFirmId, job.id);
 
         // Poll until enrichment worker drains the queue
-        const maxWait = 30 * 60 * 1000;
+        const maxWait = 60 * 60 * 1000;
         const pollInterval = 15000;
         const startTime = Date.now();
 

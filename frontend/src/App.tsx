@@ -3,6 +3,7 @@ import { Routes, Route } from "react-router-dom"
 import DashboardPage from "./pages/Dashboard"
 import { OpportunitiesPage } from "./pages/Opportunities"
 import OpportunityDetail from "./pages/OpportunityDetail"
+import ClientDetail from "./pages/ClientDetail"
 import { LoginPage } from "./pages/Login"
 import { ClientsPage } from "./pages/Clients"
 import { SubmissionsPage } from "./pages/Submissions"
@@ -33,6 +34,7 @@ export default function App() {
         <Route path="/opportunities" element={<OpportunitiesPage />} />
         <Route path="/opportunities/:id" element={<OpportunityDetail />} />
         <Route path="/clients" element={<ClientsPage />} />
+        <Route path="/clients/:id" element={<ClientDetail />} />
         <Route path="/decisions" element={<DecisionsPage />} />
         <Route path="/doc-requirements" element={<DocRequirementsPage />} />
         <Route path="/submissions" element={<SubmissionsPage />} />

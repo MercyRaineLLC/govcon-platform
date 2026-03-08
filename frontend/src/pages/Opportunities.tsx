@@ -22,6 +22,34 @@ const SET_ASIDE_LABELS: Record<string, string> = {
   SBA_8A: '8(a)',
   TOTAL_SMALL_BUSINESS: 'TSB',
 };
+const NAICS_INDUSTRY: Record<string, string> = {
+  '11': 'Agriculture', '21': 'Mining', '22': 'Utilities', '23': 'Construction',
+  '31': 'Manufacturing', '32': 'Manufacturing', '33': 'Manufacturing',
+  '42': 'Wholesale Trade', '44': 'Retail', '45': 'Retail',
+  '48': 'Transportation', '49': 'Warehousing',
+  '511': 'Publishing', '512': 'Media', '515': 'Broadcasting',
+  '517': 'Telecom', '518': 'Cloud/IT Infrastructure', '519': 'Information',
+  '52': 'Finance', '53': 'Real Estate',
+  '5413': 'Architecture/Eng', '5415': 'IT / Cybersecurity', '5416': 'Consulting',
+  '5417': 'R&D', '5418': 'Marketing', '54': 'Professional Services',
+  '5511': 'Corp Management', '56': 'Admin / Staffing',
+  '5613': 'Staffing', '5614': 'Business Support',
+  '61': 'Education', '621': 'Healthcare', '622': 'Hospitals',
+  '623': 'Residential Care', '624': 'Social Services', '62': 'Healthcare',
+  '71': 'Arts & Recreation', '72': 'Hospitality', '81': 'Other Services',
+  '92': 'Government / Defense',
+}
+
+function naicsToIndustry(code: string): string {
+  if (!code) return ''
+  for (const len of [4, 3, 2]) {
+    const prefix = code.slice(0, len)
+    if (NAICS_INDUSTRY[prefix]) return NAICS_INDUSTRY[prefix]
+  }
+  return ''
+}
+
+
 
 type PipelineStatus = 'idle' | 'running' | 'success' | 'error';
 
@@ -287,9 +315,17 @@ export function OpportunitiesPage() {
                   <DeadlineBadge priority={opp.deadline?.priority || 'GREEN'} label={opp.deadline?.label || ''} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-200 truncate">{opp.title}</p>
+                  <div className="flex items-start gap-2 flex-wrap mb-0.5">
+                    <p className="text-sm font-medium text-gray-200 truncate">{opp.title}</p>
+                    {naicsToIndustry(opp.naicsCode) && (
+                      <span className="flex-shrink-0 text-xs bg-gray-800 text-gray-400 border border-gray-700 px-1.5 py-0.5 rounded">
+                        {naicsToIndustry(opp.naicsCode)}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-gray-500">
                     {opp.agency} · NAICS {opp.naicsCode} · {SET_ASIDE_LABELS[opp.setAsideType] || opp.setAsideType}
+                    {opp.samNoticeId && <span className="ml-2 text-gray-600 font-mono">#{opp.samNoticeId}</span>}
                     {opp.isEnriched && <span className="ml-2 text-blue-400">· enriched</span>}
                     {opp.recompeteFlag && <span className="ml-2 text-yellow-400">· recompete</span>}
                   </p>

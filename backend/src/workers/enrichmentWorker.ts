@@ -183,10 +183,18 @@ export async function enqueueEnrichmentJobs(
   consultingFirmId: string,
   jobRecordId: string
 ): Promise<number> {
+  const cutoff = new Date()
+  cutoff.setDate(cutoff.getDate() + 60)
   const opportunities = await prisma.opportunity.findMany({
-    where: { consultingFirmId, status: 'ACTIVE', isEnriched: false },
+    where: {
+      consultingFirmId,
+      status: 'ACTIVE',
+      isEnriched: false,
+      responseDeadline: { lte: cutoff },
+    },
     select: { id: true },
-    take: 500,
+    orderBy: { responseDeadline: 'asc' },
+    take: 100,
   });
 
   const jobs = opportunities.map((opp) => ({

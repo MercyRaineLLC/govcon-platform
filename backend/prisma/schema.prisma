@@ -185,6 +185,12 @@ model Opportunity {
   description        String?
   scoreBreakdown     Json?
 
+  // Point of Contact (from SAM.gov)
+  pocName   String?
+  pocEmail  String?
+  pocPhone  String?
+  pocTitle  String?
+
   probabilityScore Float             @default(0)
   expectedValue    Decimal?          @db.Decimal(14, 2)
   isScored         Boolean           @default(false)
