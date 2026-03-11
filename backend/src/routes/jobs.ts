@@ -7,6 +7,8 @@
 // GET  /api/jobs/:id
 // =============================================================
 import { Router, Response, NextFunction } from 'express';
+import fs from 'fs';
+import path from 'path';
 import { prisma } from '../config/database';
 import { authenticateJWT } from '../middleware/auth';
 import { enforceTenantScope, getTenantId } from '../middleware/tenant';
@@ -34,6 +36,22 @@ router.post('/ingest', async (req: AuthenticatedRequest, res: Response, next: Ne
   try {
     const consultingFirmId = getTenantId(req);
     const params = IngestParamsSchema.parse(req.body);
+
+    // Prevent hammering SAM.gov — block if a job ran successfully in the last 5 minutes
+    const recentJob = await prisma.ingestionJob.findFirst({
+      where: {
+        consultingFirmId,
+        type: 'INGEST',
+        status: 'RUNNING',
+      },
+    });
+    if (recentJob) {
+      return res.status(409).json({
+        success: false,
+        error: 'An ingest job is already running. Wait for it to complete before starting another.',
+        data: { jobId: recentJob.id, status: 'RUNNING' },
+      });
+    }
 
     const job = await prisma.ingestionJob.create({
       data: {
@@ -204,6 +222,23 @@ router.post('/analyze/:documentId', async (req: AuthenticatedRequest, res: Respo
 
     setImmediate(async () => {
       try {
+        // Early-exit with a clear status if Anthropic key is not configured
+        if (!process.env.ANTHROPIC_API_KEY) {
+          await prisma.opportunityDocument.update({
+            where: { id: documentId },
+            data: {
+              analysisStatus: 'NO_AI_KEY',
+              analysisError: 'ANTHROPIC_API_KEY is not configured. Add it to backend/.env to enable AI document analysis.',
+            },
+          });
+          await prisma.ingestionJob.update({
+            where: { id: job.id },
+            data: { status: 'COMPLETE', completedAt: new Date() },
+          });
+          logger.warn('Document analysis skipped — ANTHROPIC_API_KEY not set', { documentId });
+          return;
+        }
+
         const { documentAnalysisService } = await import('../services/documentAnalysis');
 
         await prisma.opportunityDocument.update({
@@ -223,7 +258,12 @@ router.post('/analyze/:documentId', async (req: AuthenticatedRequest, res: Respo
           c.smallBusiness ? 'Small Business' : null,
         ].filter((x): x is string => x !== null));
 
-        const analysis = await documentAnalysisService.analyzeDocument(doc.storageKey, {
+        const documentPath = path.join(process.cwd(), 'uploads', doc.storageKey);
+        if (!fs.existsSync(documentPath)) {
+          throw new Error('Document file missing from storage');
+        }
+
+        const analysis = await documentAnalysisService.analyzeDocument(documentPath, {
           title: doc.opportunity.title,
           agency: doc.opportunity.agency,
           naicsCode: doc.opportunity.naicsCode,

@@ -1,11 +1,17 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
+const zod_1 = require("zod");
 const database_1 = require("../config/database");
 const decisionEngine_1 = require("../services/decisionEngine");
 const portfolioDecisionEngine_1 = require("../services/portfolioDecisionEngine");
 const auth_1 = require("../middleware/auth");
 const tenant_1 = require("../middleware/tenant");
+const complianceStateMachine_1 = require("../services/complianceStateMachine");
+const StatusTransitionSchema = zod_1.z.object({
+    status: zod_1.z.enum(["PENDING", "APPROVED", "BLOCKED", "REJECTED"]),
+    reason: zod_1.z.string().optional(),
+});
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticateJWT, tenant_1.enforceTenantScope);
 // ============================================================
@@ -26,6 +32,13 @@ router.post("/run", async (req, res) => {
         });
         if (!opportunity) {
             return res.status(404).json({ success: false, error: "Opportunity not found" });
+        }
+        const client = await database_1.prisma.clientCompany.findFirst({
+            where: { id: clientCompanyId, consultingFirmId, isActive: true },
+            select: { id: true },
+        });
+        if (!client) {
+            return res.status(404).json({ success: false, error: "Client not found" });
         }
         const decision = await (0, decisionEngine_1.evaluateBidDecision)(opportunityId, clientCompanyId);
         const winProb = decision.winProbability ?? 0;
@@ -94,7 +107,16 @@ router.get("/", async (req, res) => {
     try {
         const consultingFirmId = (0, tenant_1.getTenantId)(req);
         const { clientCompanyId, recommendation, complianceStatus, sortBy = "createdAt", order = "desc" } = req.query;
-        const where = { opportunity: { consultingFirmId } };
+        if (clientCompanyId) {
+            const client = await database_1.prisma.clientCompany.findFirst({
+                where: { id: String(clientCompanyId), consultingFirmId },
+                select: { id: true },
+            });
+            if (!client) {
+                return res.status(404).json({ success: false, error: "Client not found" });
+            }
+        }
+        const where = { consultingFirmId };
         if (clientCompanyId)
             where.clientCompanyId = String(clientCompanyId);
         if (recommendation)
@@ -120,7 +142,7 @@ router.get("/metrics", async (req, res) => {
     try {
         const consultingFirmId = (0, tenant_1.getTenantId)(req);
         const decisions = await database_1.prisma.bidDecision.findMany({
-            where: { opportunity: { consultingFirmId } },
+            where: { consultingFirmId },
         });
         if (decisions.length === 0) {
             return res.status(200).json({
@@ -143,8 +165,8 @@ router.get("/metrics", async (req, res) => {
         const totalNoBid = decisions.filter((d) => d.recommendation === "NO_BID").length;
         const averageWinProbability = decisions.reduce((sum, d) => sum + (d.winProbability ?? 0), 0) / totalEvaluated;
         const averageROI = decisions.reduce((sum, d) => sum + (d.roiRatio ?? 0), 0) / totalEvaluated;
-        const totalExpectedRevenue = decisions.reduce((sum, d) => sum + (d.expectedRevenue ?? 0), 0);
-        const totalNetExpectedValue = decisions.reduce((sum, d) => sum + (d.netExpectedValue ?? 0), 0);
+        const totalExpectedRevenue = decisions.reduce((sum, d) => sum + Number(d.expectedRevenue ?? 0), 0);
+        const totalNetExpectedValue = decisions.reduce((sum, d) => sum + Number(d.netExpectedValue ?? 0), 0);
         return res.status(200).json({
             success: true,
             data: {
@@ -162,6 +184,34 @@ router.get("/metrics", async (req, res) => {
     catch (error) {
         console.error("Decision metrics error:", error.message);
         return res.status(500).json({ success: false, error: "Failed to compute metrics" });
+    }
+});
+// ============================================================
+// PATCH /api/decision/:id/status  (ADMIN only)
+// Manually transition a BidDecision compliance status.
+// ============================================================
+router.patch("/:id/status", (0, auth_1.requireRole)("ADMIN"), async (req, res) => {
+    try {
+        const consultingFirmId = (0, tenant_1.getTenantId)(req);
+        const { status, reason } = StatusTransitionSchema.parse(req.body);
+        const result = await (0, complianceStateMachine_1.transitionBidDecisionStatus)({
+            decisionId: req.params.id,
+            toStatus: status,
+            consultingFirmId,
+            triggeredBy: req.user?.userId,
+            reason,
+        });
+        if (!result.success) {
+            return res.status(422).json({
+                success: false,
+                error: result.error,
+                code: "INVALID_TRANSITION",
+            });
+        }
+        return res.json({ success: true, data: { id: req.params.id, status } });
+    }
+    catch (error) {
+        return res.status(500).json({ success: false, error: "Status transition failed" });
     }
 });
 exports.default = router;

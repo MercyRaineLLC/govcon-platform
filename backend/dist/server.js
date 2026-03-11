@@ -13,8 +13,6 @@ const helmet_1 = __importDefault(require("helmet"));
 const cors_1 = __importDefault(require("cors"));
 const morgan_1 = __importDefault(require("morgan"));
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
-const path_1 = __importDefault(require("path"));
-const fs_1 = __importDefault(require("fs"));
 const config_1 = require("./config/config");
 const database_1 = require("./config/database");
 const redis_1 = require("./config/redis");
@@ -35,15 +33,13 @@ const documents_1 = __importDefault(require("./routes/documents"));
 const docRequirements_1 = __importDefault(require("./routes/docRequirements"));
 const clientPortal_1 = __importDefault(require("./routes/clientPortal"));
 const rewards_1 = __importDefault(require("./routes/rewards"));
+const templates_1 = __importDefault(require("./routes/templates"));
+const clientDocuments_1 = __importDefault(require("./routes/clientDocuments"));
+const analytics_1 = __importDefault(require("./routes/analytics"));
+const complianceMatrix_1 = __importDefault(require("./routes/complianceMatrix"));
 async function bootstrap() {
     const app = (0, express_1.default)();
-    // -------------------------------------------------------------
-    // Ensure upload directory exists
-    // -------------------------------------------------------------
-    const uploadDir = path_1.default.join(process.cwd(), 'uploads');
-    if (!fs_1.default.existsSync(uploadDir)) {
-        fs_1.default.mkdirSync(uploadDir, { recursive: true });
-    }
+    app.set('trust proxy', 1);
     // -------------------------------------------------------------
     // Security Middleware
     // -------------------------------------------------------------
@@ -52,9 +48,21 @@ async function bootstrap() {
         hsts: config_1.config.isProduction,
     }));
     app.use((0, cors_1.default)({
-        origin: config_1.config.isProduction
-            ? process.env.ALLOWED_ORIGINS?.split(',')
-            : '*',
+        origin: (origin, cb) => {
+            if (!config_1.config.isProduction) {
+                cb(null, true);
+                return;
+            }
+            const allowed = (process.env.ALLOWED_ORIGINS || '')
+                .split(',')
+                .map((o) => o.trim())
+                .filter(Boolean);
+            if (!origin || allowed.includes(origin)) {
+                cb(null, true);
+                return;
+            }
+            cb(new Error('Origin not allowed by CORS'));
+        },
         credentials: true,
         methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
         allowedHeaders: ['Content-Type', 'Authorization'],
@@ -70,10 +78,6 @@ async function bootstrap() {
             code: 'RATE_LIMITED',
         },
     }));
-    // -------------------------------------------------------------
-    // Static uploads
-    // -------------------------------------------------------------
-    app.use('/uploads', express_1.default.static(path_1.default.join(process.cwd(), 'uploads')));
     // -------------------------------------------------------------
     // Parsing Middleware
     // -------------------------------------------------------------
@@ -113,6 +117,10 @@ async function bootstrap() {
     apiRouter.use('/doc-requirements', docRequirements_1.default);
     apiRouter.use('/client-portal', clientPortal_1.default);
     apiRouter.use('/rewards', rewards_1.default);
+    apiRouter.use('/templates', templates_1.default);
+    apiRouter.use('/client-documents', clientDocuments_1.default);
+    apiRouter.use('/analytics', analytics_1.default);
+    apiRouter.use('/compliance-matrix', complianceMatrix_1.default);
     app.use('/api', apiRouter);
     // -------------------------------------------------------------
     // Error Handling

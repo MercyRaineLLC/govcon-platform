@@ -14,8 +14,17 @@ function optional(key: string, fallback: string): string {
   return process.env[key] || fallback;
 }
 
+const env = optional('NODE_ENV', 'development');
+const jwtSecret = optional('JWT_SECRET', 'dev-secret-change-in-production');
+
+if (env === 'production') {
+  if (jwtSecret === 'dev-secret-change-in-production' || jwtSecret.length < 32) {
+    throw new Error('JWT_SECRET must be set to a strong value in production');
+  }
+}
+
 export const config = {
-  env: optional('NODE_ENV', 'development'),
+  env,
   port: parseInt(optional('PORT', '3001'), 10),
 
   database: {
@@ -27,7 +36,7 @@ export const config = {
   },
 
   jwt: {
-    secret: optional('JWT_SECRET', 'dev-secret-change-in-production'),
+    secret: jwtSecret,
     expiresIn: optional('JWT_EXPIRES_IN', '8h'),
   },
 
@@ -45,6 +54,10 @@ export const config = {
     max: parseInt(optional('RATE_LIMIT_MAX', '500'), 10),
   },
 
-  isProduction: process.env.NODE_ENV === 'production',
-  isDevelopment: process.env.NODE_ENV === 'development',
+  uploads: {
+    maxMb: parseInt(optional('MAX_UPLOAD_MB', '25'), 10),
+  },
+
+  isProduction: env === 'production',
+  isDevelopment: env === 'development',
 };

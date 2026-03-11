@@ -7,10 +7,12 @@ const express_1 = require("express");
 const zod_1 = require("zod");
 const database_1 = require("../config/database");
 const auth_1 = require("../middleware/auth");
+const auth_2 = require("../middleware/auth");
 const tenant_1 = require("../middleware/tenant");
 const errors_1 = require("../utils/errors");
 const penaltyEngine_1 = require("../engines/penaltyEngine");
 const performanceStats_1 = require("../services/performanceStats");
+const complianceStateMachine_1 = require("../services/complianceStateMachine");
 const logger_1 = require("../utils/logger");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticateJWT, tenant_1.enforceTenantScope);
@@ -19,6 +21,10 @@ const CreateSubmissionSchema = zod_1.z.object({
     opportunityId: zod_1.z.string().uuid(),
     submittedAt: zod_1.z.string().datetime().transform((s) => new Date(s)),
     notes: zod_1.z.string().optional(),
+});
+const StatusTransitionSchema = zod_1.z.object({
+    status: zod_1.z.enum(['PENDING', 'APPROVED', 'BLOCKED', 'REJECTED']),
+    reason: zod_1.z.string().optional(),
 });
 /**
  * POST /api/submissions
@@ -40,6 +46,16 @@ router.post('/', async (req, res, next) => {
             throw new errors_1.NotFoundError('ClientCompany');
         if (!opportunity)
             throw new errors_1.NotFoundError('Opportunity');
+        // Compliance gate: reject if the BidDecision for this pair is BLOCKED
+        const gate = await (0, complianceStateMachine_1.isSubmissionBlocked)(body.opportunityId, body.clientCompanyId);
+        if (gate.blocked) {
+            return res.status(422).json({
+                success: false,
+                error: 'Submission blocked by compliance review',
+                code: 'COMPLIANCE_BLOCKED',
+                detail: gate.reason,
+            });
+        }
         const wasOnTime = (0, penaltyEngine_1.evaluateOnTime)(body.submittedAt, opportunity.responseDeadline);
         const submission = await database_1.prisma.$transaction(async (tx) => {
             const record = await tx.submissionRecord.create({
@@ -52,6 +68,7 @@ router.post('/', async (req, res, next) => {
                     wasOnTime,
                     penaltyAmount: 0,
                     notes: body.notes,
+                    status: 'PENDING',
                 },
             });
             if (!wasOnTime) {
@@ -59,7 +76,7 @@ router.post('/', async (req, res, next) => {
                     consultingFirmId,
                     clientCompanyId: body.clientCompanyId,
                     submissionRecordId: record.id,
-                    estimatedValue: opportunity.estimatedValue,
+                    estimatedValue: opportunity.estimatedValue ? Number(opportunity.estimatedValue) : null,
                 });
                 if (penaltyResult.amount > 0) {
                     await tx.submissionRecord.update({
@@ -120,7 +137,7 @@ router.get('/', async (req, res, next) => {
                         select: { id: true, title: true, agency: true, responseDeadline: true },
                     },
                     submittedBy: { select: { id: true, firstName: true, lastName: true } },
-                    financialPenalty: true,
+                    financialPenalties: true,
                 },
                 orderBy: { submittedAt: 'desc' },
                 skip: (pageNum - 1) * limitNum,
@@ -150,12 +167,40 @@ router.get('/:id', async (req, res, next) => {
                 clientCompany: true,
                 opportunity: true,
                 submittedBy: { select: { id: true, firstName: true, lastName: true, email: true } },
-                financialPenalty: true,
+                financialPenalties: true,
             },
         });
         if (!submission)
             throw new errors_1.NotFoundError('SubmissionRecord');
         res.json({ success: true, data: submission });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+/**
+ * PATCH /api/submissions/:id/status  (ADMIN only)
+ * Manually transition a submission's compliance status.
+ */
+router.patch('/:id/status', (0, auth_2.requireRole)('ADMIN'), async (req, res, next) => {
+    try {
+        const consultingFirmId = (0, tenant_1.getTenantId)(req);
+        const { status, reason } = StatusTransitionSchema.parse(req.body);
+        const result = await (0, complianceStateMachine_1.transitionSubmissionStatus)({
+            submissionId: req.params.id,
+            toStatus: status,
+            consultingFirmId,
+            triggeredBy: req.user?.userId,
+            reason,
+        });
+        if (!result.success) {
+            return res.status(422).json({
+                success: false,
+                error: result.error,
+                code: 'INVALID_TRANSITION',
+            });
+        }
+        res.json({ success: true, data: { id: req.params.id, status } });
     }
     catch (err) {
         next(err);

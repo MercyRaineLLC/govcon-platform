@@ -66,8 +66,8 @@ export interface EnrichmentResult {
   historicalWinner: string | null;
   historicalAvgAward: number;
   historicalAwardCount: number;
-  competitionCount: number;
-  incumbentProbability: number;
+  competitionCount: number | null;    // null = no historical data found
+  incumbentProbability: number | null; // null = no historical data found
   agencySmallBizRate: number;
   agencySdvosbRate: number;
   recompeteFlag: boolean;

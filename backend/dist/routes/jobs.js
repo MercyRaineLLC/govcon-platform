@@ -32,6 +32,9 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 // =============================================================
 // Jobs Routes
@@ -42,6 +45,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 // GET  /api/jobs/:id
 // =============================================================
 const express_1 = require("express");
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
 const database_1 = require("../config/database");
 const auth_1 = require("../middleware/auth");
 const tenant_1 = require("../middleware/tenant");
@@ -65,6 +70,21 @@ router.post('/ingest', async (req, res, next) => {
     try {
         const consultingFirmId = (0, tenant_1.getTenantId)(req);
         const params = IngestParamsSchema.parse(req.body);
+        // Prevent hammering SAM.gov — block if a job ran successfully in the last 5 minutes
+        const recentJob = await database_1.prisma.ingestionJob.findFirst({
+            where: {
+                consultingFirmId,
+                type: 'INGEST',
+                status: 'RUNNING',
+            },
+        });
+        if (recentJob) {
+            return res.status(409).json({
+                success: false,
+                error: 'An ingest job is already running. Wait for it to complete before starting another.',
+                data: { jobId: recentJob.id, status: 'RUNNING' },
+            });
+        }
         const job = await database_1.prisma.ingestionJob.create({
             data: {
                 consultingFirmId,
@@ -215,6 +235,22 @@ router.post('/analyze/:documentId', async (req, res, next) => {
         res.json({ success: true, data: { jobId: job.id, status: 'RUNNING' } });
         setImmediate(async () => {
             try {
+                // Early-exit with a clear status if Anthropic key is not configured
+                if (!process.env.ANTHROPIC_API_KEY) {
+                    await database_1.prisma.opportunityDocument.update({
+                        where: { id: documentId },
+                        data: {
+                            analysisStatus: 'NO_AI_KEY',
+                            analysisError: 'ANTHROPIC_API_KEY is not configured. Add it to backend/.env to enable AI document analysis.',
+                        },
+                    });
+                    await database_1.prisma.ingestionJob.update({
+                        where: { id: job.id },
+                        data: { status: 'COMPLETE', completedAt: new Date() },
+                    });
+                    logger_1.logger.warn('Document analysis skipped — ANTHROPIC_API_KEY not set', { documentId });
+                    return;
+                }
                 const { documentAnalysisService } = await Promise.resolve().then(() => __importStar(require('../services/documentAnalysis')));
                 await database_1.prisma.opportunityDocument.update({
                     where: { id: documentId },
@@ -230,7 +266,11 @@ router.post('/analyze/:documentId', async (req, res, next) => {
                     c.hubzone ? 'HUBZone' : null,
                     c.smallBusiness ? 'Small Business' : null,
                 ].filter((x) => x !== null));
-                const analysis = await documentAnalysisService.analyzeDocument(doc.storageKey, {
+                const documentPath = path_1.default.join(process.cwd(), 'uploads', doc.storageKey);
+                if (!fs_1.default.existsSync(documentPath)) {
+                    throw new Error('Document file missing from storage');
+                }
+                const analysis = await documentAnalysisService.analyzeDocument(documentPath, {
                     title: doc.opportunity.title,
                     agency: doc.opportunity.agency,
                     naicsCode: doc.opportunity.naicsCode,

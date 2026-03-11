@@ -14,6 +14,7 @@ import {
   BarChart3,
   Scale,
   ShieldCheck,
+  BookMarked,
 } from 'lucide-react';
 
 const navItems = [
@@ -21,10 +22,12 @@ const navItems = [
   { to: '/opportunities', icon: Search, label: 'Opportunities' },
   { to: '/clients', icon: Users, label: 'Clients' },
   { to: '/decisions', icon: Scale, label: 'Decisions' },
+  { to: '/templates', icon: FileText, label: 'Templates' },
   { to: '/doc-requirements', icon: ClipboardList, label: 'Doc Requirements' },
   { to: '/submissions', icon: FileText, label: 'Submissions' },
   { to: '/penalties', icon: DollarSign, label: 'Penalties' },
   { to: '/analytics', icon: BarChart3, label: 'Analytics' },
+  { to: '/template-library', icon: BookMarked, label: 'Template Library' },
   { to: '/compliance', icon: ShieldCheck, label: 'Compliance', adminOnly: true },
   { to: '/settings', icon: Settings, label: 'Settings', adminOnly: true },
 ];

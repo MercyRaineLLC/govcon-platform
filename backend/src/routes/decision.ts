@@ -44,6 +44,14 @@ router.post("/run", async (req: AuthenticatedRequest, res) => {
       return res.status(404).json({ success: false, error: "Opportunity not found" })
     }
 
+    const client = await prisma.clientCompany.findFirst({
+      where: { id: clientCompanyId, consultingFirmId, isActive: true },
+      select: { id: true },
+    })
+    if (!client) {
+      return res.status(404).json({ success: false, error: "Client not found" })
+    }
+
     const decision = await evaluateBidDecision(opportunityId, clientCompanyId)
 
     const winProb = decision.winProbability ?? 0
@@ -128,7 +136,17 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
     const consultingFirmId = getTenantId(req)
     const { clientCompanyId, recommendation, complianceStatus, sortBy = "createdAt", order = "desc" } = req.query
 
-    const where: any = { opportunity: { consultingFirmId } }
+    if (clientCompanyId) {
+      const client = await prisma.clientCompany.findFirst({
+        where: { id: String(clientCompanyId), consultingFirmId },
+        select: { id: true },
+      })
+      if (!client) {
+        return res.status(404).json({ success: false, error: "Client not found" })
+      }
+    }
+
+    const where: any = { consultingFirmId }
     if (clientCompanyId) where.clientCompanyId = String(clientCompanyId)
     if (recommendation) where.recommendation = String(recommendation)
     if (complianceStatus) where.complianceStatus = String(complianceStatus)
@@ -155,7 +173,7 @@ router.get("/metrics", async (req: AuthenticatedRequest, res) => {
     const consultingFirmId = getTenantId(req)
 
     const decisions = await prisma.bidDecision.findMany({
-      where: { opportunity: { consultingFirmId } },
+      where: { consultingFirmId },
     })
 
     if (decisions.length === 0) {

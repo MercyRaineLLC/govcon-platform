@@ -194,7 +194,7 @@ export default function ClientPortalDashboard() {
 
   const handleMarkSubmitted = async (reqId: string) => {
     try {
-      await axios.put(`${API_BASE}/api/doc-requirements/${reqId}`, { status: 'SUBMITTED' }, {
+      await axios.put(`${API_BASE}/api/client-portal/doc-requirements/${reqId}/submit`, {}, {
         headers: { Authorization: `Bearer ${auth.token}` },
       })
       const res = await axios.get(`${API_BASE}/api/client-portal/dashboard`, {

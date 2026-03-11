@@ -96,7 +96,7 @@ class UsaSpendingService {
       const historicalWinner = sortedByCount[0]?.[0] || null;
       const winnerCount = sortedByCount[0]?.[1] || 0;
       const competitionCount = Object.keys(recipientCounts).length;
-      const incumbentProbability = total > 0 ? winnerCount / awards.length : 0;
+      const incumbentProbability = awards.length > 0 ? winnerCount / awards.length : null;
 
       const totalAmount = awards.reduce((sum, a) => sum + a.awardAmount, 0);
       const historicalAvgAward = awards.length > 0 ? totalAmount / awards.length : 0;
@@ -200,8 +200,9 @@ class UsaSpendingService {
       historicalWinner: null,
       historicalAvgAward: 0,
       historicalAwardCount: 0,
-      competitionCount: 0,
-      incumbentProbability: 0,
+      // null = no data found — must NOT be 0, which would mean "confirmed 0 competitors / 0% incumbent"
+      competitionCount: null,
+      incumbentProbability: null,
       agencySmallBizRate: 0.25,
       agencySdvosbRate: 0.05,
       recompeteFlag: false,

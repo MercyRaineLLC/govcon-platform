@@ -15,6 +15,7 @@ import { enforceTenantScope, getTenantId } from '../middleware/tenant';
 import { AuthenticatedRequest } from '../types';
 import { NotFoundError } from '../utils/errors';
 import { enqueueAllOpportunitiesForScoring } from '../workers/scoringWorker';
+import { lookupEntityByUEI, lookupEntityByCAGE, lookupEntityByName } from '../services/samEntityApi';
 
 const router = Router();
 router.use(authenticateJWT, enforceTenantScope);
@@ -23,11 +24,20 @@ const ClientSchema = z.object({
   name: z.string().min(1).max(100),
   cage: z.string().optional(),
   uei: z.string().optional(),
+  ein: z.string().optional(),
   naicsCodes: z.array(z.string()).default([]),
   sdvosb: z.boolean().default(false),
   wosb: z.boolean().default(false),
   hubzone: z.boolean().default(false),
   smallBusiness: z.boolean().default(true),
+  phone: z.string().optional(),
+  website: z.string().optional(),
+  streetAddress: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  zipCode: z.string().optional(),
+  samRegStatus: z.string().optional(),
+  samRegExpiry: z.coerce.date().optional(),
 });
 
 /**
@@ -91,6 +101,54 @@ router.post('/', async (req: AuthenticatedRequest, res: Response, next: NextFunc
     res.status(201).json({ success: true, data: client });
   } catch (err) {
     next(err);
+  }
+});
+
+/**
+ * GET /api/clients/lookup?uei=...  OR  ?cage=...  OR  ?name=...
+ * Looks up entity data from SAM.gov — does NOT create a record.
+ * EIN lookup is NOT supported by the SAM.gov public API.
+ */
+router.get('/lookup', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { uei, cage, name } = req.query as Record<string, string>;
+    if (!uei && !cage && !name) {
+      return res.status(400).json({ success: false, error: 'Provide uei, cage, or name query parameter' });
+    }
+
+    let result: any = null;
+    if (uei) result = await lookupEntityByUEI(uei);
+    else if (cage) result = await lookupEntityByCAGE(cage);
+    else if (name) result = await lookupEntityByName(name);
+
+    if (!result) {
+      return res.status(404).json({ success: false, error: 'Entity not found in SAM.gov registry. Verify the UEI/CAGE is correct and the entity has an active registration.' });
+    }
+
+    res.json({ success: true, data: result });
+  } catch (err: any) {
+    res.status(502).json({ success: false, error: err.message || 'SAM.gov lookup failed' });
+  }
+});
+
+/**
+ * GET /api/clients/lookup-raw?uei=...  (Admin — see exact SAM response for debugging)
+ */
+router.get('/lookup-raw', requireRole('ADMIN'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const axiosLib = (await import('axios')).default;
+    const { uei, cage, name } = req.query as Record<string, string>;
+    const apiKey = process.env.SAM_API_KEY;
+    const params: Record<string, string> = { api_key: apiKey!, includeSections: 'entityRegistration,coreData,assertions' };
+    if (uei)  params.ueiSAM       = uei.trim().toUpperCase();
+    else if (cage) params.cageCode = cage.trim().toUpperCase();
+    else if (name) { params.legalBusinessName = name.trim(); params.registrationStatus = 'Active'; }
+    else return res.status(400).json({ error: 'Provide uei, cage, or name' });
+
+    const samRes = await axiosLib.get('https://api.sam.gov/entity-information/v3/entities', { params, timeout: 20000 });
+    res.json({ status: samRes.status, data: samRes.data });
+  } catch (err: any) {
+    res.json({ error: err.message, responseStatus: err.response?.status, responseData: err.response?.data });
   }
 });
 

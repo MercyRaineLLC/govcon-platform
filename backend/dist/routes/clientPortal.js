@@ -8,6 +8,8 @@ const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const database_1 = require("../config/database");
 const config_1 = require("../config/config");
+const auth_1 = require("../middleware/auth");
+const tenant_1 = require("../middleware/tenant");
 const errors_1 = require("../utils/errors");
 const logger_1 = require("../utils/logger");
 const router = (0, express_1.Router)();
@@ -37,12 +39,19 @@ function authenticateClientJWT(req, res, next) {
 // POST /api/client-portal/auth/register
 // Called by consultants to create portal access for a client contact
 // -------------------------------------------------------------
-router.post('/auth/register', async (req, res, next) => {
+router.post('/auth/register', auth_1.authenticateJWT, tenant_1.enforceTenantScope, (0, auth_1.requireRole)('ADMIN'), async (req, res, next) => {
     try {
         const { clientCompanyId, email, password, firstName, lastName } = req.body;
         if (!clientCompanyId || !email || !password || !firstName || !lastName) {
             throw new errors_1.ValidationError('clientCompanyId, email, password, firstName, lastName all required');
         }
+        const consultingFirmId = (0, tenant_1.getTenantId)(req);
+        const client = await database_1.prisma.clientCompany.findFirst({
+            where: { id: clientCompanyId, consultingFirmId, isActive: true },
+            select: { id: true },
+        });
+        if (!client)
+            throw new errors_1.NotFoundError('Client not found');
         const existing = await database_1.prisma.clientPortalUser.findUnique({ where: { email } });
         if (existing)
             throw new errors_1.ValidationError('Email already registered');
@@ -224,6 +233,35 @@ router.get('/rewards', authenticateClientJWT, async (req, res, next) => {
             orderBy: { createdAt: 'desc' },
         });
         res.json({ success: true, data: rewards });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+// -------------------------------------------------------------
+// PUT /api/client-portal/doc-requirements/:id/submit
+// Allows client users to mark their own requirement as submitted.
+// -------------------------------------------------------------
+router.put('/doc-requirements/:id/submit', authenticateClientJWT, async (req, res, next) => {
+    try {
+        const { clientCompanyId } = req.clientUser;
+        const existing = await database_1.prisma.documentRequirement.findFirst({
+            where: { id: req.params.id, clientCompanyId },
+            select: { id: true, status: true, submittedAt: true },
+        });
+        if (!existing)
+            throw new errors_1.NotFoundError('Document requirement not found');
+        if (existing.status === 'SUBMITTED') {
+            return res.json({ success: true, data: { id: existing.id, status: existing.status } });
+        }
+        const updated = await database_1.prisma.documentRequirement.update({
+            where: { id: req.params.id },
+            data: {
+                status: 'SUBMITTED',
+                submittedAt: existing.submittedAt || new Date(),
+            },
+        });
+        res.json({ success: true, data: updated });
     }
     catch (err) {
         next(err);

@@ -62,7 +62,11 @@ model ConsultingFirm {
   submissionRecords    SubmissionRecord[]
   bidDecisions         BidDecision[]
   documentRequirements DocumentRequirement[]
+  documentTemplates    DocumentTemplate[]
   complianceLogs       ComplianceLog[]
+  clientDocuments      ClientDocument[]
+  submittedTemplates   SharedTemplate[]
+  complianceMatrices   ComplianceMatrix[]
 
   @@map("consulting_firms")
 }
@@ -82,6 +86,7 @@ model User {
 
   consultingFirm    ConsultingFirm     @relation(fields: [consultingFirmId], references: [id], onDelete: Cascade)
   submissionRecords SubmissionRecord[]
+  createdTemplates  DocumentTemplate[] @relation("TemplateCreator")
 
   @@index([consultingFirmId])
   @@map("users")
@@ -132,6 +137,18 @@ model ClientCompany {
   hubzone          Boolean  @default(false)
   smallBusiness    Boolean  @default(true)
   isActive         Boolean  @default(true)
+
+  // Extended profile (auto-populated from SAM.gov Entity API)
+  ein              String?   // Employer Identification Number / Tax ID
+  phone            String?
+  website          String?
+  streetAddress    String?
+  city             String?
+  state            String?
+  zipCode          String?
+  samRegStatus     String?   // "Active" | "Inactive"
+  samRegExpiry     DateTime?
+
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -144,6 +161,7 @@ model ClientCompany {
   documentRequirements DocumentRequirement[]
   clientPortalUsers    ClientPortalUser[]
   complianceRewards    ComplianceReward[]
+  clientDocuments      ClientDocument[]
 
   @@index([consultingFirmId])
   @@map("client_companies")
@@ -215,6 +233,7 @@ model Opportunity {
   submissionRecords    SubmissionRecord[]
   bidDecisions         BidDecision[]
   documentRequirements DocumentRequirement[]
+  complianceMatrix     ComplianceMatrix?
 
   @@unique([consultingFirmId, samNoticeId])
   @@index([consultingFirmId])
@@ -474,6 +493,7 @@ model DocumentRequirement {
   consultingFirmId String
   clientCompanyId  String
   opportunityId    String?
+  templateId       String?
   title            String
   description      String?
   dueDate          DateTime
@@ -489,11 +509,41 @@ model DocumentRequirement {
   consultingFirm ConsultingFirm @relation(fields: [consultingFirmId], references: [id], onDelete: Cascade)
   clientCompany  ClientCompany  @relation(fields: [clientCompanyId], references: [id], onDelete: Cascade)
   opportunity    Opportunity?   @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  template       DocumentTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
 
   @@index([consultingFirmId])
   @@index([clientCompanyId])
   @@index([opportunityId])
+  @@index([templateId])
   @@map("document_requirements")
+}
+
+// =============================================================
+// DOCUMENT TEMPLATES
+// =============================================================
+
+model DocumentTemplate {
+  id               String    @id @default(cuid())
+  consultingFirmId String
+  createdById      String?
+  title            String
+  description      String?
+  category         String?
+  fileName         String
+  fileType         String
+  fileSize         Int
+  storageKey       String
+  isActive         Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  consultingFirm        ConsultingFirm         @relation(fields: [consultingFirmId], references: [id], onDelete: Cascade)
+  createdBy             User?                  @relation("TemplateCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  documentRequirements  DocumentRequirement[]
+
+  @@index([consultingFirmId])
+  @@index([createdById])
+  @@map("document_templates")
 }
 
 // =============================================================
@@ -539,4 +589,116 @@ model ComplianceLog {
   @@index([entityId])
   @@index([consultingFirmId])
   @@map("compliance_logs")
+}
+
+
+
+//////////////////////////////////////////////////////////////
+// CLIENT COMPANY DOCUMENTS (branded uploads)
+//////////////////////////////////////////////////////////////
+
+enum ClientDocumentType {
+  CAPABILITY_STATEMENT
+  PAST_PERFORMANCE
+  TECHNICAL_PROPOSAL
+  MANAGEMENT_APPROACH
+  PRICE_VOLUME
+  SMALL_BUSINESS_PLAN
+  TEAMING_AGREEMENT
+  COVER_LETTER
+  OTHER
+}
+
+enum SharedTemplateStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+model ClientDocument {
+  id               String             @id @default(cuid())
+  consultingFirmId String
+  clientCompanyId  String
+  documentType     ClientDocumentType @default(OTHER)
+  fileName         String
+  fileType         String
+  fileSize         Int                @default(0)
+  storageKey       String
+  fileUrl          String?
+  title            String
+  notes            String?
+  isSharedAsTemplate Boolean          @default(false)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  consultingFirm ConsultingFirm  @relation(fields: [consultingFirmId], references: [id], onDelete: Cascade)
+  clientCompany  ClientCompany   @relation(fields: [clientCompanyId], references: [id], onDelete: Cascade)
+  sharedTemplate SharedTemplate?
+
+  @@index([consultingFirmId])
+  @@index([clientCompanyId])
+  @@map("client_documents")
+}
+
+model SharedTemplate {
+  id                   String               @id @default(cuid())
+  sourceDocumentId     String               @unique
+  submittedByFirmId    String
+  documentType         ClientDocumentType
+  title                String
+  description          String?
+  anonymizedStorageKey String
+  status               SharedTemplateStatus @default(PENDING_REVIEW)
+  reviewNotes          String?
+  downloadCount        Int                  @default(0)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+
+  sourceDocument  ClientDocument @relation(fields: [sourceDocumentId], references: [id], onDelete: Cascade)
+  submittedByFirm ConsultingFirm @relation(fields: [submittedByFirmId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([documentType])
+  @@map("shared_templates")
+}
+
+//////////////////////////////////////////////////////////////
+// COMPLIANCE MATRIX (RFP Section L / M Extractor)
+//////////////////////////////////////////////////////////////
+
+model ComplianceMatrix {
+  id               String   @id @default(cuid())
+  opportunityId    String   @unique
+  consultingFirmId String
+  sourceText       String?  // snippet used for generation
+  generatedAt      DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  opportunity    Opportunity    @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  consultingFirm ConsultingFirm @relation(fields: [consultingFirmId], references: [id], onDelete: Cascade)
+  requirements   MatrixRequirement[]
+
+  @@index([consultingFirmId])
+  @@map("compliance_matrices")
+}
+
+model MatrixRequirement {
+  id              String  @id @default(cuid())
+  matrixId        String
+  section         String
+  sectionType     String  @default("INSTRUCTION")
+  requirementText String
+  proposalSection String?
+  status          String  @default("NOT_STARTED")
+  notes           String?
+  isMandatory     Boolean @default(true)
+  farReference    String?
+  sortOrder       Int     @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  matrix ComplianceMatrix @relation(fields: [matrixId], references: [id], onDelete: Cascade)
+
+  @@index([matrixId])
+  @@map("matrix_requirements")
 }

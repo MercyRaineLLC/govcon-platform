@@ -23,11 +23,23 @@ router.post('/upload', upload.single('file'), async (req: AuthenticatedRequest, 
     const opportunity = await prisma.opportunity.findFirst({ where: { id: opportunityId, consultingFirmId } })
     if (!opportunity) throw new NotFoundError('Opportunity not found')
 
+    // Prevent duplicate uploads of the same file to the same opportunity
+    const existing = await prisma.opportunityDocument.findFirst({
+      where: { opportunityId, fileName: req.file.originalname },
+    })
+    if (existing) {
+      fs.unlinkSync(req.file.path)
+      return res.status(409).json({
+        success: false,
+        error: `"${req.file.originalname}" has already been uploaded for this opportunity. Delete it first or upload a different file.`,
+      })
+    }
+
     const document = await prisma.opportunityDocument.create({
       data: {
         opportunityId,
         fileName: req.file.originalname,
-        fileUrl: `/uploads/${req.file.filename}`,
+        fileUrl: null,
         storageKey: req.file.filename,
         fileType: req.file.mimetype,
         fileSize: req.file.size,
@@ -37,8 +49,40 @@ router.post('/upload', upload.single('file'), async (req: AuthenticatedRequest, 
     })
 
     logger.info('Document uploaded', { documentId: document.id, opportunityId })
-    res.json({ success: true, data: document })
+    res.json({
+      success: true,
+      data: {
+        ...document,
+        fileUrl: `/api/documents/download/${document.id}`,
+      },
+    })
   } catch (err) { next(err) }
+})
+
+// GET /api/documents/download/:documentId
+router.get('/download/:documentId', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const consultingFirmId = getTenantId(req)
+
+    const doc = await prisma.opportunityDocument.findFirst({
+      where: { id: req.params.documentId },
+      include: { opportunity: { select: { consultingFirmId: true } } },
+    })
+    if (!doc || doc.opportunity.consultingFirmId !== consultingFirmId) {
+      throw new NotFoundError('Document not found')
+    }
+
+    const filePath = path.join(process.cwd(), 'uploads', doc.storageKey)
+    if (!fs.existsSync(filePath)) {
+      throw new NotFoundError('Document file not found')
+    }
+
+    res.setHeader('Content-Type', doc.fileType)
+    res.setHeader('X-Content-Type-Options', 'nosniff')
+    res.download(filePath, doc.fileName)
+  } catch (err) {
+    next(err)
+  }
 })
 
 // GET /api/documents/:opportunityId
@@ -47,8 +91,17 @@ router.get('/:opportunityId', async (req: AuthenticatedRequest, res: Response, n
     const consultingFirmId = getTenantId(req)
     const opportunity = await prisma.opportunity.findFirst({ where: { id: req.params.opportunityId, consultingFirmId } })
     if (!opportunity) throw new NotFoundError('Opportunity not found')
-    const documents = await prisma.opportunityDocument.findMany({ where: { opportunityId: req.params.opportunityId }, orderBy: { uploadedAt: 'desc' } })
-    res.json({ success: true, data: documents })
+    const documents = await prisma.opportunityDocument.findMany({
+      where: { opportunityId: req.params.opportunityId },
+      orderBy: { uploadedAt: 'desc' },
+    })
+    res.json({
+      success: true,
+      data: documents.map((doc) => ({
+        ...doc,
+        fileUrl: `/api/documents/download/${doc.id}`,
+      })),
+    })
   } catch (err) { next(err) }
 })
 

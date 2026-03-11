@@ -166,6 +166,8 @@ exports.samApiService = {
                 offset += pageSize;
                 if (records.length < pageSize)
                     break;
+                // Throttle between pages to respect SAM.gov rate limits (~10 req/sec)
+                await new Promise((r) => setTimeout(r, 1200));
             }
             await database_1.prisma.consultingFirm.update({
                 where: { id: consultingFirmId },
@@ -180,8 +182,21 @@ exports.samApiService = {
             return { success: true, found: totalFound, ingested: totalIngested, errors: totalErrors };
         }
         catch (error) {
-            logger_1.logger.error("SAM ingestion failed", { error: error.message });
-            throw new Error("SAM.gov API unavailable");
+            const status = error.response?.status;
+            const body = error.response?.data;
+            logger_1.logger.error("SAM ingestion failed", { error: error.message, status, body });
+            if (status === 429) {
+                throw new Error("SAM.gov rate limit exceeded (HTTP 429). The public API allows ~1,000 requests/day. " +
+                    "Wait 15–60 minutes before ingesting again.");
+            }
+            if (status === 401 || status === 403) {
+                throw new Error(`SAM.gov API key rejected (HTTP ${status}). Verify SAM_API_KEY in backend/.env.`);
+            }
+            if (status) {
+                const detail = typeof body === "object" ? JSON.stringify(body) : String(body ?? "");
+                throw new Error(`SAM.gov returned HTTP ${status}: ${detail.slice(0, 200)}`);
+            }
+            throw new Error(`SAM.gov request failed: ${error.message}`);
         }
     },
 };

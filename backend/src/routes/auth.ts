@@ -5,16 +5,117 @@ import { Router, Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { prisma } from '../config/database';
-import { generateToken, authenticateJWT } from '../middleware/auth';
+import { generateToken, authenticateJWT, requireRole } from '../middleware/auth';
+import { enforceTenantScope, getTenantId } from '../middleware/tenant';
 import { AuthenticatedRequest } from '../types';
-import { UnauthorizedError, NotFoundError } from '../utils/errors';
+import { UnauthorizedError, NotFoundError, ConflictError } from '../utils/errors';
 import { logger } from '../utils/logger';
 
 const router = Router();
+const passwordSchema = z
+  .string()
+  .min(12)
+  .regex(/[A-Z]/, 'Must include uppercase')
+  .regex(/[a-z]/, 'Must include lowercase')
+  .regex(/[0-9]/, 'Must include number')
+  .regex(/[^A-Za-z0-9]/, 'Must include symbol')
 
 const LoginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
+});
+
+const RegisterFirmSchema = z.object({
+  firmName: z.string().min(2).max(120),
+  contactEmail: z.string().email(),
+  firstName: z.string().min(1).max(60),
+  lastName: z.string().min(1).max(60),
+  email: z.string().email().optional(),
+  password: passwordSchema,
+});
+
+const RegisterUserSchema = z.object({
+  email: z.string().email(),
+  password: passwordSchema,
+  firstName: z.string().min(1).max(60),
+  lastName: z.string().min(1).max(60),
+  role: z.enum(['ADMIN', 'CONSULTANT']).default('CONSULTANT'),
+});
+
+/**
+ * POST /api/auth/register-firm
+ * Creates tenant + first admin user.
+ */
+router.post('/register-firm', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const body = RegisterFirmSchema.parse(req.body);
+    const adminEmail = body.email || body.contactEmail
+
+    const existingFirm = await prisma.consultingFirm.findUnique({
+      where: { contactEmail: body.contactEmail },
+      select: { id: true },
+    });
+    if (existingFirm) throw new ConflictError('A firm with this contact email already exists');
+
+    const existingUser = await prisma.user.findUnique({
+      where: { email: adminEmail },
+      select: { id: true },
+    });
+    if (existingUser) throw new ConflictError('A user with this email already exists');
+
+    const passwordHash = await bcrypt.hash(body.password, 12);
+
+    const created = await prisma.$transaction(async (tx) => {
+      const firm = await tx.consultingFirm.create({
+        data: {
+          name: body.firmName,
+          contactEmail: body.contactEmail,
+        },
+      });
+
+      const user = await tx.user.create({
+        data: {
+          consultingFirmId: firm.id,
+          email: adminEmail,
+          passwordHash,
+          firstName: body.firstName,
+          lastName: body.lastName,
+          role: 'ADMIN',
+          isActive: true,
+        },
+      });
+
+      return { firm, user };
+    });
+
+    const token = generateToken({
+      userId: created.user.id,
+      consultingFirmId: created.firm.id,
+      role: 'ADMIN',
+      email: created.user.email,
+    });
+
+    res.status(201).json({
+      success: true,
+      data: {
+        token,
+        user: {
+          id: created.user.id,
+          email: created.user.email,
+          firstName: created.user.firstName,
+          lastName: created.user.lastName,
+          role: created.user.role,
+        },
+        firm: {
+          id: created.firm.id,
+          name: created.firm.name,
+          contactEmail: created.firm.contactEmail,
+        },
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 /**
@@ -29,7 +130,7 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction) =>
       include: { consultingFirm: true },
     });
 
-    if (!user || !user.isActive) {
+    if (!user || !user.isActive || !user.consultingFirm.isActive) {
       throw new UnauthorizedError('Invalid credentials');
     }
 
@@ -96,6 +197,60 @@ router.get(
           lastName: user.lastName,
           role: user.role,
           consultingFirm: user.consultingFirm,
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+/**
+ * POST /api/auth/register-user
+ * Adds a user inside the current tenant. ADMIN only.
+ */
+router.post(
+  '/register-user',
+  authenticateJWT,
+  enforceTenantScope,
+  requireRole('ADMIN'),
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const body = RegisterUserSchema.parse(req.body);
+      const consultingFirmId = getTenantId(req);
+
+      const existing = await prisma.user.findUnique({
+        where: { email: body.email },
+        select: { id: true },
+      });
+      if (existing) throw new ConflictError('A user with this email already exists');
+
+      const user = await prisma.user.create({
+        data: {
+          consultingFirmId,
+          email: body.email,
+          passwordHash: await bcrypt.hash(body.password, 12),
+          firstName: body.firstName,
+          lastName: body.lastName,
+          role: body.role,
+          isActive: true,
+        },
+      });
+
+      logger.info('User registered', {
+        consultingFirmId,
+        createdUserId: user.id,
+        createdBy: req.user?.userId,
+      });
+
+      res.status(201).json({
+        success: true,
+        data: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
         },
       });
     } catch (err) {

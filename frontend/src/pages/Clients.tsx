@@ -3,16 +3,26 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { clientsApi, clientPortalUsersApi } from '../services/api';
 import { PageHeader, Spinner, EmptyState, ErrorBanner, formatCurrency } from '../components/ui';
-import { Plus, CheckCircle, XCircle, Shield, KeyRound, X } from 'lucide-react';
+import { Plus, CheckCircle, XCircle, Shield, KeyRound, X, Search, Loader2, MapPin, Phone, Globe } from 'lucide-react';
+
+const EMPTY_FORM = {
+  name: '', cage: '', uei: '', ein: '', naicsCodes: '',
+  sdvosb: false, wosb: false, hubzone: false, smallBusiness: true,
+  phone: '', website: '', streetAddress: '', city: '', state: '', zipCode: '',
+};
 
 export function ClientsPage() {
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({
-    name: '', cage: '', uei: '', naicsCodes: '',
-    sdvosb: false, wosb: false, hubzone: false, smallBusiness: true,
-  });
+  const [form, setForm] = useState(EMPTY_FORM);
   const [formError, setFormError] = useState('');
+
+  // SAM.gov lookup state
+  const [lookupQuery, setLookupQuery] = useState('');
+  const [lookupType, setLookupType] = useState<'uei' | 'cage' | 'name'>('uei');
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupError, setLookupError] = useState('');
+  const [lookupResult, setLookupResult] = useState<any>(null);
 
   // Portal access state
   const [portalClientId, setPortalClientId] = useState<string | null>(null);
@@ -43,7 +53,9 @@ export function ClientsPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['clients'] });
       setShowCreate(false);
-      setForm({ name: '', cage: '', uei: '', naicsCodes: '', sdvosb: false, wosb: false, hubzone: false, smallBusiness: true });
+      setForm(EMPTY_FORM);
+      setLookupResult(null);
+      setLookupQuery('');
     },
     onError: (err: any) => setFormError(err.response?.data?.error || 'Create failed'),
   });
@@ -57,37 +69,192 @@ export function ClientsPage() {
     });
   };
 
+  const handleSamLookup = async () => {
+    if (!lookupQuery.trim()) return;
+    setLookupLoading(true);
+    setLookupError('');
+    setLookupResult(null);
+    try {
+      const params =
+        lookupType === 'uei'  ? { uei: lookupQuery.trim() } :
+        lookupType === 'cage' ? { cage: lookupQuery.trim() } :
+                                { name: lookupQuery.trim() };
+      const res = await clientsApi.samLookup(params);
+      const d = res.data;
+      setLookupResult(d);
+      // Pre-fill the create form
+      setForm({
+        name: d.name || '',
+        cage: d.cage || '',
+        uei: d.uei || '',
+        ein: '',
+        naicsCodes: (d.naicsCodes || []).join(', '),
+        sdvosb: !!d.sdvosb,
+        wosb: !!d.wosb,
+        hubzone: !!d.hubzone,
+        smallBusiness: !!d.smallBusiness,
+        phone: d.phone || '',
+        website: d.website || '',
+        streetAddress: d.streetAddress || '',
+        city: d.city || '',
+        state: d.state || '',
+        zipCode: d.zipCode || '',
+      });
+      setShowCreate(true);
+    } catch (err: any) {
+      setLookupError(err?.response?.data?.error || 'Lookup failed — entity not found or SAM.gov unavailable');
+    } finally {
+      setLookupLoading(false);
+    }
+  };
+
   const clients = data?.data || [];
 
   return (
     <div>
       <PageHeader title="Client Companies" subtitle="Government contractor portfolio">
-        <button onClick={() => setShowCreate(!showCreate)} className="btn-primary flex items-center gap-2">
+        <button onClick={() => { setShowCreate(!showCreate); setLookupResult(null); }} className="btn-primary flex items-center gap-2">
           <Plus className="w-4 h-4" />
           Add Client
         </button>
       </PageHeader>
+
+      {/* SAM.gov Quick Lookup */}
+      <div className="card mb-6">
+        <h2 className="font-semibold text-gray-200 mb-1 flex items-center gap-2">
+          <Search className="w-4 h-4 text-blue-400" /> SAM.gov Entity Lookup
+        </h2>
+        <p className="text-xs text-gray-500 mb-3">
+          Enter a UEI, CAGE code, or company name to auto-populate client details from SAM.gov.
+          <span className="text-gray-600"> (EIN/Tax ID lookup is not available via the public SAM API.)</span>
+        </p>
+        <div className="flex flex-wrap gap-2 items-end">
+          <div>
+            <label className="label">Search By</label>
+            <select className="input w-36" value={lookupType} onChange={(e) => { setLookupType(e.target.value as 'uei' | 'cage' | 'name'); setLookupQuery(''); }}>
+              <option value="uei">UEI (exact)</option>
+              <option value="cage">CAGE Code</option>
+              <option value="name">Company Name</option>
+            </select>
+          </div>
+          <div className="flex-1 min-w-48">
+            <label className="label">
+              {lookupType === 'uei'  ? 'UEI — 12 alphanumeric characters' :
+               lookupType === 'cage' ? 'CAGE Code — 5 characters' :
+                                       'Legal business name (as registered in SAM.gov)'}
+            </label>
+            <input
+              className="input"
+              value={lookupQuery}
+              onChange={(e) => setLookupQuery(e.target.value)}
+              placeholder={
+                lookupType === 'uei'  ? 'QDFNQQ83G946' :
+                lookupType === 'cage' ? '9V5E3' :
+                                        'Acme Defense Solutions LLC'
+              }
+              onKeyDown={(e) => e.key === 'Enter' && handleSamLookup()}
+            />
+          </div>
+          <button
+            onClick={handleSamLookup}
+            disabled={lookupLoading || !lookupQuery.trim()}
+            className="btn-primary flex items-center gap-2 h-9"
+          >
+            {lookupLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+            {lookupLoading ? 'Looking up...' : 'Lookup'}
+          </button>
+        </div>
+        {lookupError && (
+          <div className="mt-3 p-3 bg-red-950/40 border border-red-800/50 rounded-lg">
+            <p className="text-red-300 text-sm font-medium mb-1">Lookup failed</p>
+            <p className="text-red-400 text-xs mb-2">{lookupError}</p>
+            <p className="text-xs text-gray-500 mb-2">
+              Tips: UEI must be exactly 12 alphanumeric chars. CAGE codes are 5 chars. For name search, use the exact legal name from SAM.gov.
+            </p>
+            <button
+              onClick={() => { setShowCreate(true); setLookupError(''); }}
+              className="btn-secondary text-xs"
+            >
+              Enter details manually instead
+            </button>
+          </div>
+        )}
+        {lookupResult && (
+          <div className="mt-3 p-3 bg-green-950/30 border border-green-800/50 rounded-lg text-sm">
+            <p className="text-green-300 font-medium mb-1">
+              Found: <span className="text-white">{lookupResult.name ?? '(no name returned)'}</span>
+            </p>
+            <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-gray-400">
+              {lookupResult.uei && <span>UEI: <span className="font-mono text-gray-300">{lookupResult.uei}</span></span>}
+              {lookupResult.cage && <span>CAGE: <span className="font-mono text-gray-300">{lookupResult.cage}</span></span>}
+              {lookupResult.samRegStatus && (
+                <span>SAM: <span className={lookupResult.samRegStatus === 'Active' ? 'text-green-400' : 'text-yellow-400'}>{lookupResult.samRegStatus}</span></span>
+              )}
+              {lookupResult.city && <span>{lookupResult.city}{lookupResult.state ? `, ${lookupResult.state}` : ''}</span>}
+              {lookupResult.naicsCodes?.length > 0 && (
+                <span>{lookupResult.naicsCodes.length} NAICS code{lookupResult.naicsCodes.length > 1 ? 's' : ''}</span>
+              )}
+            </div>
+            <p className="text-xs text-blue-400 mt-1">
+              Form has been pre-filled below. Review certifications and click Create Client.
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* Create Form */}
       {showCreate && (
         <div className="card mb-6">
           <h2 className="font-semibold text-gray-200 mb-4">New Client Company</h2>
           <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Core IDs */}
             <div>
               <label className="label">Company Name *</label>
               <input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
             </div>
             <div>
+              <label className="label">EIN / Tax ID</label>
+              <input className="input font-mono" value={form.ein} onChange={(e) => setForm({ ...form, ein: e.target.value })} placeholder="12-3456789" />
+            </div>
+            <div>
               <label className="label">UEI</label>
-              <input className="input" value={form.uei} onChange={(e) => setForm({ ...form, uei: e.target.value })} />
+              <input className="input font-mono" value={form.uei} onChange={(e) => setForm({ ...form, uei: e.target.value })} />
             </div>
             <div>
               <label className="label">CAGE Code</label>
-              <input className="input" value={form.cage} onChange={(e) => setForm({ ...form, cage: e.target.value })} />
+              <input className="input font-mono" value={form.cage} onChange={(e) => setForm({ ...form, cage: e.target.value })} />
             </div>
-            <div>
+            <div className="md:col-span-2">
               <label className="label">NAICS Codes (comma-separated)</label>
               <input className="input" value={form.naicsCodes} onChange={(e) => setForm({ ...form, naicsCodes: e.target.value })} placeholder="484121, 541614" />
+            </div>
+
+            {/* Contact & Address */}
+            <div>
+              <label className="label">Phone</label>
+              <input className="input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="(555) 123-4567" />
+            </div>
+            <div>
+              <label className="label">Website</label>
+              <input className="input" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} placeholder="https://example.com" />
+            </div>
+            <div className="md:col-span-2">
+              <label className="label">Street Address</label>
+              <input className="input" value={form.streetAddress} onChange={(e) => setForm({ ...form, streetAddress: e.target.value })} placeholder="123 Main St" />
+            </div>
+            <div>
+              <label className="label">City</label>
+              <input className="input" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="label">State</label>
+                <input className="input font-mono" value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} placeholder="VA" maxLength={2} />
+              </div>
+              <div>
+                <label className="label">ZIP</label>
+                <input className="input font-mono" value={form.zipCode} onChange={(e) => setForm({ ...form, zipCode: e.target.value })} placeholder="20001" />
+              </div>
             </div>
 
             {/* Certifications */}
@@ -119,7 +286,7 @@ export function ClientsPage() {
               <button type="submit" disabled={createMutation.isPending} className="btn-primary">
                 {createMutation.isPending ? 'Creating...' : 'Create Client'}
               </button>
-              <button type="button" onClick={() => setShowCreate(false)} className="btn-secondary">
+              <button type="button" onClick={() => { setShowCreate(false); setLookupResult(null); }} className="btn-secondary">
                 Cancel
               </button>
             </div>

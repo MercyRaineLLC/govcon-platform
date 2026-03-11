@@ -31,7 +31,7 @@ const typeIcons: Record<string, any> = {
 export function RiskRadarCard({ risks }: { risks?: RiskItem[] }) {
   return (
     <div className="card">
-      <div className="flex items-center gap-2 mb-4">
+      <div className="flex items-center gap-2 mb-1">
         <AlertTriangle className="w-4 h-4 text-red-400" />
         <h3 className="font-semibold text-gray-200">Risk Radar</h3>
         {risks && risks.length > 0 && (
@@ -41,7 +41,28 @@ export function RiskRadarCard({ risks }: { risks?: RiskItem[] }) {
         )}
       </div>
 
-      <div className="space-y-2 max-h-72 overflow-y-auto">
+      <p className="text-xs text-gray-500 mb-3">
+        Active risks across your client portfolio, ranked by severity. Each item flags a specific
+        issue that could impact a submission, compliance standing, or contract performance.
+      </p>
+
+      {/* Legend */}
+      <div className="flex flex-wrap gap-3 mb-3 pb-3 border-b border-gray-800">
+        <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
+          <Clock className="w-3 h-3 text-gray-400" /> <span>DEADLINE — submission window closing</span>
+        </div>
+        <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
+          <ShieldAlert className="w-3 h-3 text-gray-400" /> <span>COMPLIANCE — status block detected</span>
+        </div>
+        <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
+          <DollarSign className="w-3 h-3 text-gray-400" /> <span>PENALTY — unpaid penalties on record</span>
+        </div>
+        <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
+          <AlertTriangle className="w-3 h-3 text-gray-400" /> <span>LATE_RISK — elevated late submission probability</span>
+        </div>
+      </div>
+
+      <div className="space-y-2 max-h-64 overflow-y-auto">
         {!risks || risks.length === 0 ? (
           <p className="text-sm text-gray-500 text-center py-4">No active risks</p>
         ) : (

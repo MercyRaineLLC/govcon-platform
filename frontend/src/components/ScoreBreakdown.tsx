@@ -1,4 +1,4 @@
-import { Info } from 'lucide-react'
+import { Info, ExternalLink } from 'lucide-react'
 import { useState } from 'react'
 
 interface FactorContribution {
@@ -22,6 +22,7 @@ interface Props {
   probability: number
   estimatedValue?: number
   expectedValue?: number
+  samUrl?: string
 }
 
 const FACTOR_LABELS: Record<string, string> = {
@@ -87,7 +88,7 @@ function FactorBar({ factor }: { factor: FactorContribution }) {
   )
 }
 
-export function ScoreBreakdown({ breakdown, probability, estimatedValue, expectedValue }: Props) {
+export function ScoreBreakdown({ breakdown, probability, estimatedValue, expectedValue, samUrl }: Props) {
   if (!breakdown?.factorContributions?.length) {
     return (
       <div className="card">
@@ -115,11 +116,24 @@ export function ScoreBreakdown({ breakdown, probability, estimatedValue, expecte
           <h2 className="text-lg font-semibold text-gray-200">Win Probability Breakdown</h2>
           <p className="text-xs text-gray-500 mt-0.5">8-factor logistic regression model</p>
         </div>
-        <div className="text-right">
-          <p className={`text-3xl font-bold font-mono ${probColor}`}>{probPct}%</p>
-          {expectedValue ? (
-            <p className="text-xs text-green-400 font-mono">EV {fmt(expectedValue)}</p>
-          ) : null}
+        <div className="flex flex-col items-end gap-2">
+          <div className="text-right">
+            <p className={`text-3xl font-bold font-mono ${probColor}`}>{probPct}%</p>
+            {expectedValue ? (
+              <p className="text-xs text-green-400 font-mono">EV {fmt(expectedValue)}</p>
+            ) : null}
+          </div>
+          {samUrl && (
+            <a
+              href={samUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              View on SAM.gov
+            </a>
+          )}
         </div>
       </div>
 

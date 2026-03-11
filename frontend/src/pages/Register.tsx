@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { authApi } from '../services/api';
@@ -61,7 +61,7 @@ export function RegisterPage() {
             </div>
             <div>
               <label className="label">Password *</label>
-              <input type="password" className="input" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required placeholder="Min 8 chars, 1 uppercase, 1 number" />
+              <input type="password" className="input" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required placeholder="Min 12 chars, upper/lower/number/symbol" />
             </div>
 
             {error && <div className="bg-red-900/40 border border-red-700 text-red-300 text-sm rounded px-3 py-2">{error}</div>}
@@ -71,10 +71,12 @@ export function RegisterPage() {
             </button>
           </form>
           <div className="mt-4 pt-4 border-t border-gray-800 text-center">
-            <Link to="/login" className="text-sm text-blue-400 hover:text-blue-300">← Sign in to existing account</Link>
+            <Link to="/login" className="text-sm text-blue-400 hover:text-blue-300">&lt;- Sign in to existing account</Link>
           </div>
         </div>
       </div>
     </div>
   );
 }
+
+

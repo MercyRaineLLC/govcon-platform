@@ -38,8 +38,11 @@ export async function evaluateBidDecision(
     include: { performanceStats: true },
   })
 
-  if (!opportunity || !client) {
+  if (!opportunity || !client || !client.isActive) {
     throw new Error('Invalid opportunity or client')
+  }
+  if (client.consultingFirmId !== opportunity.consultingFirmId) {
+    throw new Error('Client does not belong to the same consulting firm')
   }
 
   // ------------------------------------------------------------

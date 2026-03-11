@@ -99,6 +99,9 @@ export const clientsApi = {
     api.delete(`/clients/${id}`).then((r) => r.data),
   stats: (id: string) =>
     api.get(`/clients/${id}/stats`).then((r) => r.data),
+  /** Look up entity data from SAM.gov without creating a client record */
+  samLookup: (params: { uei?: string; cage?: string; name?: string }) =>
+    api.get('/clients/lookup', { params }).then((r) => r.data),
 };
 
 // ---- Submissions ----
@@ -179,6 +182,26 @@ export const docRequirementsApi = {
     api.get(`/doc-requirements/client/${clientId}`).then((r) => r.data),
 };
 
+// ---- Templates ----
+export const templatesApi = {
+  list: (params?: any) =>
+    api.get('/templates', { params }).then((r) => r.data),
+  upload: (formData: FormData) =>
+    api.post('/templates', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then((r) => r.data),
+  update: (id: string, data: any) =>
+    api.patch(`/templates/${id}`, data).then((r) => r.data),
+  deactivate: (id: string) =>
+    api.delete(`/templates/${id}`).then((r) => r.data),
+  assign: (id: string, data: any) =>
+    api.post(`/templates/${id}/assign`, data).then((r) => r.data),
+  download: async (id: string) => {
+    const response = await api.get(`/templates/${id}/download`, { responseType: 'blob' });
+    return response.data as Blob;
+  },
+};
+
 // ---- Rewards ----
 export const rewardsApi = {
   list: (params?: any) =>
@@ -204,3 +227,41 @@ export const clientPortalUsersApi = {
   register: (data: { clientCompanyId: string; email: string; password: string; firstName: string; lastName: string }) =>
     api.post('/client-portal/auth/register', data).then((r) => r.data),
 };
+
+// ---- Client Documents & Template Library ----
+export const clientDocumentsApi = {
+  upload: (data: { clientCompanyId: string; documentType: string; title: string; notes?: string }, file: File) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    Object.entries(data).forEach(([k, v]) => { if (v !== undefined) fd.append(k, v) })
+    return api.post('/client-documents/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then((r) => r.data)
+  },
+  list: (clientCompanyId: string) =>
+    api.get('/client-documents', { params: { clientCompanyId } }).then((r) => r.data),
+  delete: (documentId: string) =>
+    api.delete('/client-documents/' + documentId).then((r) => r.data),
+  shareAsTemplate: (documentId: string, data: { title: string; description?: string }) =>
+    api.post('/client-documents/' + documentId + '/share-as-template', data).then((r) => r.data),
+  listTemplates: (params?: { documentType?: string; page?: number; limit?: number }) =>
+    api.get('/client-documents/templates', { params }).then((r) => r.data),
+  downloadTemplate: async (templateId: string, fileName: string) => {
+    const res = await api.get('/client-documents/templates/download/' + templateId, { responseType: 'blob' })
+    const url = URL.createObjectURL(res.data)
+    const a = document.createElement('a'); a.href = url; a.download = fileName; a.click()
+    URL.revokeObjectURL(url)
+  },
+  listTemplatesAdmin: () =>
+    api.get('/client-documents/templates/admin').then((r) => r.data),
+  reviewTemplate: (templateId: string, data: { status: 'APPROVED' | 'REJECTED'; reviewNotes?: string }) =>
+    api.post('/client-documents/templates/' + templateId + '/review', data).then((r) => r.data),
+}
+
+// ---- Compliance Matrix ----
+export const complianceMatrixApi = {
+  get: (opportunityId: string) =>
+    api.get(`/compliance-matrix/${opportunityId}`).then((r) => r.data),
+  generate: (opportunityId: string) =>
+    api.post(`/compliance-matrix/${opportunityId}/generate`).then((r) => r.data),
+  updateRequirement: (requirementId: string, data: { proposalSection?: string; status?: string; notes?: string }) =>
+    api.patch(`/compliance-matrix/requirements/${requirementId}`, data).then((r) => r.data),
+}

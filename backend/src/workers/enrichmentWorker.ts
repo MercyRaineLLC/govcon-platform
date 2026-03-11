@@ -157,7 +157,7 @@ export function startEnrichmentWorker(): Worker<EnrichmentJobData> {
         opportunityId,
         historicalWinner: enrichment.historicalWinner,
         competitionCount: enrichment.competitionCount,
-        incumbentProbability: enrichment.incumbentProbability.toFixed(3),
+        incumbentProbability: enrichment.incumbentProbability?.toFixed(3) ?? 'null',
         newProbability: bestProbability.toFixed(4),
       });
     },

@@ -26,11 +26,22 @@ router.post('/upload', upload_1.upload.single('file'), async (req, res, next) =>
         const opportunity = await database_1.prisma.opportunity.findFirst({ where: { id: opportunityId, consultingFirmId } });
         if (!opportunity)
             throw new errors_1.NotFoundError('Opportunity not found');
+        // Prevent duplicate uploads of the same file to the same opportunity
+        const existing = await database_1.prisma.opportunityDocument.findFirst({
+            where: { opportunityId, fileName: req.file.originalname },
+        });
+        if (existing) {
+            fs_1.default.unlinkSync(req.file.path);
+            return res.status(409).json({
+                success: false,
+                error: `"${req.file.originalname}" has already been uploaded for this opportunity. Delete it first or upload a different file.`,
+            });
+        }
         const document = await database_1.prisma.opportunityDocument.create({
             data: {
                 opportunityId,
                 fileName: req.file.originalname,
-                fileUrl: `/uploads/${req.file.filename}`,
+                fileUrl: null,
                 storageKey: req.file.filename,
                 fileType: req.file.mimetype,
                 fileSize: req.file.size,
@@ -39,7 +50,36 @@ router.post('/upload', upload_1.upload.single('file'), async (req, res, next) =>
             },
         });
         logger_1.logger.info('Document uploaded', { documentId: document.id, opportunityId });
-        res.json({ success: true, data: document });
+        res.json({
+            success: true,
+            data: {
+                ...document,
+                fileUrl: `/api/documents/download/${document.id}`,
+            },
+        });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+// GET /api/documents/download/:documentId
+router.get('/download/:documentId', async (req, res, next) => {
+    try {
+        const consultingFirmId = (0, tenant_1.getTenantId)(req);
+        const doc = await database_1.prisma.opportunityDocument.findFirst({
+            where: { id: req.params.documentId },
+            include: { opportunity: { select: { consultingFirmId: true } } },
+        });
+        if (!doc || doc.opportunity.consultingFirmId !== consultingFirmId) {
+            throw new errors_1.NotFoundError('Document not found');
+        }
+        const filePath = path_1.default.join(process.cwd(), 'uploads', doc.storageKey);
+        if (!fs_1.default.existsSync(filePath)) {
+            throw new errors_1.NotFoundError('Document file not found');
+        }
+        res.setHeader('Content-Type', doc.fileType);
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.download(filePath, doc.fileName);
     }
     catch (err) {
         next(err);
@@ -52,8 +92,17 @@ router.get('/:opportunityId', async (req, res, next) => {
         const opportunity = await database_1.prisma.opportunity.findFirst({ where: { id: req.params.opportunityId, consultingFirmId } });
         if (!opportunity)
             throw new errors_1.NotFoundError('Opportunity not found');
-        const documents = await database_1.prisma.opportunityDocument.findMany({ where: { opportunityId: req.params.opportunityId }, orderBy: { uploadedAt: 'desc' } });
-        res.json({ success: true, data: documents });
+        const documents = await database_1.prisma.opportunityDocument.findMany({
+            where: { opportunityId: req.params.opportunityId },
+            orderBy: { uploadedAt: 'desc' },
+        });
+        res.json({
+            success: true,
+            data: documents.map((doc) => ({
+                ...doc,
+                fileUrl: `/api/documents/download/${doc.id}`,
+            })),
+        });
     }
     catch (err) {
         next(err);

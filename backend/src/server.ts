@@ -9,8 +9,6 @@ import helmet from 'helmet'
 import cors from 'cors'
 import morgan from 'morgan'
 import rateLimit from 'express-rate-limit'
-import path from 'path'
-import fs from 'fs'
 
 import { config } from './config/config'
 import { connectDatabase, disconnectDatabase } from './config/database'
@@ -33,17 +31,15 @@ import documentsRoutes from './routes/documents'
 import docRequirementsRoutes from './routes/docRequirements'
 import clientPortalRoutes from './routes/clientPortal'
 import rewardsRoutes from './routes/rewards'
+import templateRoutes from './routes/templates'
+import clientDocumentsRoutes from './routes/clientDocuments'
+import analyticsRoutes from './routes/analytics'
+import complianceMatrixRoutes from './routes/complianceMatrix'
 
 async function bootstrap(): Promise<void> {
   const app = express()
 
-  // -------------------------------------------------------------
-  // Ensure upload directory exists
-  // -------------------------------------------------------------
-  const uploadDir = path.join(process.cwd(), 'uploads');
-  if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-  }
+  app.set('trust proxy', 1)
 
   // -------------------------------------------------------------
   // Security Middleware
@@ -57,9 +53,24 @@ async function bootstrap(): Promise<void> {
 
   app.use(
     cors({
-      origin: config.isProduction
-        ? process.env.ALLOWED_ORIGINS?.split(',')
-        : '*',
+      origin: (origin, cb) => {
+        if (!config.isProduction) {
+          cb(null, true)
+          return
+        }
+
+        const allowed = (process.env.ALLOWED_ORIGINS || '')
+          .split(',')
+          .map((o) => o.trim())
+          .filter(Boolean)
+
+        if (!origin || allowed.includes(origin)) {
+          cb(null, true)
+          return
+        }
+
+        cb(new Error('Origin not allowed by CORS'))
+      },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization'],
@@ -79,11 +90,6 @@ async function bootstrap(): Promise<void> {
       },
     })
   )
-
-  // -------------------------------------------------------------
-  // Static uploads
-  // -------------------------------------------------------------
-  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')))
 
   // -------------------------------------------------------------
   // Parsing Middleware
@@ -130,6 +136,10 @@ async function bootstrap(): Promise<void> {
   apiRouter.use('/doc-requirements', docRequirementsRoutes)
   apiRouter.use('/client-portal', clientPortalRoutes)
   apiRouter.use('/rewards', rewardsRoutes)
+  apiRouter.use('/templates', templateRoutes)
+  apiRouter.use('/client-documents', clientDocumentsRoutes)
+  apiRouter.use('/analytics', analyticsRoutes)
+  apiRouter.use('/compliance-matrix', complianceMatrixRoutes)
 
   app.use('/api', apiRouter)
 
