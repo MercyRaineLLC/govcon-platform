@@ -11,7 +11,7 @@ import morgan from 'morgan'
 import rateLimit from 'express-rate-limit'
 
 import { config } from './config/config'
-import { connectDatabase, disconnectDatabase } from './config/database'
+import { connectDatabase, disconnectDatabase, prisma } from './config/database'
 import { connectRedis, disconnectRedis } from './config/redis'
 import { logger } from './utils/logger'
 import { errorHandler, notFoundHandler } from './middleware/errorHandler'
@@ -35,6 +35,8 @@ import templateRoutes from './routes/templates'
 import clientDocumentsRoutes from './routes/clientDocuments'
 import analyticsRoutes from './routes/analytics'
 import complianceMatrixRoutes from './routes/complianceMatrix'
+import billingRoutes from './routes/billing'
+import marketAnalyticsRoutes from './routes/marketAnalytics'
 
 async function bootstrap(): Promise<void> {
   const app = express()
@@ -110,13 +112,23 @@ async function bootstrap(): Promise<void> {
   // -------------------------------------------------------------
   // Health Check
   // -------------------------------------------------------------
-  app.get('/health', (_req, res) => {
-    res.json({
-      status: 'healthy',
-      timestamp: new Date().toISOString(),
-      version: process.env.npm_package_version || '1.0.0',
-      environment: config.env,
-    })
+  app.get('/health', async (_req, res) => {
+    try {
+      await prisma.$queryRaw`SELECT 1`
+      res.json({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        version: process.env.npm_package_version || '1.0.0',
+        environment: config.env,
+        db: 'ok',
+      })
+    } catch {
+      res.status(503).json({
+        status: 'unhealthy',
+        timestamp: new Date().toISOString(),
+        db: 'error',
+      })
+    }
   })
 
   // -------------------------------------------------------------
@@ -140,6 +152,8 @@ async function bootstrap(): Promise<void> {
   apiRouter.use('/client-documents', clientDocumentsRoutes)
   apiRouter.use('/analytics', analyticsRoutes)
   apiRouter.use('/compliance-matrix', complianceMatrixRoutes)
+  apiRouter.use('/billing', billingRoutes)
+  apiRouter.use('/market-analytics', marketAnalyticsRoutes)
 
   app.use('/api', apiRouter)
 

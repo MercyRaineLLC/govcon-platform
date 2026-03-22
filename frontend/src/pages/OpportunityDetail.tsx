@@ -3,11 +3,13 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { opportunitiesApi, jobsApi, documentsApi, scoreApi, clientsApi, decisionsApi, complianceMatrixApi } from '../services/api'
 import { useQuery } from '@tanstack/react-query'
 import { ScoreBreakdown } from '../components/ScoreBreakdown'
+import { useRecentlyViewed } from '../hooks/useRecentlyViewed'
+import { useFavorites } from '../hooks/useFavorites'
 import {
   Upload, FileText, Loader, CheckCircle, AlertCircle,
   ExternalLink, Trophy, Users, TrendingUp, Shield,
   Languages, ChevronDown, ChevronUp, Download, ArrowLeft, BookOpen, Send, Mail, ClipboardList,
-  UserCheck, BarChart3, Table2, RefreshCw, Pencil,
+  UserCheck, BarChart3, Table2, RefreshCw, Pencil, Lightbulb, Target, AlertTriangle, Star, Zap, Trash2, FileDown, StarOff,
 } from 'lucide-react'
 import { parseSubmissionInstructions } from '../utils/parseSubmission'
 
@@ -61,6 +63,7 @@ interface OpportunityDetail {
   competitionCount?: number
   incumbentProbability?: number
   agencySdvosbRate?: number
+  agencySmallBizRate?: number
   recompeteFlag?: boolean
   incumbentSignalDetected?: boolean
   deadlineClassification?: { priority: string; daysUntilDeadline: number; label: string }
@@ -79,6 +82,7 @@ export default function OpportunityDetail() {
   const [error, setError] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null)
   const [analyzeStatus, setAnalyzeStatus] = useState<'idle' | 'running' | 'complete' | 'error'>('idle')
   const [interpretingId, setInterpretingId] = useState<string | null>(null)
   const [expandedAmendmentId, setExpandedAmendmentId] = useState<string | null>(null)
@@ -89,6 +93,9 @@ export default function OpportunityDetail() {
   const [scoringClient, setScoringClient] = useState(false)
   const [scoreError, setScoreError] = useState('')
 
+  const { addView } = useRecentlyViewed()
+  const { isFavorite, toggleFavorite } = useFavorites()
+
   // Compliance matrix
   const [matrix, setMatrix] = useState<any>(null)
   const [matrixLoading, setMatrixLoading] = useState(false)
@@ -97,11 +104,24 @@ export default function OpportunityDetail() {
   const [editingReqId, setEditingReqId] = useState<string | null>(null)
   const [editProposalSection, setEditProposalSection] = useState('')
 
+  // Bid guidance / win strategy
+  const [guidance, setGuidance] = useState<any>(null)
+  const [guidanceGenerating, setGuidanceGenerating] = useState(false)
+  const [guidanceError, setGuidanceError] = useState('')
+
   const fetchOpportunity = async () => {
     if (!id) return
     try {
       const res = await opportunitiesApi.getById(id)
-      setData(res.data ?? res)
+      const opp = res.data ?? res
+      setData(opp)
+      // Track in recently viewed
+      addView({
+        id: opp.id,
+        title: opp.title,
+        agency: opp.agency,
+        deadline: opp.responseDeadline,
+      })
     } catch {
       setError(true)
     } finally {
@@ -114,9 +134,32 @@ export default function OpportunityDetail() {
     setMatrixLoading(true)
     try {
       const res = await complianceMatrixApi.get(id)
-      setMatrix(res.data ?? null)
+      const m = res.data ?? null
+      setMatrix(m)
+      if (m?.bidGuidanceJson) {
+        setGuidance({ ...m.bidGuidanceJson, generatedAt: m.bidGuidanceAt ?? undefined })
+      }
     } catch { /* non-fatal */ } finally {
       setMatrixLoading(false)
+    }
+  }
+
+  const handleGenerateBidGuidance = async () => {
+    if (!id) return
+    setGuidanceGenerating(true)
+    setGuidanceError('')
+    try {
+      const res = await complianceMatrixApi.generateBidGuidance(id)
+      setGuidance(res.data)
+    } catch (err: any) {
+      const msg = err?.response?.data?.error
+      if (msg === 'NO_AI_KEY') {
+        setGuidanceError('AI key not configured. Add ANTHROPIC_API_KEY to backend/.env and restart.')
+      } else {
+        setGuidanceError(err?.response?.data?.message || 'Generation failed')
+      }
+    } finally {
+      setGuidanceGenerating(false)
     }
   }
 
@@ -166,6 +209,8 @@ export default function OpportunityDetail() {
     setMatrix(null)
     setMatrixError('')
     setMatrixLoading(false)
+    setGuidance(null)
+    setGuidanceError('')
     setClientScore(null)
     setScoreError('')
     setAnalyzeStatus('idle')
@@ -204,6 +249,21 @@ export default function OpportunityDetail() {
     setUploading(true)
     setUploadError('')
     try {
+      // ZIP: extract all files, then trigger analysis on each
+      if (file.name.toLowerCase().endsWith('.zip')) {
+        const zipRes = await documentsApi.uploadZip(id, file)
+        const extracted: any[] = zipRes.data ?? []
+        setUploadError('')
+        fetchOpportunity()
+        // Trigger analysis for each extracted doc
+        for (const doc of extracted) {
+          try { await jobsApi.triggerDocumentAnalysis(doc.id) } catch {}
+        }
+        setAnalyzeStatus(extracted.length > 0 ? 'running' : 'error')
+        setUploading(false)
+        if (fileInputRef.current) fileInputRef.current.value = ''
+        return
+      }
       const uploadRes = await documentsApi.upload(id, file)
       const documentId = uploadRes.data?.id ?? uploadRes.id
       const jobRes = await jobsApi.triggerDocumentAnalysis(documentId)
@@ -238,6 +298,327 @@ export default function OpportunityDetail() {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
+  }
+
+  const handleDeleteDocument = async (documentId: string) => {
+    if (!window.confirm('Delete this document? This cannot be undone.')) return
+    setDeletingDocId(documentId)
+    try {
+      await documentsApi.delete(documentId)
+      await fetchOpportunity()
+    } catch (err: any) {
+      setUploadError(err?.response?.data?.error || 'Delete failed')
+    } finally {
+      setDeletingDocId(null)
+    }
+  }
+
+  const handleExportSynopsis = () => {
+    if (!data) return
+
+    // --- helpers ---
+    const cleanAgency = (raw: string): string => {
+      // Remove duplicate segments separated by dots: "VA, DEPT OF.VA, DEPT OF.SAC FREDERICK" → "VA, DEPT OF — SAC FREDERICK"
+      const parts = raw.split('.').map(s => s.trim()).filter(Boolean)
+      const unique: string[] = []
+      for (const p of parts) {
+        if (!unique.some(u => u.toLowerCase() === p.toLowerCase())) unique.push(p)
+      }
+      // Title-case each segment, join with em-dash
+      return unique.map(p =>
+        p.replace(/\b(\w)/g, c => c.toUpperCase())
+         .replace(/\b(Of|The|And|For|A|An)\b/g, m => m.toLowerCase())
+         .replace(/^./, c => c.toUpperCase())
+      ).join(' — ')
+    }
+
+    const parseContractType = (title: string): string | null => {
+      const upper = title.toUpperCase()
+      if (upper.includes('IDIQ')) return 'IDIQ (Indefinite Delivery / Indefinite Quantity)'
+      if (upper.includes('GWAC')) return 'GWAC (Government-Wide Acquisition Contract)'
+      if (upper.includes('BPA')) return 'BPA (Blanket Purchase Agreement)'
+      if (upper.includes('SBSA')) return 'SBSA (Small Business Set-Aside)'
+      if (upper.includes(' FFP')) return 'FFP (Firm Fixed Price)'
+      if (upper.includes(' T&M') || upper.includes(' TIME AND MATERIAL')) return 'T&M (Time & Materials)'
+      if (upper.includes(' CPFF')) return 'CPFF (Cost Plus Fixed Fee)'
+      if (upper.includes(' MAC')) return 'MAC (Multiple Award Contract)'
+      return null
+    }
+
+    const parseSolicitationNumber = (title: string): string | null => {
+      // Match leading codes like "R425", "36C10B22R0001", "W912HN-22-R-0002"
+      const m = title.match(/^([A-Z0-9]{2,20}(?:[-][A-Z0-9]{2,10})*)\s+/)
+      return m ? m[1] : null
+    }
+
+    const formatSetAside = (type?: string): string => {
+      if (!type || type === 'NONE') return 'Open Competition (Full &amp; Open)'
+      const map: Record<string, string> = {
+        SDVOSB: 'Service-Disabled Veteran-Owned Small Business (SDVOSB)',
+        WOSB: 'Women-Owned Small Business (WOSB)',
+        EDWOSB: 'Economically Disadvantaged WOSB (EDWOSB)',
+        HUBZone: 'HUBZone Small Business',
+        SB: 'Small Business Set-Aside',
+        '8A': '8(a) Business Development Program',
+        VOSB: 'Veteran-Owned Small Business (VOSB)',
+      }
+      return map[type] || type
+    }
+
+    const daysUntil = (deadline: string): number =>
+      Math.ceil((new Date(deadline).getTime() - Date.now()) / 86400000)
+
+    // --- computed values ---
+    const sub = parseSubmissionInstructions(data.description ?? '')
+    if (data.pocEmail && !sub.email) sub.email = data.pocEmail
+    if (data.pocName && !sub.contactName) sub.contactName = data.pocName
+
+    const samLink = data.samNoticeId
+      ? `https://sam.gov/opp/${data.samNoticeId}/view`
+      : `https://sam.gov/search/?index=opp&keywords=${encodeURIComponent(data.title)}`
+
+    const deadline = new Date(data.responseDeadline).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+    const daysLeft = daysUntil(data.responseDeadline)
+    const urgencyColor = daysLeft <= 7 ? '#dc2626' : daysLeft <= 14 ? '#d97706' : '#16a34a'
+
+    const value = data.estimatedValue
+      ? `$${Number(data.estimatedValue).toLocaleString()}`
+      : (data.estimatedValueMin && data.estimatedValueMax)
+        ? `$${Number(data.estimatedValueMin).toLocaleString()} – $${Number(data.estimatedValueMax).toLocaleString()}`
+        : 'Not specified'
+
+    const now = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+    const contractType = parseContractType(data.title)
+    const solNumber = parseSolicitationNumber(data.title)
+    const agency = cleanAgency(data.agency)
+    const setAside = formatSetAside(data.setAsideType)
+    const prob = data.probabilityScore != null ? Math.round(data.probabilityScore * 100) : null
+    const probColor = prob == null ? '#888' : prob >= 60 ? '#16a34a' : prob >= 35 ? '#d97706' : '#dc2626'
+
+    // Aggregate scope keywords from all analyzed documents
+    const allKeywords = [...new Set(
+      (data.documents ?? []).flatMap(d => d.scopeKeywords ?? []).filter(Boolean)
+    )].slice(0, 20)
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Opportunity Synopsis — ${data.title}</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; max-width: 960px; margin: 0 auto; padding: 40px 32px 60px; color: #111827; font-size: 13px; line-height: 1.65; background: #fff; }
+
+  /* Header band */
+  .header-band { background: #1e3a5f; color: #fff; border-radius: 8px; padding: 24px 28px 20px; margin-bottom: 24px; }
+  .header-band .label { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: #93c5fd; margin-bottom: 6px; }
+  .header-band h1 { font-size: 20px; font-weight: 700; margin: 0 0 8px; color: #fff; line-height: 1.3; }
+  .header-band .meta-row { display: flex; flex-wrap: wrap; gap: 16px; font-size: 11.5px; color: #bfdbfe; margin-top: 10px; }
+  .header-band .meta-row span::before { content: '· '; }
+  .header-band .meta-row span:first-child::before { content: ''; }
+  .header-band a { color: #93c5fd; text-decoration: underline; }
+
+  /* Deadline badge */
+  .deadline-badge { display: inline-block; background: ${urgencyColor}20; border: 1px solid ${urgencyColor}; color: ${urgencyColor}; font-weight: 700; font-size: 12px; border-radius: 20px; padding: 3px 12px; margin-left: 10px; vertical-align: middle; }
+
+  /* Win probability banner */
+  .prob-banner { display: flex; align-items: center; gap: 20px; background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid ${probColor}; border-radius: 6px; padding: 12px 18px; margin-bottom: 20px; }
+  .prob-score { font-size: 32px; font-weight: 800; color: ${probColor}; line-height: 1; }
+  .prob-label { font-size: 11px; color: #64748b; }
+  .prob-label strong { display: block; font-size: 13px; color: #1e293b; }
+
+  /* Section headers */
+  h2 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: #1e3a5f; border-bottom: 2px solid #1e3a5f; padding-bottom: 5px; margin: 28px 0 14px; }
+
+  /* Key info grid */
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 24px; margin-bottom: 4px; }
+  .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 24px; margin-bottom: 4px; }
+  .field { padding: 10px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; }
+  .field label { display: block; font-size: 9.5px; text-transform: uppercase; letter-spacing: .08em; color: #64748b; margin-bottom: 3px; }
+  .field p { margin: 0; font-weight: 600; color: #111827; font-size: 13px; }
+  .field.highlight { background: #eff6ff; border-color: #bfdbfe; }
+  .field.urgent { background: #fef2f2; border-color: #fca5a5; }
+
+  /* Set-aside badge */
+  .set-aside-pill { display: inline-block; background: #fef3c7; border: 1px solid #fbbf24; color: #92400e; font-weight: 700; font-size: 11px; border-radius: 4px; padding: 2px 8px; }
+
+  /* Boxes */
+  .box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 14px 18px; margin-bottom: 10px; }
+  .box.blue { background: #eff6ff; border-color: #bfdbfe; }
+  .box.amber { background: #fffbeb; border-color: #fde68a; }
+  .box.red { background: #fef2f2; border-color: #fca5a5; }
+  .box.green { background: #f0fdf4; border-color: #86efac; }
+
+  /* Score breakdown */
+  .score-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; border-bottom: 1px solid #f1f5f9; }
+  .score-row:last-child { border-bottom: none; }
+  .score-bar-wrap { flex: 1; background: #e2e8f0; border-radius: 4px; height: 6px; overflow: hidden; }
+  .score-bar { height: 100%; border-radius: 4px; background: #1e3a5f; }
+  .score-val { font-weight: 700; font-size: 12px; width: 36px; text-align: right; color: #1e3a5f; }
+  .score-name { width: 200px; font-size: 12px; color: #374151; }
+
+  /* Keywords */
+  .tag { display: inline-block; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; border-radius: 12px; padding: 2px 10px; font-size: 11px; margin: 2px 3px 2px 0; }
+
+  ul { margin: 6px 0 0 0; padding-left: 20px; }
+  li { margin-bottom: 5px; }
+  a { color: #1d4ed8; }
+  strong { color: #111827; }
+
+  /* Footer */
+  .footer { margin-top: 48px; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 12px; display: flex; justify-content: space-between; }
+
+  @media print {
+    body { padding: 20px; }
+    .header-band { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .field { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══ HEADER ═══ -->
+<div class="header-band">
+  <div class="label">Opportunity Synopsis${solNumber ? ' · Solicitation ' + solNumber : ''}</div>
+  <h1>${data.title}</h1>
+  <div class="meta-row">
+    <span>Generated ${now}</span>
+    ${data.samNoticeId ? `<span>Notice ID: ${data.samNoticeId}</span>` : ''}
+    <span><a href="${samLink}" target="_blank">View on SAM.gov ↗</a></span>
+  </div>
+</div>
+
+<!-- ═══ WIN PROBABILITY ═══ -->
+${prob != null ? `
+<div class="prob-banner">
+  <div>
+    <div class="prob-score">${prob}%</div>
+    <div style="font-size:10px;color:#94a3b8;margin-top:2px">Win Probability</div>
+  </div>
+  <div style="flex:1">
+    <div style="background:#e2e8f0;border-radius:6px;height:10px;overflow:hidden;margin-bottom:6px">
+      <div style="width:${prob}%;height:100%;background:${probColor};border-radius:6px"></div>
+    </div>
+    <div style="font-size:11.5px;color:#475569">
+      ${prob >= 60 ? 'Strong match — platform recommends pursuit.' : prob >= 35 ? 'Moderate match — evaluate alignment before committing.' : 'Low probability — consider carefully before bidding.'}
+    </div>
+  </div>
+</div>` : ''}
+
+<!-- ═══ KEY INFORMATION ═══ -->
+<h2>Key Information</h2>
+<div class="grid-3">
+  <div class="field${daysLeft <= 14 ? ' urgent' : ' highlight'}">
+    <label>Response Deadline</label>
+    <p>${deadline} <span class="deadline-badge">${daysLeft > 0 ? daysLeft + ' days' : 'PAST DUE'}</span></p>
+  </div>
+  <div class="field">
+    <label>Issuing Agency</label>
+    <p>${agency}</p>
+  </div>
+  <div class="field">
+    <label>Estimated Contract Value</label>
+    <p>${value}</p>
+  </div>
+  <div class="field">
+    <label>NAICS Code</label>
+    <p>${data.naicsCode}${data.naicsDescription ? ' — ' + data.naicsDescription : ''}</p>
+  </div>
+  <div class="field">
+    <label>Set-Aside Eligibility</label>
+    <p><span class="set-aside-pill">${data.setAsideType && data.setAsideType !== 'NONE' ? data.setAsideType : 'Full &amp; Open'}</span> ${data.setAsideType && data.setAsideType !== 'NONE' ? '— ' + setAside : ''}</p>
+  </div>
+  ${contractType ? `<div class="field"><label>Contract Type</label><p>${contractType}</p></div>` : ''}
+  ${data.placeOfPerformance ? `<div class="field"><label>Place of Performance</label><p>${data.placeOfPerformance}</p></div>` : ''}
+  ${solNumber ? `<div class="field"><label>Solicitation Number</label><p>${solNumber}</p></div>` : ''}
+</div>
+
+<!-- ═══ POINT OF CONTACT ═══ -->
+${(data.pocName || data.pocEmail || data.pocPhone) ? `
+<h2>Point of Contact</h2>
+<div class="box blue">
+  ${data.pocName ? `<strong>${data.pocName}</strong>${data.pocTitle ? ', ' + data.pocTitle : ''}<br/>` : ''}
+  ${data.pocEmail ? `📧 <a href="mailto:${data.pocEmail}">${data.pocEmail}</a><br/>` : ''}
+  ${data.pocPhone ? `📞 ${data.pocPhone}` : ''}
+</div>` : ''}
+
+<!-- ═══ SCOPE OF WORK ═══ -->
+${data.description ? `
+<h2>Scope of Work</h2>
+<div class="box">
+  <p style="white-space:pre-wrap;margin:0">${data.description.substring(0, 5000)}${data.description.length > 5000 ? '\n\n[Truncated — view full solicitation on SAM.gov]' : ''}</p>
+</div>` : ''}
+
+<!-- ═══ SCOPE KEYWORDS (from AI document analysis) ═══ -->
+${allKeywords.length > 0 ? `
+<h2>AI-Extracted Scope Keywords</h2>
+<div class="box">
+  ${allKeywords.map(k => `<span class="tag">${k}</span>`).join('')}
+</div>` : ''}
+
+<!-- ═══ SUBMISSION INSTRUCTIONS ═══ -->
+<h2>Submission Instructions</h2>
+<div class="box ${sub.email ? 'blue' : ''}">
+  <strong>Method:</strong> ${sub.method || 'See solicitation for details'}<br/>
+  ${sub.email ? `<strong>Submit To:</strong> <a href="mailto:${sub.email}">${sub.email}</a><br/>` : ''}
+  ${sub.contactName ? `<strong>Contracting Officer:</strong> ${sub.contactName}<br/>` : ''}
+  ${sub.steps.length > 0 ? `<br/><strong>Steps:</strong><ul>${sub.steps.map(s => `<li>${s}</li>`).join('')}</ul>` : ''}
+  ${sub.documents.length > 0 ? `<br/><strong>Required Documents / Volumes:</strong><ul>${sub.documents.map(d => `<li>${d}</li>`).join('')}</ul>` : ''}
+</div>
+
+<!-- ═══ COMPETITIVE INTELLIGENCE ═══ -->
+${data.isEnriched && (data.historicalWinner || data.competitionCount || data.historicalAvgAward || data.incumbentProbability || data.agencySmallBizRate || data.agencySdvosbRate) ? `
+<h2>Competitive Intelligence</h2>
+<div class="grid-3">
+  ${data.historicalWinner ? `<div class="field"><label>Previous Award Winner</label><p>${data.historicalWinner}</p></div>` : ''}
+  ${data.competitionCount ? `<div class="field"><label>Typical Competitor Count</label><p>${data.competitionCount} bidders</p></div>` : ''}
+  ${data.historicalAvgAward ? `<div class="field"><label>Historical Avg Award</label><p>$${Number(data.historicalAvgAward).toLocaleString()}</p></div>` : ''}
+  ${data.historicalAwardCount ? `<div class="field"><label>Historical Award Count</label><p>${data.historicalAwardCount} awards</p></div>` : ''}
+  ${data.incumbentProbability ? `<div class="field"><label>Incumbent Recompete Prob.</label><p>${Math.round(data.incumbentProbability * 100)}%</p></div>` : ''}
+  ${data.agencySmallBizRate ? `<div class="field"><label>Agency Small Biz Rate</label><p>${Math.round(data.agencySmallBizRate * 100)}%</p></div>` : ''}
+  ${data.agencySdvosbRate ? `<div class="field"><label>Agency SDVOSB Rate</label><p>${Math.round(data.agencySdvosbRate * 100)}%</p></div>` : ''}
+  ${data.recompeteFlag ? `<div class="field highlight"><label>Recompete Flag</label><p>⚠ Incumbent contract up for recompete</p></div>` : ''}
+  ${data.incumbentSignalDetected ? `<div class="field amber"><label>Incumbent Signal</label><p>⚠ Incumbent language detected in documents</p></div>` : ''}
+</div>` : ''}
+
+<!-- ═══ SCORE BREAKDOWN ═══ -->
+${data.scoreBreakdown?.featureBreakdown && Object.keys(data.scoreBreakdown.featureBreakdown).length > 0 ? `
+<h2>Scoring Factor Breakdown</h2>
+<div class="box">
+  ${Object.entries(data.scoreBreakdown.featureBreakdown as Record<string, number>).map(([name, score]) => `
+  <div class="score-row">
+    <div class="score-name">${name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</div>
+    <div class="score-bar-wrap"><div class="score-bar" style="width:${Math.min(100, Math.max(0, score * 100))}%"></div></div>
+    <div class="score-val">${Math.round(score * 100)}</div>
+  </div>`).join('')}
+</div>` : ''}
+
+<!-- ═══ AMENDMENTS ═══ -->
+${data.amendments && data.amendments.length > 0 ? `
+<h2>Amendments (${data.amendments.length})</h2>
+${data.amendments.map(a => `
+<div class="box">
+  <strong>${a.amendmentNumber || 'Amendment'}${a.title ? ' — ' + a.title : ''}</strong>
+  ${a.postedDate ? `<span style="color:#94a3b8;font-size:11px;margin-left:10px">${new Date(a.postedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>` : ''}
+  ${a.plainLanguageSummary ? `<p style="margin:6px 0 0;color:#374151">${a.plainLanguageSummary}</p>` : (a.description ? `<p style="margin:6px 0 0;color:#374151;white-space:pre-wrap">${a.description.substring(0, 600)}</p>` : '')}
+</div>`).join('')}` : ''}
+
+<!-- ═══ FOOTER ═══ -->
+<div class="footer">
+  <span>GovCon Advisory Intelligence Platform · Exported ${now}</span>
+  <span>CONFIDENTIAL — Internal Use Only</span>
+</div>
+
+</body>
+</html>`
+
+    const blob = new Blob([html], { type: 'text/html' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `Synopsis_${(solNumber || data.title).replace(/[^a-zA-Z0-9]/g, '_').substring(0, 60)}.html`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   const handleInterpretAmendment = async (amendmentId: string) => {
@@ -289,7 +670,9 @@ export default function OpportunityDetail() {
   }
   if (data.pocName && !subInfo.contactName) subInfo.contactName = data.pocName
 
-  const samUrl = data.sourceUrl
+  // Sanitize sourceUrl — SAM.gov API sometimes returns api.sam.gov URLs instead of web UI URLs
+  const rawSourceUrl = data.sourceUrl?.startsWith('https://sam.gov/') ? data.sourceUrl : null
+  const samUrl = rawSourceUrl
     || (data.samNoticeId ? `https://sam.gov/opp/${data.samNoticeId}/view` : null)
     || `https://sam.gov/search/?index=opp&keywords=${encodeURIComponent(data.title)}`
 
@@ -310,16 +693,43 @@ export default function OpportunityDetail() {
             <h1 className="text-xl font-bold text-gray-200 leading-snug mb-1">{data.title}</h1>
             <p className="text-sm text-gray-500">{data.agency}</p>
           </div>
-          <div className="text-right flex-shrink-0">
-            <p className="text-xs text-gray-500 mb-0.5">Win Probability</p>
-            <p className={`text-4xl font-bold font-mono ${probColor}`}>
-              {Math.round(prob * 100)}%
-            </p>
-            {(data.expectedValue ?? 0) > 0 && (
-              <p className="text-xs text-green-400 font-mono mt-0.5">
-                EV {fmt(data.expectedValue!)}
+          <div className="flex flex-col items-end gap-2 flex-shrink-0">
+            <div className="text-right">
+              <p className="text-xs text-gray-500 mb-0.5">Baseline Score</p>
+              <p className={`text-4xl font-bold font-mono ${probColor}`}>
+                {Math.round(prob * 100)}%
               </p>
-            )}
+              <p className="text-[10px] text-gray-600 mt-0.5">Run analysis below for client-specific score</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => toggleFavorite({
+                  id: data.id,
+                  title: data.title,
+                  agency: data.agency,
+                  deadline: data.responseDeadline,
+                  naicsCode: data.naicsCode,
+                })}
+                className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded border transition-colors ${
+                  isFavorite(data.id)
+                    ? 'bg-yellow-900/40 border-yellow-700 text-yellow-300 hover:bg-yellow-900/60'
+                    : 'bg-gray-800 hover:bg-gray-700 border-gray-700 text-gray-400 hover:text-yellow-300'
+                }`}
+                title={isFavorite(data.id) ? 'Remove from favorites' : 'Add to favorites'}
+              >
+                {isFavorite(data.id)
+                  ? <><StarOff className="w-3.5 h-3.5" /> Starred</>
+                  : <><Star className="w-3.5 h-3.5" /> Star</>
+                }
+              </button>
+              <button
+                onClick={handleExportSynopsis}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 transition-colors"
+                title="Export opportunity synopsis"
+              >
+                <FileDown className="w-3.5 h-3.5" /> Export Synopsis
+              </button>
+            </div>
           </div>
         </div>
 
@@ -387,11 +797,7 @@ export default function OpportunityDetail() {
 
         {/* SAM.gov CTA — primary action */}
         {(() => {
-          const subInfo = parseSubmissionInstructions(data.description ?? "")
-
-  const samUrl = data.sourceUrl
-            || (data.samNoticeId ? `https://sam.gov/opp/${data.samNoticeId}/view` : null)
-            || `https://sam.gov/search/?index=opp&keywords=${encodeURIComponent(data.title)}`
+          // Use pre-sanitized samUrl (api.sam.gov URLs already stripped above)
           return (
             <a
               href={samUrl}
@@ -486,12 +892,31 @@ export default function OpportunityDetail() {
               <div>
                 <p className="text-gray-500 text-xs mb-0.5">Net Expected Value</p>
                 <p className="text-sm font-mono text-green-400">{fmt(Number(clientScore.netExpectedValue))}</p>
+                <p className="text-[10px] text-gray-600">NPV discounted ~9mo to award</p>
               </div>
             )}
             {clientScore.deadlineSummary && (
               <div>
                 <p className="text-gray-500 text-xs mb-0.5">Deadline</p>
                 <p className="text-sm text-gray-300">{clientScore.deadlineSummary}</p>
+              </div>
+            )}
+            {clientScore.expectedLifetimeValue != null && (
+              <div>
+                <p className="text-gray-500 text-xs mb-0.5">Expected Lifetime Value</p>
+                <p className="text-sm font-mono text-purple-400">{fmt(Number(clientScore.expectedLifetimeValue))}</p>
+                <p className="text-[10px] text-gray-600">Base + ~1.5 option years × win prob</p>
+              </div>
+            )}
+            {clientScore.lifetimeValue != null && (
+              <div>
+                <p className="text-gray-500 text-xs mb-0.5">Contract Lifetime Value</p>
+                <p className="text-sm font-mono text-yellow-400">{fmt(Number(clientScore.lifetimeValue))}</p>
+                <p className="text-[10px] text-gray-600">
+                  {clientScore.subContractShare
+                    ? `${Math.round(clientScore.subContractShare * 100)}% sub-share × 2.5yr`
+                    : 'Full prime × 2.5yr option factor'}
+                </p>
               </div>
             )}
           </div>
@@ -525,16 +950,16 @@ export default function OpportunityDetail() {
                 : 'This is an open competition — any qualified business may submit a proposal.'}
             </p>
           </div>
-          {/* Contract value */}
-          <div className="flex gap-3">
-            <span className="text-blue-400 flex-shrink-0 mt-0.5">{'•'}</span>
-            <p className="text-gray-300">
-              <span className="text-gray-400">Estimated value: </span>
-              {estValueDisplay === 'TBD'
-                ? 'The government has not yet published an estimated contract value.'
-                : `The government estimates this contract is worth approximately ${estValueDisplay}.`}
-            </p>
-          </div>
+          {/* Contract value — only show when known */}
+          {estValueDisplay !== 'TBD' && (
+            <div className="flex gap-3">
+              <span className="text-blue-400 flex-shrink-0 mt-0.5">{'•'}</span>
+              <p className="text-gray-300">
+                <span className="text-gray-400">Estimated value: </span>
+                {`The government estimates this contract is worth approximately ${estValueDisplay}.`}
+              </p>
+            </div>
+          )}
           {/* Deadline */}
           <div className="flex gap-3">
             <span className="text-blue-400 flex-shrink-0 mt-0.5">{'•'}</span>
@@ -570,7 +995,8 @@ export default function OpportunityDetail() {
       </div>
 
 
-      {/* ── HOW TO SUBMIT ────────────────────────────────────── */}
+      {/* ── HOW TO SUBMIT — only shown when real data was extracted ── */}
+      {(subInfo.rawFound || subInfo.email || subInfo.documents.length > 0 || subInfo.steps.length > 0) && (
       <div className="card">
         <h2 className="text-lg font-semibold text-gray-200 mb-4 flex items-center gap-2">
           <Send className="w-5 h-5 text-blue-400" />
@@ -581,10 +1007,7 @@ export default function OpportunityDetail() {
             </span>
           )}
         </h2>
-
-        {(subInfo.rawFound || subInfo.email || subInfo.documents.length > 0 || subInfo.steps.length > 0) ? (
         <div className="space-y-4">
-          {/* Submission method + contact */}
           <div className="flex flex-wrap gap-4">
             <div className="flex-1 min-w-[200px]">
               <p className="text-gray-500 text-xs mb-1 flex items-center gap-1">
@@ -592,10 +1015,7 @@ export default function OpportunityDetail() {
               </p>
               <p className="text-gray-200 text-sm font-medium">{subInfo.method}</p>
               {subInfo.email && (
-                <a
-                  href={"mailto:" + subInfo.email}
-                  className="text-blue-400 hover:text-blue-300 text-sm font-mono mt-1 block"
-                >
+                <a href={"mailto:" + subInfo.email} className="text-blue-400 hover:text-blue-300 text-sm font-mono mt-1 block">
                   {subInfo.email}
                 </a>
               )}
@@ -612,8 +1032,6 @@ export default function OpportunityDetail() {
               </div>
             )}
           </div>
-
-          {/* Documents required */}
           {subInfo.documents.length > 0 && (
             <div>
               <p className="text-gray-500 text-xs mb-2 flex items-center gap-1">
@@ -621,15 +1039,11 @@ export default function OpportunityDetail() {
               </p>
               <div className="flex flex-wrap gap-2">
                 {subInfo.documents.map((doc, i) => (
-                  <span key={i} className="text-xs bg-blue-900/30 text-blue-300 border border-blue-800 px-2 py-1 rounded">
-                    {doc}
-                  </span>
+                  <span key={i} className="text-xs bg-blue-900/30 text-blue-300 border border-blue-800 px-2 py-1 rounded">{doc}</span>
                 ))}
               </div>
             </div>
           )}
-
-          {/* Step-by-step instructions */}
           {subInfo.steps.length > 0 && (
             <div>
               <p className="text-gray-500 text-xs mb-2">Key Submission Steps</p>
@@ -643,22 +1057,9 @@ export default function OpportunityDetail() {
               </ol>
             </div>
           )}
-
         </div>
-        ) : (
-          <div className="flex items-start gap-3 bg-gray-900/50 border border-gray-800 rounded-lg px-4 py-3">
-            <Upload className="w-4 h-4 text-gray-500 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm text-gray-400 font-medium">Submission details not yet available</p>
-              <p className="text-xs text-gray-600 mt-1">
-                The SAM.gov synopsis does not contain submission instructions. Upload the full solicitation
-                package (SOW, RFQ, or RFP) in the Documents section below and the system will automatically
-                extract the contact email, required volumes, and key submission steps.
-              </p>
-            </div>
-          </div>
-        )}
       </div>
+      )}
 
       {/* ── WIN PROBABILITY SCORE BREAKDOWN ─────────────────── */}
       <ScoreBreakdown
@@ -670,7 +1071,7 @@ export default function OpportunityDetail() {
       />
 
       {/* ── AWARD HISTORY INTELLIGENCE (USASpending) ────────── */}
-      {data.isEnriched && (
+      {data.isEnriched && (data.historicalWinner || (data.historicalAwardCount ?? 0) > 0 || (data.competitionCount ?? 0) > 0) && (
         <div className="card">
           <h2 className="text-lg font-semibold text-gray-200 mb-4 flex items-center gap-2">
             <TrendingUp className="w-5 h-5 text-blue-400" />
@@ -705,7 +1106,7 @@ export default function OpportunityDetail() {
                 <p className="text-gray-200 font-mono">{fmt(data.historicalAvgAward!)}</p>
               </div>
             )}
-            {data.agencySdvosbRate != null && (
+            {data.agencySdvosbRate != null && data.agencySdvosbRate !== 0.05 && (
               <div>
                 <p className="text-gray-500 text-xs flex items-center gap-1 mb-0.5">
                   <Shield className="w-3 h-3" /> Agency SDVOSB Rate
@@ -750,7 +1151,7 @@ export default function OpportunityDetail() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".pdf,.txt,.docx"
+            accept=".pdf,.txt,.docx,.zip"
             className="hidden"
             onChange={handleFileUpload}
           />
@@ -762,7 +1163,7 @@ export default function OpportunityDetail() {
             {uploading
               ? <Loader className="w-4 h-4 animate-spin" />
               : <Upload className="w-4 h-4" />}
-            {uploading ? 'Uploading...' : 'Upload Document / Amendment'}
+            {uploading ? 'Uploading...' : 'Upload Document / ZIP'}
           </button>
 
           {analyzeStatus === 'running' && (
@@ -807,6 +1208,17 @@ export default function OpportunityDetail() {
                         <Download className="w-3 h-3" /> Download
                       </a>
                     )}
+                    <button
+                      onClick={() => handleDeleteDocument(doc.id)}
+                      disabled={deletingDocId === doc.id}
+                      className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 disabled:opacity-40"
+                      title="Delete document"
+                    >
+                      {deletingDocId === doc.id
+                        ? <Loader className="w-3 h-3 animate-spin" />
+                        : <Trash2 className="w-3 h-3" />}
+                      Delete
+                    </button>
                     <span className={`text-xs px-2 py-0.5 rounded ${
                       doc.analysisStatus === 'COMPLETE'   ? 'bg-green-900/40 text-green-300' :
                       doc.analysisStatus === 'RUNNING'    ? 'bg-blue-900/40 text-blue-300' :
@@ -876,6 +1288,240 @@ export default function OpportunityDetail() {
           </div>
         ) : (
           <p className="text-gray-600 text-sm">No documents uploaded yet.</p>
+        )}
+      </div>
+
+      {/* ── WIN STRATEGY / BID GUIDANCE ──────────────────────── */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-200 flex items-center gap-2">
+            <Lightbulb className="w-5 h-5 text-yellow-400" />
+            Win Strategy
+            <span className="text-xs font-normal text-gray-500 ml-1">AI-extracted from solicitation text</span>
+          </h2>
+          <button
+            onClick={handleGenerateBidGuidance}
+            disabled={guidanceGenerating}
+            className="flex items-center gap-1.5 text-sm bg-yellow-900/30 hover:bg-yellow-900/50 text-yellow-300 border border-yellow-800 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            {guidanceGenerating
+              ? <><Loader className="w-3.5 h-3.5 animate-spin" /> Analyzing...</>
+              : <><Zap className="w-3.5 h-3.5" /> {guidance ? 'Re-analyze' : 'Analyze Solicitation'}</>}
+          </button>
+        </div>
+
+        {guidanceError && <p className="text-red-400 text-xs mb-3">{guidanceError}</p>}
+
+        {!guidance && !guidanceGenerating && (
+          <div className="bg-gray-900/50 border border-gray-800 rounded-lg px-4 py-4 text-sm text-gray-500">
+            <p className="font-medium text-gray-400 mb-1">No strategy analysis yet</p>
+            <p>Click <span className="text-yellow-400">Analyze Solicitation</span> to extract plain-language bid strategy from the RFP — what the agency wants, how they'll score you, and how to win.</p>
+            <p className="mt-2 text-xs text-gray-600">Requires <span className="font-mono text-yellow-500">ANTHROPIC_API_KEY</span> in <span className="font-mono text-yellow-500">backend/.env</span>.</p>
+          </div>
+        )}
+
+        {guidanceGenerating && (
+          <p className="text-gray-500 text-sm flex items-center gap-2">
+            <Loader className="w-4 h-4 animate-spin" /> Analyzing solicitation text with AI — this may take 15–30 seconds...
+          </p>
+        )}
+
+        {/* USASpending historical context strip — shown only when real data exists */}
+        {data && data.isEnriched && (data.historicalWinner || (data.historicalAwardCount ?? 0) > 0) && (
+          <div className="mb-4 bg-gray-900/60 border border-gray-700 rounded-lg px-4 py-3">
+            <p className="text-xs text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+              <TrendingUp className="w-3.5 h-3.5 text-blue-400" />
+              USASpending Historical Intelligence
+              <span className="ml-1 text-gray-700 normal-case">— used to inform this analysis</span>
+            </p>
+            <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+              {data.historicalWinner && (
+                <div className="text-xs">
+                  <span className="text-gray-500">Last winner: </span>
+                  <span className="text-gray-200 font-medium">{data.historicalWinner}</span>
+                  {data.recompeteFlag && (
+                    <span className="ml-1.5 text-orange-400 font-medium">⚠ Recompete</span>
+                  )}
+                </div>
+              )}
+              {data.historicalAvgAward != null && (
+                <div className="text-xs">
+                  <span className="text-gray-500">Avg award: </span>
+                  <span className="text-gray-200 font-medium">${Number(data.historicalAvgAward).toLocaleString()}</span>
+                </div>
+              )}
+              {data.historicalAwardCount != null && (
+                <div className="text-xs">
+                  <span className="text-gray-500">Times competed (5yr): </span>
+                  <span className="text-gray-200 font-medium">{data.historicalAwardCount}</span>
+                </div>
+              )}
+              {data.competitionCount != null && (
+                <div className="text-xs">
+                  <span className="text-gray-500">Avg competitors: </span>
+                  <span className="text-gray-200 font-medium">{data.competitionCount}</span>
+                </div>
+              )}
+              {data.incumbentProbability != null && (
+                <div className="text-xs">
+                  <span className="text-gray-500">Incumbent win rate: </span>
+                  <span className={`font-medium ${data.incumbentProbability > 0.6 ? 'text-red-400' : data.incumbentProbability > 0.4 ? 'text-yellow-400' : 'text-green-400'}`}>
+                    {Math.round(data.incumbentProbability * 100)}%
+                  </span>
+                </div>
+              )}
+              {data.agencySdvosbRate != null && data.agencySdvosbRate !== 0.05 && (
+                <div className="text-xs">
+                  <span className="text-gray-500">Agency SDVOSB rate: </span>
+                  <span className="text-blue-300 font-medium">{Math.round(data.agencySdvosbRate * 100)}%</span>
+                </div>
+              )}
+              {data.agencySmallBizRate != null && data.agencySmallBizRate !== 0.25 && (
+                <div className="text-xs">
+                  <span className="text-gray-500">Agency SB rate: </span>
+                  <span className="text-blue-300 font-medium">{Math.round(data.agencySmallBizRate * 100)}%</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {guidance && !guidanceGenerating && (
+          <div className="space-y-5">
+            {/* What the agency wants */}
+            {guidance.agencyWants && (
+              <div className="bg-blue-950/30 border border-blue-800/40 rounded-lg p-4">
+                <p className="text-xs text-blue-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                  <Target className="w-3.5 h-3.5" /> What the Agency Wants
+                </p>
+                <p className="text-sm text-gray-200 leading-relaxed">{guidance.agencyWants}</p>
+              </div>
+            )}
+
+            {/* Core requirements */}
+            {guidance.coreRequirements?.length > 0 && (
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">Core Requirements</p>
+                <div className="flex flex-wrap gap-2">
+                  {guidance.coreRequirements.map((req: string, i: number) => (
+                    <span key={i} className="text-xs bg-gray-800 text-gray-300 border border-gray-700 px-2 py-1 rounded">
+                      {req}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Evaluation criteria */}
+            {guidance.evaluationCriteria?.length > 0 && (
+              <div>
+                <p className="text-xs text-purple-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                  <BarChart3 className="w-3.5 h-3.5" /> How You'll Be Scored
+                </p>
+                <div className="space-y-2">
+                  {guidance.evaluationCriteria.map((c: any, i: number) => {
+                    const weightCls = c.relativeWeight === 'high'
+                      ? 'bg-red-900/30 text-red-400 border-red-800'
+                      : c.relativeWeight === 'medium'
+                        ? 'bg-yellow-900/30 text-yellow-400 border-yellow-800'
+                        : 'bg-gray-800 text-gray-400 border-gray-700'
+                    return (
+                      <div key={i} className="border border-gray-800 rounded-lg p-3 bg-gray-900/30">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-sm font-medium text-gray-200">{c.criterion}</span>
+                          <span className={`text-xs px-1.5 py-0.5 rounded border capitalize ${weightCls}`}>
+                            {c.relativeWeight} weight
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-400 mb-1">{c.description}</p>
+                        {c.winStrategy && (
+                          <p className="text-xs text-green-400 flex gap-1">
+                            <span className="flex-shrink-0">→</span> {c.winStrategy}
+                          </p>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Winning approach */}
+              {guidance.winningApproach?.length > 0 && (
+                <div className="bg-green-950/20 border border-green-800/30 rounded-lg p-3">
+                  <p className="text-xs text-green-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                    <Trophy className="w-3.5 h-3.5" /> How to Win
+                  </p>
+                  <ul className="space-y-1.5">
+                    {guidance.winningApproach.map((item: string, i: number) => (
+                      <li key={i} className="text-xs text-gray-300 flex gap-2">
+                        <CheckCircle className="w-3.5 h-3.5 text-green-500 flex-shrink-0 mt-0.5" />
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Key differentiators */}
+              {guidance.keyDifferentiators?.length > 0 && (
+                <div className="bg-yellow-950/20 border border-yellow-800/30 rounded-lg p-3">
+                  <p className="text-xs text-yellow-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                    <Star className="w-3.5 h-3.5" /> Differentiators to Emphasize
+                  </p>
+                  <ul className="space-y-1.5">
+                    {guidance.keyDifferentiators.map((item: string, i: number) => (
+                      <li key={i} className="text-xs text-gray-300 flex gap-2">
+                        <span className="text-yellow-500 flex-shrink-0">★</span>
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Red flags */}
+              {guidance.redFlags?.length > 0 && (
+                <div className="bg-red-950/20 border border-red-800/30 rounded-lg p-3">
+                  <p className="text-xs text-red-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                    <AlertTriangle className="w-3.5 h-3.5" /> Red Flags
+                  </p>
+                  <ul className="space-y-1.5">
+                    {guidance.redFlags.map((item: string, i: number) => (
+                      <li key={i} className="text-xs text-gray-300 flex gap-2">
+                        <AlertTriangle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Must-dos */}
+              {guidance.submissionMustDos?.length > 0 && (
+                <div className="bg-orange-950/20 border border-orange-800/30 rounded-lg p-3">
+                  <p className="text-xs text-orange-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                    <ClipboardList className="w-3.5 h-3.5" /> Submission Must-Dos
+                  </p>
+                  <ul className="space-y-1.5">
+                    {guidance.submissionMustDos.map((item: string, i: number) => (
+                      <li key={i} className="text-xs text-gray-300 flex gap-2">
+                        <span className="text-orange-500 flex-shrink-0">!</span>
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            {guidance.generatedAt && (
+              <p className="text-xs text-gray-700">
+                Analyzed {new Date(guidance.generatedAt).toLocaleString()}
+              </p>
+            )}
+          </div>
         )}
       </div>
 
@@ -1048,112 +1694,6 @@ export default function OpportunityDetail() {
         )
       })()}
 
-      {/* ── AMENDMENTS ───────────────────────────────────────── */}
-      <div className="card">
-        <h2 className="text-lg font-semibold text-gray-200 mb-1 flex items-center gap-2">
-          <Languages className="w-5 h-5 text-blue-400" />
-          Amendments
-          <span className="ml-1 text-xs text-gray-500 font-normal">
-            — click an amendment to generate a plain-language interpretation
-          </span>
-        </h2>
-
-        {(!data.amendments || data.amendments.length === 0) ? (
-          <p className="text-gray-500 text-sm mt-3">No amendments on record for this solicitation.</p>
-        ) : (
-          <div className="space-y-3 mt-3">
-            {data.amendments.map((a) => {
-              const isOpen = expandedAmendmentId === a.id
-              return (
-                <div key={a.id} className="border border-gray-800 rounded-lg">
-                  {/* Amendment header row */}
-                  <button
-                    className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-800/30 rounded-lg transition-colors"
-                    onClick={() => setExpandedAmendmentId(isOpen ? null : a.id)}
-                  >
-                    <div>
-                      <p className="text-sm font-semibold text-gray-300">
-                        {a.title || `Amendment ${a.amendmentNumber ?? ''}`}
-                      </p>
-                      {a.postedDate && (
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          Posted {new Date(a.postedDate).toLocaleDateString('en-US', {
-                            month: 'short', day: 'numeric', year: 'numeric',
-                          })}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0 ml-4">
-                      {a.plainLanguageSummary && (
-                        <span className="text-xs bg-green-900/40 text-green-300 border border-green-700 px-2 py-0.5 rounded">
-                          Interpreted
-                        </span>
-                      )}
-                      {isOpen
-                        ? <ChevronUp className="w-4 h-4 text-gray-500" />
-                        : <ChevronDown className="w-4 h-4 text-gray-500" />}
-                    </div>
-                  </button>
-
-                  {/* Expanded body */}
-                  {isOpen && (
-                    <div className="px-4 pb-4 border-t border-gray-800 pt-3 space-y-4">
-                      {/* Original text */}
-                      {a.description && (
-                        <div>
-                          <p className="text-xs text-gray-600 uppercase tracking-wider mb-1">
-                            Original Government Language
-                          </p>
-                          <p className="text-xs text-gray-400 bg-gray-800/50 rounded-lg p-3 leading-relaxed whitespace-pre-wrap">
-                            {a.description}
-                          </p>
-                        </div>
-                      )}
-
-                      {/* Plain language */}
-                      {a.plainLanguageSummary ? (
-                        <div>
-                          <p className="text-xs text-green-500 uppercase tracking-wider mb-2 flex items-center gap-1">
-                            <CheckCircle className="w-3 h-3" /> Plain-Language Interpretation
-                          </p>
-                          <div className="bg-green-950/20 border border-green-800/40 rounded-lg p-3 space-y-2">
-                            {a.plainLanguageSummary.split(' ● ').filter(Boolean).map((point, i) => (
-                              <p key={i} className="text-sm text-gray-200 flex gap-2">
-                                <span className="text-green-600 flex-shrink-0">•</span>
-                                {point}
-                              </p>
-                            ))}
-                          </div>
-                          {a.interpretedAt && (
-                            <p className="text-xs text-gray-700 mt-1.5">
-                              Interpreted {new Date(a.interpretedAt).toLocaleString()}
-                            </p>
-                          )}
-                        </div>
-                      ) : (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleInterpretAmendment(a.id)
-                          }}
-                          disabled={interpretingId === a.id}
-                          className="w-full flex items-center justify-center gap-2 text-sm bg-blue-900/30 hover:bg-blue-900/50 text-blue-300 border border-blue-800 px-4 py-2.5 rounded-lg transition-colors"
-                        >
-                          {interpretingId === a.id ? (
-                            <><Loader className="w-3.5 h-3.5 animate-spin" /> Generating interpretation...</>
-                          ) : (
-                            <><Languages className="w-3.5 h-3.5" /> Generate Plain-Language Summary</>
-                          )}
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
     </div>
   )
 }

@@ -38,18 +38,20 @@ interface ProbabilityBarProps {
 
 export function ProbabilityBar({ probability }: ProbabilityBarProps) {
   const pct = Math.round(probability * 100);
-  const color =
-    pct >= 60 ? 'bg-green-500' : pct >= 35 ? 'bg-yellow-500' : 'bg-red-500';
+  const barColor =
+    pct >= 60 ? '#10b981' : pct >= 35 ? '#f59e0b' : '#ef4444';
+  const textColor =
+    pct >= 60 ? '#6ee7b7' : pct >= 35 ? '#fde68a' : '#f87171';
 
   return (
     <div className="flex items-center gap-2">
-      <div className="flex-1 bg-gray-700 rounded-full h-2">
+      <div className="flex-1 rounded-full h-1.5" style={{ background: '#1a2e4a' }}>
         <div
-          className={`h-2 rounded-full ${color} transition-all`}
-          style={{ width: `${pct}%` }}
+          className="h-1.5 rounded-full transition-all"
+          style={{ width: `${pct}%`, background: barColor }}
         />
       </div>
-      <span className="text-xs font-mono text-gray-300 w-8">{pct}%</span>
+      <span className="text-xs font-mono w-8 text-right font-bold" style={{ color: textColor }}>{pct}%</span>
     </div>
   );
 }
@@ -57,15 +59,20 @@ export function ProbabilityBar({ probability }: ProbabilityBarProps) {
 // ---- Loading Spinner ----
 export function Spinner({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
   const sizes = { sm: 'w-4 h-4', md: 'w-6 h-6', lg: 'w-10 h-10' };
-  return <Loader2 className={`animate-spin text-blue-400 ${sizes[size]}`} />;
+  return <Loader2 className={`animate-spin ${sizes[size]}`} style={{ color: '#f59e0b' }} />;
 }
 
 // ---- Empty State ----
 export function EmptyState({ message }: { message: string }) {
   return (
-    <div className="text-center py-16 text-gray-500">
-      <div className="text-4xl mb-3">📭</div>
-      <p>{message}</p>
+    <div className="text-center py-16" style={{ color: '#334155' }}>
+      <div
+        className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4"
+        style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.15)' }}
+      >
+        <span className="text-2xl">☂</span>
+      </div>
+      <p className="text-sm text-slate-500">{message}</p>
     </div>
   );
 }
@@ -73,7 +80,9 @@ export function EmptyState({ message }: { message: string }) {
 // ---- Error Banner ----
 export function ErrorBanner({ message }: { message: string }) {
   return (
-    <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-md px-4 py-3 text-sm">
+    <div className="rounded-lg px-4 py-3 text-sm flex items-center gap-2"
+      style={{ background: 'rgba(127,29,29,0.35)', border: '1px solid rgba(185,28,28,0.45)', color: '#fca5a5' }}>
+      <AlertTriangle className="w-4 h-4 flex-shrink-0" />
       {message}
     </div>
   );
@@ -84,23 +93,38 @@ interface StatCardProps {
   label: string;
   value: string | number;
   sub?: string;
-  color?: 'default' | 'red' | 'yellow' | 'green' | 'blue';
+  color?: 'default' | 'red' | 'yellow' | 'green' | 'blue' | 'gold';
 }
 
 export function StatCard({ label, value, sub, color = 'default' }: StatCardProps) {
-  const colors = {
-    default: 'text-gray-100',
-    red: 'text-red-400',
-    yellow: 'text-yellow-400',
-    green: 'text-green-400',
-    blue: 'text-blue-400',
+  const colors: Record<string, string> = {
+    default: '#e2e8f0',
+    red:     '#f87171',
+    yellow:  '#fde68a',
+    green:   '#6ee7b7',
+    blue:    '#93c5fd',
+    gold:    '#f59e0b',
   };
 
   return (
-    <div className="card">
-      <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">{label}</p>
-      <p className={`text-3xl font-bold ${colors[color]}`}>{value}</p>
-      {sub && <p className="text-xs text-gray-500 mt-1">{sub}</p>}
+    <div className="card" style={{ position: 'relative', overflow: 'hidden' }}>
+      {/* Subtle gold top accent line */}
+      <div style={{
+        position: 'absolute', top: 0, left: 0, right: 0, height: '2px',
+        background: color === 'gold' || color === 'green'
+          ? 'linear-gradient(90deg, #f59e0b, transparent)'
+          : color === 'red'
+          ? 'linear-gradient(90deg, #ef4444, transparent)'
+          : 'linear-gradient(90deg, rgba(245,158,11,0.3), transparent)',
+      }} />
+      <p className="text-[11px] font-semibold uppercase tracking-widest mb-2"
+        style={{ color: '#475569', letterSpacing: '0.1em' }}>
+        {label}
+      </p>
+      <p className="text-3xl font-black" style={{ color: colors[color] || colors.default }}>
+        {value}
+      </p>
+      {sub && <p className="text-xs mt-1" style={{ color: '#475569' }}>{sub}</p>}
     </div>
   );
 }
@@ -110,10 +134,16 @@ export function PageHeader({ title, subtitle, children }: { title: string; subti
   return (
     <div className="flex items-start justify-between mb-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-100">{title}</h1>
-        {subtitle && <p className="text-sm text-gray-500 mt-1">{subtitle}</p>}
+        <h1 className="text-2xl font-black text-slate-100" style={{ letterSpacing: '-0.01em' }}>{title}</h1>
+        {subtitle && (
+          <p className="text-sm mt-1" style={{ color: '#475569' }}>{subtitle}</p>
+        )}
+        {/* Gold rule under title */}
+        <div className="mt-2 w-10 h-0.5 rounded" style={{
+          background: 'linear-gradient(90deg, #f59e0b, transparent)',
+        }} />
       </div>
-      {children && <div className="flex gap-2">{children}</div>}
+      {children && <div className="flex gap-2 items-center">{children}</div>}
     </div>
   );
 }

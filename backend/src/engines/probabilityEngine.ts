@@ -7,16 +7,16 @@ import { logger } from '../utils/logger';
 
 // -------------------------------------------------------------
 // Feature Weights (must sum to 1.0)
-// Calibrated for federal contracting competitive dynamics
+// 7-factor model — set-aside alignment moved to Layer 1 compliance gate
+// Weights redistributed proportionally from removed setAsideAlignmentScore
 // -------------------------------------------------------------
 const WEIGHTS: Record<keyof ProbabilityFeatures, number> = {
-  naicsOverlapScore:       0.22,  // Domain match — strong predictor
-  setAsideAlignmentScore:  0.20,  // Qualification gate — binary high impact
-  incumbentWeaknessScore:  0.18,  // Incumbent dominance inversion
-  documentAlignmentScore:  0.15,  // SOW scope match from uploaded documents
-  agencyAlignmentScore:    0.12,  // Historical agency relationship
-  awardSizeFitScore:       0.08,  // Capacity fit
-  competitionDensityScore: 0.03,  // Market crowding
+  naicsOverlapScore:       0.28,  // Domain match — strong predictor
+  incumbentWeaknessScore:  0.22,  // Incumbent dominance inversion
+  documentAlignmentScore:  0.19,  // SOW scope match from uploaded documents
+  agencyAlignmentScore:    0.15,  // Historical agency relationship
+  awardSizeFitScore:       0.10,  // Capacity fit
+  competitionDensityScore: 0.04,  // Market crowding
   historicalDistribution:  0.02,  // USAspending base rate
 };
 
@@ -68,22 +68,6 @@ export function computeNaicsOverlap(
   if (clientNaics.some((n) => n.substring(0, 2) === oppSubsector)) return 0.3;
 
   return 0;
-}
-
-export function computeSetAsideAlignment(
-  clientProfile: { sdvosb: boolean; wosb: boolean; hubzone: boolean; smallBusiness: boolean },
-  setAsideType: string
-): number {
-  switch (setAsideType) {
-    case 'SDVOSB': return clientProfile.sdvosb ? 1.0 : 0.0;
-    case 'WOSB': return clientProfile.wosb ? 1.0 : 0.0;
-    case 'HUBZONE': return clientProfile.hubzone ? 1.0 : 0.0;
-    case 'SMALL_BUSINESS':
-    case 'TOTAL_SMALL_BUSINESS': return clientProfile.smallBusiness ? 1.0 : 0.0;
-    case 'SBA_8A': return 0.0;
-    case 'NONE': return 0.7;
-    default: return 0.5;
-  }
 }
 
 export function computeAwardSizeFit(
@@ -156,7 +140,6 @@ export function computeProbability(
 
 export function scoreOpportunityForClient(params: {
   opportunityNaics: string;
-  opportunitySetAside: string;
   opportunityEstimatedValue: number | null;
   opportunityAgency: string;
   clientNaics: string[];
@@ -164,6 +147,7 @@ export function scoreOpportunityForClient(params: {
   // Tier 2: USAspending enrichment
   incumbentProbability?: number | null;
   competitionCount?: number | null;
+  offersReceived?: number | null;
   agencyAlignmentScore?: number;
   historicalDistribution?: number;
   agencySdvosbRate?: number | null;
@@ -177,18 +161,20 @@ export function scoreOpportunityForClient(params: {
     agencyScore = clamp(0.3 + params.agencySdvosbRate * 2);
   }
 
+  // Use offersReceived (actual bidders) over competitionCount (unique historical winners) when available
+  const competitorCount = params.offersReceived ?? params.competitionCount ?? null;
+
   const features: ProbabilityFeatures = {
     naicsOverlapScore:       computeNaicsOverlap(params.clientNaics, params.opportunityNaics),
-    setAsideAlignmentScore:  computeSetAsideAlignment(params.clientProfile, params.opportunitySetAside),
     incumbentWeaknessScore:  computeIncumbentWeaknessScore(
                                params.incumbentProbability ?? null,
-                               params.competitionCount ?? null
+                               competitorCount
                              ),
     documentAlignmentScore:  params.documentAlignmentScore ?? 0.5,
     agencyAlignmentScore:    agencyScore,
     awardSizeFitScore:       computeAwardSizeFit(params.opportunityEstimatedValue),
-    competitionDensityScore: params.competitionCount
-                               ? clamp(1 - (params.competitionCount / 20))
+    competitionDensityScore: competitorCount
+                               ? clamp(1 - (competitorCount / 20))
                                : 0.5,
     historicalDistribution:  params.historicalDistribution ?? 0.3,
   };

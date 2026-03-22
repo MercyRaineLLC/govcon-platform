@@ -61,6 +61,13 @@ router.get('/', async (req: AuthenticatedRequest, res: Response, next: NextFunct
         updatedAt: firm.updatedAt,
         activeClientCount,
         _count: firm._count,
+        samApiKey: firm.samApiKey ?? null,
+        anthropicApiKey: firm.anthropicApiKey ?? null,
+        llmProvider: firm.llmProvider ?? 'claude',
+        openaiApiKey: firm.openaiApiKey ?? null,
+        insightEngineApiKey: firm.insightEngineApiKey ?? null,
+        localaiBaseUrl: firm.localaiBaseUrl ?? null,
+        localaiModel: firm.localaiModel ?? null,
       },
     })
   } catch (err) {
@@ -176,6 +183,171 @@ router.put('/penalty-config', requireRole('ADMIN'), async (req: AuthenticatedReq
         ...updated,
         flatLateFee: updated.flatLateFee != null ? Number(updated.flatLateFee) : null,
         penaltyPercent: updated.penaltyPercent != null ? Number(updated.penaltyPercent) : null,
+      },
+    })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// -------------------------------------------------------------
+// PUT /api/firm/sam-api-key  (ADMIN only — store/update SAM.gov API key)
+// -------------------------------------------------------------
+router.put('/sam-api-key', requireRole('ADMIN'), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const consultingFirmId = getTenantId(req)
+    const { samApiKey } = req.body
+    if (typeof samApiKey !== 'string') {
+      return res.status(400).json({ success: false, error: 'samApiKey must be a string' })
+    }
+    await prisma.consultingFirm.update({
+      where: { id: consultingFirmId },
+      data: { samApiKey: samApiKey.trim() || null },
+    })
+    res.json({ success: true, message: 'SAM API key saved' })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// -------------------------------------------------------------
+// PUT /api/firm/anthropic-api-key  (ADMIN only — store/update Anthropic API key)
+// -------------------------------------------------------------
+router.put('/anthropic-api-key', requireRole('ADMIN'), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const consultingFirmId = getTenantId(req)
+    const { anthropicApiKey } = req.body
+    if (typeof anthropicApiKey !== 'string') {
+      return res.status(400).json({ success: false, error: 'anthropicApiKey must be a string' })
+    }
+    await prisma.consultingFirm.update({
+      where: { id: consultingFirmId },
+      data: { anthropicApiKey: anthropicApiKey.trim() || null },
+    })
+    res.json({ success: true, message: 'Anthropic API key saved' })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// -------------------------------------------------------------
+// PUT /api/firm/llm-provider  (ADMIN only)
+// -------------------------------------------------------------
+router.put('/llm-provider', requireRole('ADMIN'), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const consultingFirmId = getTenantId(req)
+    const { llmProvider } = req.body
+    const VALID = ['claude', 'openai', 'insight_engine', 'localai']
+    if (!VALID.includes(llmProvider)) {
+      return res.status(400).json({ success: false, error: `llmProvider must be one of: ${VALID.join(', ')}` })
+    }
+    await prisma.consultingFirm.update({ where: { id: consultingFirmId }, data: { llmProvider } })
+    res.json({ success: true, message: 'AI provider updated' })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// -------------------------------------------------------------
+// PUT /api/firm/openai-api-key  (ADMIN only)
+// -------------------------------------------------------------
+router.put('/openai-api-key', requireRole('ADMIN'), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const consultingFirmId = getTenantId(req)
+    const { openaiApiKey } = req.body
+    if (typeof openaiApiKey !== 'string') {
+      return res.status(400).json({ success: false, error: 'openaiApiKey must be a string' })
+    }
+    await prisma.consultingFirm.update({ where: { id: consultingFirmId }, data: { openaiApiKey: openaiApiKey.trim() || null } })
+    res.json({ success: true, message: 'OpenAI API key saved' })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// -------------------------------------------------------------
+// PUT /api/firm/insight-engine-api-key  (ADMIN only)
+// -------------------------------------------------------------
+router.put('/insight-engine-api-key', requireRole('ADMIN'), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const consultingFirmId = getTenantId(req)
+    const { insightEngineApiKey } = req.body
+    if (typeof insightEngineApiKey !== 'string') {
+      return res.status(400).json({ success: false, error: 'insightEngineApiKey must be a string' })
+    }
+    await prisma.consultingFirm.update({ where: { id: consultingFirmId }, data: { insightEngineApiKey: insightEngineApiKey.trim() || null } })
+    res.json({ success: true, message: 'Insight Engine API key saved' })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// -------------------------------------------------------------
+// PUT /api/firm/localai-config  (ADMIN only)
+// -------------------------------------------------------------
+router.put('/localai-config', requireRole('ADMIN'), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const consultingFirmId = getTenantId(req)
+    const { localaiBaseUrl, localaiModel } = req.body
+    await prisma.consultingFirm.update({
+      where: { id: consultingFirmId },
+      data: {
+        localaiBaseUrl: typeof localaiBaseUrl === 'string' ? localaiBaseUrl.trim() || null : undefined,
+        localaiModel: typeof localaiModel === 'string' ? localaiModel.trim() || null : undefined,
+      },
+    })
+    res.json({ success: true, message: 'LocalAI configuration saved' })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// -------------------------------------------------------------
+// GET /api/firm/ai-usage  (ADMIN + CONSULTANT)
+// -------------------------------------------------------------
+router.get('/ai-usage', requireRole('ADMIN', 'CONSULTANT'), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const consultingFirmId = getTenantId(req)
+    const days = Math.min(90, Math.max(1, parseInt(req.query.days as string) || 30))
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+
+    const [totals, byProvider, byTask, recentLogs] = await Promise.all([
+      prisma.apiUsageLog.aggregate({
+        where: { consultingFirmId, createdAt: { gte: since } },
+        _sum: { inputTokens: true, outputTokens: true, estimatedCostUsd: true },
+        _count: true,
+      }),
+      prisma.apiUsageLog.groupBy({
+        by: ['provider'],
+        where: { consultingFirmId, createdAt: { gte: since } },
+        _count: { _all: true },
+        _sum: { estimatedCostUsd: true },
+      }),
+      prisma.apiUsageLog.groupBy({
+        by: ['task'],
+        where: { consultingFirmId, createdAt: { gte: since } },
+        _count: { _all: true },
+        _sum: { estimatedCostUsd: true },
+      }),
+      prisma.apiUsageLog.findMany({
+        where: { consultingFirmId, createdAt: { gte: since } },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+        select: { provider: true, model: true, task: true, inputTokens: true, outputTokens: true, estimatedCostUsd: true, cacheHit: true, durationMs: true, createdAt: true },
+      }),
+    ])
+
+    res.json({
+      success: true,
+      data: {
+        days,
+        totalCalls: totals._count,
+        totalInputTokens: totals._sum.inputTokens ?? 0,
+        totalOutputTokens: totals._sum.outputTokens ?? 0,
+        totalCostUsd: Number(totals._sum.estimatedCostUsd ?? 0),
+        byProvider: byProvider.map((r) => ({ provider: r.provider, calls: r._count._all, costUsd: Number(r._sum.estimatedCostUsd ?? 0) })),
+        byTask: byTask.map((r) => ({ task: r.task, calls: r._count._all, costUsd: Number(r._sum.estimatedCostUsd ?? 0) })),
+        recentLogs: recentLogs.map((l) => ({ ...l, estimatedCostUsd: Number(l.estimatedCostUsd) })),
       },
     })
   } catch (err) {
@@ -383,9 +555,10 @@ router.get(
           where: {
             consultingFirmId,
             status: 'ACTIVE',
-            expectedValue: { gt: 0 },
+            isScored: true,
+            probabilityScore: { gt: 0 },
           },
-          orderBy: { expectedValue: 'desc' },
+          orderBy: [{ probabilityScore: 'desc' }, { responseDeadline: 'asc' }],
           take: 6,
           select: {
             id: true,
@@ -430,9 +603,14 @@ router.get(
           },
         }),
 
-        prisma.opportunity.aggregate({
-          where: { consultingFirmId, status: 'ACTIVE' },
-          _sum: { expectedValue: true, estimatedValue: true },
+        // Pipeline value: sum expectedValue from active (non-NO_BID) bid decisions
+        // This reflects real decision-engine calculations with lifetime value, NPV, etc.
+        prisma.bidDecision.aggregate({
+          where: {
+            consultingFirmId,
+            recommendation: { in: ['BID_PRIME', 'BID_SUB'] },
+          },
+          _sum: { expectedValue: true, netExpectedValue: true },
         }),
 
         prisma.bidDecision.aggregate({
@@ -509,7 +687,7 @@ router.get(
 
           pipelineValue: {
             totalExpected: Number(pipelineValue._sum.expectedValue || 0),
-            totalEstimated: Number(pipelineValue._sum.estimatedValue || 0),
+            totalNet: Number(pipelineValue._sum.netExpectedValue || 0),
           },
 
           avgWinProbability: avgWinProb._avg.winProbability || 0,
@@ -518,11 +696,11 @@ router.get(
             ...o,
             estimatedValue: Number(o.estimatedValue || 0),
             expectedValue: Number(o.expectedValue || 0),
-            deadline: {
+            deadline: o.responseDeadline ? {
               daysUntil: Math.ceil(
                 (o.responseDeadline.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
               ),
-            },
+            } : null,
           })),
 
           recentDecisions: recentDecisions.map((d) => ({

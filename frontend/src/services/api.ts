@@ -6,6 +6,7 @@ const API_BASE =
 export const api = axios.create({
   baseURL: `${API_BASE}/api`,
   headers: { 'Content-Type': 'application/json' },
+  timeout: 30000, // 30s – prevents indefinitely hanging requests
 });
 
 // Attach JWT on every request
@@ -79,6 +80,14 @@ export const documentsApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }).then((r) => r.data);
   },
+  uploadZip: (opportunityId: string, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('opportunityId', opportunityId);
+    return api.post('/documents/upload-zip', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then((r) => r.data);
+  },
   list: (opportunityId: string) =>
     api.get(`/documents/${opportunityId}`).then((r) => r.data),
   delete: (documentId: string) =>
@@ -102,6 +111,15 @@ export const clientsApi = {
   /** Look up entity data from SAM.gov without creating a client record */
   samLookup: (params: { uei?: string; cage?: string; name?: string }) =>
     api.get('/clients/lookup', { params }).then((r) => r.data),
+  /** Bulk import clients from a CSV file */
+  importCsv: (file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post('/clients/import-csv', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000,
+    }).then((r) => r.data);
+  },
 };
 
 // ---- Submissions ----
@@ -140,6 +158,20 @@ export const firmApi = {
     api.get('/firm/users').then((r) => r.data),
   seedDemo: () =>
     api.post('/firm/seed-demo').then((r) => r.data),
+  updateSamApiKey: (samApiKey: string) =>
+    api.put('/firm/sam-api-key', { samApiKey }).then((r) => r.data),
+  updateAnthropicApiKey: (anthropicApiKey: string) =>
+    api.put('/firm/anthropic-api-key', { anthropicApiKey }).then((r) => r.data),
+  updateLlmProvider: (llmProvider: string) =>
+    api.put('/firm/llm-provider', { llmProvider }).then((r) => r.data),
+  updateOpenaiApiKey: (openaiApiKey: string) =>
+    api.put('/firm/openai-api-key', { openaiApiKey }).then((r) => r.data),
+  updateInsightEngineApiKey: (insightEngineApiKey: string) =>
+    api.put('/firm/insight-engine-api-key', { insightEngineApiKey }).then((r) => r.data),
+  updateLocalaiConfig: (data: { localaiBaseUrl?: string; localaiModel?: string }) =>
+    api.put('/firm/localai-config', data).then((r) => r.data),
+  aiUsage: (params?: { days?: number }) =>
+    api.get('/firm/ai-usage', { params }).then((r) => r.data),
 };
 
 // ---- Analytics ----
@@ -156,6 +188,8 @@ export const analyticsApi = {
     api.get('/analytics/portfolio-health').then((r) => r.data),
   complianceLogs: (params?: { entityType?: string; entityId?: string; page?: number; limit?: number }) =>
     api.get('/analytics/compliance-logs', { params }).then((r) => r.data),
+  pipelineAnalysis: () =>
+    api.get('/analytics/pipeline-analysis').then((r) => r.data),
 };
 
 // ---- Decisions ----
@@ -222,10 +256,49 @@ export const scoreApi = {
     api.post(`/opportunities/${opportunityId}/amendments/${amendmentId}/interpret`).then((r) => r.data),
 };
 
+// ---- Clients — decline/un-decline per client ----
+export const clientOpportunitiesApi = {
+  getMatched: (clientId: string) =>
+    api.get(`/clients/${clientId}/opportunities`).then((r) => r.data),
+  decline: (clientId: string, opportunityId: string, reason?: string) =>
+    api.post(`/clients/${clientId}/decline-opportunity`, { opportunityId, reason }).then((r) => r.data),
+  undecline: (clientId: string, opportunityId: string) =>
+    api.delete(`/clients/${clientId}/decline-opportunity/${opportunityId}`).then((r) => r.data),
+};
+
 // ---- Client Portal Users (created by consultants) ----
 export const clientPortalUsersApi = {
   register: (data: { clientCompanyId: string; email: string; password: string; firstName: string; lastName: string }) =>
     api.post('/client-portal/auth/register', data).then((r) => r.data),
+  /** List all portal users for a client */
+  listByClient: (clientId: string) =>
+    api.get(`/client-portal/admin/users/${clientId}`).then((r) => r.data),
+  /** Reset a portal user's password */
+  resetPassword: (userId: string, newPassword: string) =>
+    api.put(`/client-portal/admin/users/${userId}/reset-password`, { newPassword }).then((r) => r.data),
+  /** Toggle a portal user's active status */
+  toggleActive: (userId: string) =>
+    api.put(`/client-portal/admin/users/${userId}/toggle-active`).then((r) => r.data),
+};
+
+// ---- Client Portal (used from portal frontend with portal token) ----
+const API_BASE_RAW = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+export const clientPortalApi = {
+  _getToken: () => { try { return JSON.parse(localStorage.getItem('govcon_client_auth') ?? '').token } catch { return '' } },
+  getOpportunities: () =>
+    axios.get(`${API_BASE_RAW}/api/client-portal/opportunities`, { headers: { Authorization: `Bearer ${clientPortalApi._getToken()}` } }).then(r => r.data),
+  uploadDoc: (file: File, title: string, notes?: string) => {
+    const fd = new FormData(); fd.append('file', file); fd.append('title', title); if (notes) fd.append('notes', notes);
+    return axios.post(`${API_BASE_RAW}/api/client-portal/uploads`, fd, { headers: { Authorization: `Bearer ${clientPortalApi._getToken()}`, 'Content-Type': 'multipart/form-data' } }).then(r => r.data);
+  },
+  getUploads: () =>
+    axios.get(`${API_BASE_RAW}/api/client-portal/uploads`, { headers: { Authorization: `Bearer ${clientPortalApi._getToken()}` } }).then(r => r.data),
+  adminGetUploads: (clientId: string) =>
+    api.get(`/client-portal/admin/uploads/${clientId}`).then(r => r.data),
+  adminDownloadUpload: async (clientId: string, uploadId: string, fileName: string) => {
+    const res = await api.get(`/client-portal/admin/uploads/${clientId}/download/${uploadId}`, { responseType: 'blob' });
+    const url = URL.createObjectURL(res.data); const a = document.createElement('a'); a.href = url; a.download = fileName; a.click(); URL.revokeObjectURL(url);
+  },
 };
 
 // ---- Client Documents & Template Library ----
@@ -238,6 +311,12 @@ export const clientDocumentsApi = {
   },
   list: (clientCompanyId: string) =>
     api.get('/client-documents', { params: { clientCompanyId } }).then((r) => r.data),
+  download: async (documentId: string, fileName: string) => {
+    const res = await api.get(`/client-documents/${documentId}/download`, { responseType: 'blob' })
+    const url = URL.createObjectURL(res.data)
+    const a = document.createElement('a'); a.href = url; a.download = fileName; a.click()
+    URL.revokeObjectURL(url)
+  },
   delete: (documentId: string) =>
     api.delete('/client-documents/' + documentId).then((r) => r.data),
   shareAsTemplate: (documentId: string, data: { title: string; description?: string }) =>
@@ -256,12 +335,47 @@ export const clientDocumentsApi = {
     api.post('/client-documents/templates/' + templateId + '/review', data).then((r) => r.data),
 }
 
+// ---- Billing ----
+export const billingApi = {
+  getPlans: () => api.get('/billing/plans').then((r) => r.data),
+  getSubscription: () => api.get('/billing/subscription').then((r) => r.data),
+  subscribe: (planId: string, billingCycle: 'MONTHLY' | 'ANNUAL') =>
+    api.post('/billing/subscribe', { planId, billingCycle }).then((r) => r.data),
+  cancel: () => api.put('/billing/subscription/cancel').then((r) => r.data),
+  reactivate: () => api.put('/billing/subscription/reactivate').then((r) => r.data),
+  getInvoices: (params?: { page?: number; limit?: number }) =>
+    api.get('/billing/invoices', { params }).then((r) => r.data),
+  getInvoice: (id: string) => api.get(`/billing/invoices/${id}`).then((r) => r.data),
+  generateInvoice: (notes?: string) =>
+    api.post('/billing/invoices/generate', { notes }).then((r) => r.data),
+  updateInvoiceStatus: (id: string, status: string) =>
+    api.put(`/billing/invoices/${id}/status`, { status }).then((r) => r.data),
+}
+
 // ---- Compliance Matrix ----
 export const complianceMatrixApi = {
   get: (opportunityId: string) =>
     api.get(`/compliance-matrix/${opportunityId}`).then((r) => r.data),
   generate: (opportunityId: string) =>
-    api.post(`/compliance-matrix/${opportunityId}/generate`).then((r) => r.data),
+    api.post(`/compliance-matrix/${opportunityId}/generate`, {}, { timeout: 90000 }).then((r) => r.data),
   updateRequirement: (requirementId: string, data: { proposalSection?: string; status?: string; notes?: string }) =>
     api.patch(`/compliance-matrix/requirements/${requirementId}`, data).then((r) => r.data),
+  generateBidGuidance: (opportunityId: string) =>
+    api.post(`/compliance-matrix/${opportunityId}/bid-guidance`, {}, { timeout: 90000 }).then((r) => r.data),
+}
+
+// ---- Market Analytics (BigQuery-powered) ----
+export const marketAnalyticsApi = {
+  status: () =>
+    api.get('/market-analytics/status').then((r) => r.data),
+  competition: (naicsCode: string, agency?: string) =>
+    api.get(`/market-analytics/competition/${naicsCode}`, { params: agency ? { agency } : {} }).then((r) => r.data),
+  agency: (agencyName: string) =>
+    api.get(`/market-analytics/agency/${encodeURIComponent(agencyName)}`).then((r) => r.data),
+  contractor: (name: string) =>
+    api.get(`/market-analytics/contractor/${encodeURIComponent(name)}`).then((r) => r.data),
+  snapshot: (naics?: string) =>
+    api.get('/market-analytics/snapshot', { params: naics ? { naics } : {} }).then((r) => r.data),
+  ingest: (body: { naicsCode?: string; agency?: string; bulk?: boolean; maxPages?: number }) =>
+    api.post('/market-analytics/ingest', body).then((r) => r.data),
 }

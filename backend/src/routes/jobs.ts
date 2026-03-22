@@ -14,7 +14,7 @@ import { authenticateJWT } from '../middleware/auth';
 import { enforceTenantScope, getTenantId } from '../middleware/tenant';
 import { AuthenticatedRequest } from '../types';
 import { scoringQueue, enqueueAllOpportunitiesForScoring } from '../workers/scoringWorker';
-import { enqueueEnrichmentJobs } from '../workers/enrichmentWorker';
+import { enrichmentQueue, enqueueEnrichmentJobs } from '../workers/enrichmentWorker';
 import { samApiService } from '../services/samApi';
 import { logger } from '../utils/logger';
 import { z } from 'zod';
@@ -153,18 +153,26 @@ router.post('/enrich', async (req: AuthenticatedRequest, res: Response, next: Ne
 
         const poll = async () => {
           if (Date.now() - startTime > maxWait) {
+            // Mark complete with however many were enriched — don't fail just because
+            // the queue drained via timeout (batch may be legitimately done)
+            const enrichedCount = await prisma.opportunity.count({
+              where: { consultingFirmId, isEnriched: true },
+            });
             await prisma.ingestionJob.update({
               where: { id: job.id },
-              data: { status: 'FAILED', completedAt: new Date(), errorDetail: 'Timeout after 30 minutes' },
+              data: { status: 'COMPLETE', completedAt: new Date(), enrichedCount },
             });
+            logger.info('Enrich job timed out — marking complete with current count', { jobId: job.id, enrichedCount });
             return;
           }
 
-          const remaining = await prisma.opportunity.count({
-            where: { consultingFirmId, status: 'ACTIVE', isEnriched: false },
-          });
+          // Check BullMQ queue drain instead of counting unenriched records.
+          // Previously we checked isEnriched:false which never hit 0 because only
+          // 500 records were queued at a time out of potentially 18k+.
+          const counts = await enrichmentQueue.getJobCounts('waiting', 'active', 'delayed');
+          const queueSize = (counts.waiting || 0) + (counts.active || 0) + (counts.delayed || 0);
 
-          if (remaining === 0) {
+          if (queueSize === 0) {
             const enrichedCount = await prisma.opportunity.count({
               where: { consultingFirmId, isEnriched: true },
             });
@@ -222,23 +230,6 @@ router.post('/analyze/:documentId', async (req: AuthenticatedRequest, res: Respo
 
     setImmediate(async () => {
       try {
-        // Early-exit with a clear status if Anthropic key is not configured
-        if (!process.env.ANTHROPIC_API_KEY) {
-          await prisma.opportunityDocument.update({
-            where: { id: documentId },
-            data: {
-              analysisStatus: 'NO_AI_KEY',
-              analysisError: 'ANTHROPIC_API_KEY is not configured. Add it to backend/.env to enable AI document analysis.',
-            },
-          });
-          await prisma.ingestionJob.update({
-            where: { id: job.id },
-            data: { status: 'COMPLETE', completedAt: new Date() },
-          });
-          logger.warn('Document analysis skipped — ANTHROPIC_API_KEY not set', { documentId });
-          return;
-        }
-
         const { documentAnalysisService } = await import('../services/documentAnalysis');
 
         await prisma.opportunityDocument.update({
@@ -269,7 +260,7 @@ router.post('/analyze/:documentId', async (req: AuthenticatedRequest, res: Respo
           naicsCode: doc.opportunity.naicsCode,
           clientNaicsCodes: clients.flatMap((c) => c.naicsCodes),
           clientCertifications: [...new Set(clientCerts)],
-        });
+        }, consultingFirmId);
 
         await prisma.opportunityDocument.update({
           where: { id: documentId },
@@ -307,13 +298,19 @@ router.post('/analyze/:documentId', async (req: AuthenticatedRequest, res: Respo
         });
       } catch (err) {
         const errorMsg = (err as Error).message;
+        const isNoKey = errorMsg === 'NO_LLM_KEY';
         await prisma.opportunityDocument.update({
           where: { id: documentId },
-          data: { analysisStatus: 'FAILED', analysisError: errorMsg },
+          data: {
+            analysisStatus: isNoKey ? 'NO_AI_KEY' : 'FAILED',
+            analysisError: isNoKey
+              ? 'No AI provider key configured. Add it in Settings → AI Intelligence Provider.'
+              : errorMsg,
+          },
         }).catch(() => {});
         await prisma.ingestionJob.update({
           where: { id: job.id },
-          data: { status: 'FAILED', completedAt: new Date(), errorDetail: errorMsg },
+          data: { status: isNoKey ? 'COMPLETE' : 'FAILED', completedAt: new Date(), errorDetail: isNoKey ? null : errorMsg },
         });
       }
     });

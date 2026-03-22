@@ -57,6 +57,10 @@ services:
       DATABASE_URL: postgresql://govcon_user:govcon_pass@postgres:5432/govcon_platform
       REDIS_URL: redis://redis:6379
       JWT_SECRET: dev-secret-change-in-production
+      LOCALAI_BASE_URL: http://local-ai:8080/v1
+      GOOGLE_APPLICATION_CREDENTIALS: /app/adc.json
+      GCP_PROJECT_ID: gov-con-491005
+      BQ_DATASET: govcon_analytics
 
     ports:
       - "3001:3001"
@@ -67,8 +71,9 @@ services:
       redis:
         condition: service_healthy
 
-    # 🚫 No bind mounts
-    # 🚫 No ts-node-dev
+    volumes:
+      - uploads_data:/app/uploads
+      - C:\Users\gladm\Downloads\adc.json:/app/adc.json:ro
     command: npm start
 
   # ----------------------------
@@ -90,6 +95,26 @@ services:
       - /app/node_modules
     command: npm run dev -- --host
 
+  # ----------------------------
+  # LocalAI — Self-Hosted LLM
+  # ----------------------------
+  local-ai:
+    image: localai/localai:latest
+    container_name: local-ai
+    ports:
+      - "8080:8080"
+    volumes:
+      - localai_models:/models
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:8080/readyz || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
 volumes:
   postgres_data:
   redis_data:
+  localai_models:
+  uploads_data:

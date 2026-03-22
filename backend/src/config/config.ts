@@ -58,6 +58,14 @@ export const config = {
     maxMb: parseInt(optional('MAX_UPLOAD_MB', '25'), 10),
   },
 
+  gcp: {
+    projectId: optional('GCP_PROJECT_ID', 'gov-con-491005'),
+    bqDataset: optional('BQ_DATASET', 'govcon_analytics'),
+    // Set GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json for Docker/CI.
+    // Leave unset to use Application Default Credentials (gcloud auth).
+    keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+  },
+
   isProduction: env === 'production',
   isDevelopment: env === 'development',
 };

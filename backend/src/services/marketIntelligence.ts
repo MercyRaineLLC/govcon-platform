@@ -148,9 +148,10 @@ export async function getAgencyProfiles(consultingFirmId: string): Promise<Agenc
       SELECT
         agency,
         COUNT(*)::bigint as count,
-        COALESCE(AVG("agencySmallBizRate"::float), 0) as avg_sbr,
-        COALESCE(AVG("agencySdvosbRate"::float), 0) as avg_sdvosb,
-        COALESCE(AVG("historicalAvgAward"::float), 0) as avg_award
+        -- Only average enriched records to avoid fallback 0.25 polluting rates
+        COALESCE(AVG(CASE WHEN "isEnriched" = true THEN "agencySmallBizRate"::float END), 0) as avg_sbr,
+        COALESCE(AVG(CASE WHEN "isEnriched" = true THEN "agencySdvosbRate"::float END), 0) as avg_sdvosb,
+        COALESCE(AVG(CASE WHEN "isEnriched" = true AND "historicalAvgAward" > 0 THEN "historicalAvgAward"::float END), 0) as avg_award
       FROM opportunities
       WHERE "consultingFirmId" = ${consultingFirmId}
         AND agency IS NOT NULL AND agency != ''

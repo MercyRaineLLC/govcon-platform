@@ -1,0 +1,458 @@
+// =============================================================
+// BigQuery Analytics Service
+// Decision-intelligence queries on award_history table
+// =============================================================
+import { getBigQuery, GCP_PROJECT_ID, BQ_DATASET, BQ_TABLES } from '../../config/bigquery'
+import { logger } from '../../utils/logger'
+
+const FULL_TABLE = (t: string) =>
+  `\`${GCP_PROJECT_ID}.${BQ_DATASET}.${t}\``
+
+// ── Types ─────────────────────────────────────────────────────
+
+export interface CompetitionProfile {
+  naicsCode: string
+  agency?: string
+  totalAwards: number
+  totalAmount: number
+  avgAwardAmount: number
+  medianAwardAmount: number
+  uniqueWinners: number
+  avgOffersReceived: number | null
+  winnerConcentrationHHI: number   // 0-1, higher = more concentrated
+  topWinners: {
+    name: string
+    wins: number
+    totalAmount: number
+    shareOfWins: number
+  }[]
+  setAsideBreakdown: { type: string; count: number; pct: number }[]
+  yearlySummary: { year: number; awards: number; totalAmount: number }[]
+  dataPoints: number
+}
+
+export interface AgencyProfile {
+  agency: string
+  totalAwards: number
+  totalAmount: number
+  avgAwardAmount: number
+  smallBizRate: number
+  sdvosbRate: number
+  wosbRate: number
+  hubzoneRate: number
+  topNaicsCodes: { naics: string; count: number }[]
+  competitiveness: 'HIGH' | 'MEDIUM' | 'LOW'   // derived from avg offers
+  dataPoints: number
+}
+
+export interface ContractorProfile {
+  name: string
+  totalWins: number
+  totalAmount: number
+  avgAwardAmount: number
+  agencies: { agency: string; wins: number }[]
+  naicsCodes: { naics: string; wins: number }[]
+  recentWin: string | null
+}
+
+export interface MarketSnapshot {
+  naicsCodes: string[]
+  totalOpportunityVolume: number
+  avgContractSize: number
+  competitorCount: number
+  topAgencies: { agency: string; awards: number; amount: number }[]
+  heatmap: {
+    naicsCode: string
+    awards: number
+    avgAmount: number
+    concentration: number  // HHI 0-1
+    avgOffers: number | null
+  }[]
+}
+
+// ── Queries ───────────────────────────────────────────────────
+
+/**
+ * Full competition profile for a NAICS code.
+ * Core input for Market Score and decision intelligence.
+ */
+export async function getCompetitionProfile(
+  naicsCode: string,
+  agency?: string
+): Promise<CompetitionProfile | null> {
+  const bq = getBigQuery()
+
+  const agencyFilter = agency ? `AND agency = @agency` : ''
+
+  const query = `
+    WITH base AS (
+      SELECT
+        recipientName,
+        awardAmount,
+        awardDate,
+        offersReceived,
+        setAsideType,
+        EXTRACT(YEAR FROM PARSE_DATE('%Y-%m-%d', CAST(awardDate AS STRING))) AS awardYear
+      FROM ${FULL_TABLE(BQ_TABLES.AWARD_HISTORY)}
+      WHERE naicsCode = @naicsCode
+        ${agencyFilter}
+        AND awardAmount > 0
+    ),
+    summary AS (
+      SELECT
+        COUNT(*) AS totalAwards,
+        SUM(awardAmount) AS totalAmount,
+        AVG(awardAmount) AS avgAwardAmount,
+        COUNT(DISTINCT recipientName) AS uniqueWinners,
+        AVG(offersReceived) AS avgOffersReceived
+      FROM base
+    ),
+    winner_counts AS (
+      SELECT
+        recipientName,
+        COUNT(*) AS wins,
+        SUM(awardAmount) AS totalAmount
+      FROM base
+      GROUP BY recipientName
+      ORDER BY wins DESC
+      LIMIT 10
+    ),
+    hhi AS (
+      SELECT
+        SUM(POWER(winShare, 2)) AS hhi
+      FROM (
+        SELECT
+          COUNT(*) / (SELECT COUNT(*) FROM base) AS winShare
+        FROM base
+        GROUP BY recipientName
+      )
+    ),
+    setaside AS (
+      SELECT
+        COALESCE(setAsideType, 'UNKNOWN') AS setAsideType,
+        COUNT(*) AS cnt
+      FROM base
+      GROUP BY setAsideType
+    ),
+    yearly AS (
+      SELECT
+        awardYear AS year,
+        COUNT(*) AS awards,
+        SUM(awardAmount) AS totalAmount
+      FROM base
+      WHERE awardYear IS NOT NULL
+      GROUP BY awardYear
+      ORDER BY awardYear DESC
+      LIMIT 6
+    )
+    SELECT
+      s.totalAwards,
+      s.totalAmount,
+      s.avgAwardAmount,
+      s.uniqueWinners,
+      s.avgOffersReceived,
+      h.hhi AS winnerConcentrationHHI,
+      TO_JSON_STRING(ARRAY(SELECT AS STRUCT recipientName, wins, totalAmount FROM winner_counts)) AS topWinnersJson,
+      TO_JSON_STRING(ARRAY(SELECT AS STRUCT setAsideType, cnt FROM setaside)) AS setAsideJson,
+      TO_JSON_STRING(ARRAY(SELECT AS STRUCT year, awards, totalAmount FROM yearly)) AS yearlyJson
+    FROM summary s, hhi h
+  `
+
+  try {
+    const [rows] = await bq.query({
+      query,
+      params: { naicsCode, ...(agency ? { agency } : {}) },
+      location: 'US',
+    })
+
+    if (!rows || rows.length === 0) return null
+    const r = rows[0]
+
+    const totalAwards = Number(r.totalAwards ?? 0)
+    const topWinners = JSON.parse(r.topWinnersJson ?? '[]').map((w: Record<string, unknown>) => ({
+      name: w.recipientName as string,
+      wins: Number(w.wins),
+      totalAmount: Number(w.totalAmount),
+      shareOfWins: totalAwards > 0 ? Number(w.wins) / totalAwards : 0,
+    }))
+
+    const setAsideRaw = JSON.parse(r.setAsideJson ?? '[]')
+    const setTotal = setAsideRaw.reduce((s: number, x: { cnt: number }) => s + Number(x.cnt), 0)
+    const setAsideBreakdown = setAsideRaw.map((x: { setAsideType: string; cnt: number }) => ({
+      type: x.setAsideType,
+      count: Number(x.cnt),
+      pct: setTotal > 0 ? Number(x.cnt) / setTotal : 0,
+    }))
+
+    const yearlySummary = JSON.parse(r.yearlyJson ?? '[]').map((y: Record<string, unknown>) => ({
+      year: Number(y.year),
+      awards: Number(y.awards),
+      totalAmount: Number(y.totalAmount),
+    }))
+
+    return {
+      naicsCode,
+      agency,
+      totalAwards,
+      totalAmount: Number(r.totalAmount ?? 0),
+      avgAwardAmount: Number(r.avgAwardAmount ?? 0),
+      medianAwardAmount: 0, // BigQuery median requires APPROX_QUANTILES; skipped for cost
+      uniqueWinners: Number(r.uniqueWinners ?? 0),
+      avgOffersReceived: r.avgOffersReceived != null ? Number(r.avgOffersReceived) : null,
+      winnerConcentrationHHI: Number(r.winnerConcentrationHHI ?? 0),
+      topWinners,
+      setAsideBreakdown,
+      yearlySummary,
+      dataPoints: totalAwards,
+    }
+  } catch (err) {
+    logger.error('BQ getCompetitionProfile failed', { naicsCode, error: (err as Error).message })
+    return null
+  }
+}
+
+/**
+ * Agency buying profile — set-aside rates, avg award, top NAICS codes.
+ * Used to enhance compliance gate context and agency alignment scoring.
+ */
+export async function getAgencyProfile(agency: string): Promise<AgencyProfile | null> {
+  const bq = getBigQuery()
+
+  const query = `
+    WITH base AS (
+      SELECT
+        recipientName,
+        awardAmount,
+        setAsideType,
+        naicsCode
+      FROM ${FULL_TABLE(BQ_TABLES.AWARD_HISTORY)}
+      WHERE agency = @agency
+        AND awardAmount > 0
+    ),
+    totals AS (
+      SELECT
+        COUNT(*) AS totalAwards,
+        SUM(awardAmount) AS totalAmount,
+        AVG(awardAmount) AS avgAward,
+        COUNTIF(UPPER(COALESCE(setAsideType,'')) LIKE '%SMALL%') AS smallBizCount,
+        COUNTIF(UPPER(COALESCE(setAsideType,'')) LIKE '%SDVOSB%'
+             OR UPPER(COALESCE(setAsideType,'')) LIKE '%SERVICE-DISABLED%') AS sdvosbCount,
+        COUNTIF(UPPER(COALESCE(setAsideType,'')) LIKE '%WOSB%'
+             OR UPPER(COALESCE(setAsideType,'')) LIKE '%WOMEN%') AS wosbCount,
+        COUNTIF(UPPER(COALESCE(setAsideType,'')) LIKE '%HUBZONE%') AS hubzoneCount
+      FROM base
+    ),
+    top_naics AS (
+      SELECT naicsCode, COUNT(*) AS cnt
+      FROM base
+      GROUP BY naicsCode
+      ORDER BY cnt DESC
+      LIMIT 8
+    )
+    SELECT
+      t.totalAwards,
+      t.totalAmount,
+      t.avgAward,
+      t.smallBizCount,
+      t.sdvosbCount,
+      t.wosbCount,
+      t.hubzoneCount,
+      TO_JSON_STRING(ARRAY(SELECT AS STRUCT naicsCode, cnt FROM top_naics)) AS topNaicsJson
+    FROM totals t
+  `
+
+  try {
+    const [rows] = await bq.query({ query, params: { agency }, location: 'US' })
+    if (!rows || rows.length === 0) return null
+    const r = rows[0]
+
+    const totalAwards = Number(r.totalAwards ?? 0)
+    const smallBizRate = totalAwards > 0 ? Number(r.smallBizCount) / totalAwards : 0
+    const sdvosbRate   = totalAwards > 0 ? Number(r.sdvosbCount)   / totalAwards : 0
+    const wosbRate     = totalAwards > 0 ? Number(r.wosbCount)      / totalAwards : 0
+    const hubzoneRate  = totalAwards > 0 ? Number(r.hubzoneCount)   / totalAwards : 0
+
+    // Competitiveness proxy: we don't have offers at agency level easily, use SB rate
+    const competitiveness: 'HIGH' | 'MEDIUM' | 'LOW' =
+      smallBizRate > 0.6 ? 'HIGH' : smallBizRate > 0.3 ? 'MEDIUM' : 'LOW'
+
+    const topNaicsCodes = JSON.parse(r.topNaicsJson ?? '[]').map(
+      (x: { naicsCode: string; cnt: number }) => ({ naics: x.naicsCode, count: Number(x.cnt) })
+    )
+
+    return {
+      agency,
+      totalAwards,
+      totalAmount: Number(r.totalAmount ?? 0),
+      avgAwardAmount: Number(r.avgAward ?? 0),
+      smallBizRate,
+      sdvosbRate,
+      wosbRate,
+      hubzoneRate,
+      topNaicsCodes,
+      competitiveness,
+      dataPoints: totalAwards,
+    }
+  } catch (err) {
+    logger.error('BQ getAgencyProfile failed', { agency, error: (err as Error).message })
+    return null
+  }
+}
+
+/**
+ * Contractor win history — used for incumbent analysis and competitor intelligence.
+ */
+export async function getContractorProfile(recipientName: string): Promise<ContractorProfile | null> {
+  const bq = getBigQuery()
+
+  const query = `
+    WITH base AS (
+      SELECT agency, naicsCode, awardAmount, awardDate
+      FROM ${FULL_TABLE(BQ_TABLES.AWARD_HISTORY)}
+      WHERE UPPER(recipientName) = UPPER(@recipientName)
+        AND awardAmount > 0
+    )
+    SELECT
+      COUNT(*) AS totalWins,
+      SUM(awardAmount) AS totalAmount,
+      AVG(awardAmount) AS avgAward,
+      MAX(awardDate) AS recentWin,
+      TO_JSON_STRING(ARRAY(
+        SELECT AS STRUCT agency, COUNT(*) AS wins
+        FROM base GROUP BY agency ORDER BY wins DESC LIMIT 6
+      )) AS agenciesJson,
+      TO_JSON_STRING(ARRAY(
+        SELECT AS STRUCT naicsCode, COUNT(*) AS wins
+        FROM base GROUP BY naicsCode ORDER BY wins DESC LIMIT 6
+      )) AS naicsJson
+    FROM base
+  `
+
+  try {
+    const [rows] = await bq.query({ query, params: { recipientName }, location: 'US' })
+    if (!rows || rows.length === 0 || !rows[0].totalWins) return null
+    const r = rows[0]
+
+    return {
+      name: recipientName,
+      totalWins: Number(r.totalWins),
+      totalAmount: Number(r.totalAmount),
+      avgAwardAmount: Number(r.avgAward),
+      recentWin: r.recentWin ?? null,
+      agencies: JSON.parse(r.agenciesJson ?? '[]').map(
+        (x: { agency: string; wins: number }) => ({ agency: x.agency, wins: Number(x.wins) })
+      ),
+      naicsCodes: JSON.parse(r.naicsJson ?? '[]').map(
+        (x: { naicsCode: string; wins: number }) => ({ naics: x.naicsCode, wins: Number(x.wins) })
+      ),
+    }
+  } catch (err) {
+    logger.error('BQ getContractorProfile failed', { recipientName, error: (err as Error).message })
+    return null
+  }
+}
+
+/**
+ * Multi-NAICS market snapshot — firm-wide competitive landscape.
+ * Returns the overall market context for a firm's NAICS portfolio.
+ */
+export async function getMarketSnapshot(naicsCodes: string[]): Promise<MarketSnapshot | null> {
+  if (naicsCodes.length === 0) return null
+  const bq = getBigQuery()
+
+  // BigQuery doesn't support IN with @param arrays directly; build a literal list
+  const naicsLiteral = naicsCodes.map((c) => `'${c.replace(/'/g, '')}'`).join(',')
+
+  const query = `
+    WITH base AS (
+      SELECT naicsCode, agency, awardAmount, recipientName
+      FROM ${FULL_TABLE(BQ_TABLES.AWARD_HISTORY)}
+      WHERE naicsCode IN (${naicsLiteral})
+        AND awardAmount > 0
+    ),
+    heatmap AS (
+      SELECT
+        naicsCode,
+        COUNT(*) AS awards,
+        AVG(awardAmount) AS avgAmount,
+        COUNT(DISTINCT recipientName) AS uniqueWinners,
+        AVG(offersReceived) AS avgOffers
+      FROM ${FULL_TABLE(BQ_TABLES.AWARD_HISTORY)}
+      WHERE naicsCode IN (${naicsLiteral}) AND awardAmount > 0
+      GROUP BY naicsCode
+    ),
+    top_agencies AS (
+      SELECT agency, COUNT(*) AS awards, SUM(awardAmount) AS amount
+      FROM base
+      GROUP BY agency
+      ORDER BY awards DESC
+      LIMIT 8
+    )
+    SELECT
+      COUNT(*) AS totalAwards,
+      SUM(awardAmount) AS totalAmount,
+      AVG(awardAmount) AS avgAwardAmount,
+      COUNT(DISTINCT recipientName) AS competitorCount,
+      TO_JSON_STRING(ARRAY(SELECT AS STRUCT agency, awards, amount FROM top_agencies)) AS agenciesJson,
+      TO_JSON_STRING(ARRAY(SELECT AS STRUCT naicsCode, awards, avgAmount, uniqueWinners, avgOffers FROM heatmap)) AS heatmapJson
+    FROM base
+  `
+
+  try {
+    const [rows] = await bq.query({ query, location: 'US' })
+    if (!rows || rows.length === 0) return null
+    const r = rows[0]
+
+    const topAgencies = JSON.parse(r.agenciesJson ?? '[]').map(
+      (x: { agency: string; awards: number; amount: number }) => ({
+        agency: x.agency,
+        awards: Number(x.awards),
+        amount: Number(x.amount),
+      })
+    )
+
+    const heatmap = JSON.parse(r.heatmapJson ?? '[]').map(
+      (x: { naicsCode: string; awards: number; avgAmount: number; uniqueWinners: number; avgOffers: number | null }) => {
+        const n = Number(x.uniqueWinners ?? 1)
+        const awards = Number(x.awards ?? 0)
+        // Simple HHI proxy: if 1 winner takes everything, HHI = 1; many winners → low
+        const concentration = awards > 0 ? Math.min(1 / Math.max(n, 1), 1) : 0
+        return {
+          naicsCode: x.naicsCode,
+          awards,
+          avgAmount: Number(x.avgAmount ?? 0),
+          concentration,
+          avgOffers: x.avgOffers != null ? Number(x.avgOffers) : null,
+        }
+      }
+    )
+
+    return {
+      naicsCodes,
+      totalOpportunityVolume: Number(r.totalAmount ?? 0),
+      avgContractSize: Number(r.avgAwardAmount ?? 0),
+      competitorCount: Number(r.competitorCount ?? 0),
+      topAgencies,
+      heatmap,
+    }
+  } catch (err) {
+    logger.error('BQ getMarketSnapshot failed', { naicsCodes, error: (err as Error).message })
+    return null
+  }
+}
+
+/**
+ * Count of rows in award_history — used to determine if data has been ingested.
+ */
+export async function getAwardHistoryCount(): Promise<number> {
+  const bq = getBigQuery()
+  try {
+    const [rows] = await bq.query({
+      query: `SELECT COUNT(*) AS cnt FROM ${FULL_TABLE(BQ_TABLES.AWARD_HISTORY)}`,
+      location: 'US',
+    })
+    return Number(rows?.[0]?.cnt ?? 0)
+  } catch {
+    return -1  // -1 = table not yet accessible (not yet ingested or BQ not connected)
+  }
+}

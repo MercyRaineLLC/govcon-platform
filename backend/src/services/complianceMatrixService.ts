@@ -1,9 +1,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import { logger } from '../utils/logger'
-
-const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages'
-const MODEL = 'claude-sonnet-4-6'
+import { generateWithRouter } from './llm/llmRouter'
 
 const MATRIX_PROMPT = `You are a federal contracting compliance expert. Extract ALL distinct requirements from this government solicitation document (RFP/RFQ/IFB).
 
@@ -49,53 +47,29 @@ export interface ParsedRequirement extends RawRequirement {
 
 export async function generateComplianceMatrix(
   text: string,
-  opportunityTitle: string
+  opportunityTitle: string,
+  consultingFirmId?: string | null
 ): Promise<ParsedRequirement[]> {
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) {
-    logger.warn('ANTHROPIC_API_KEY not set — returning shell compliance matrix')
-    return fallbackMatrix()
-  }
-
   const truncated = text.substring(0, 60000)
 
   try {
-    const response = await fetch(ANTHROPIC_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
+    const llmResponse = await generateWithRouter(
+      {
+        systemPrompt: MATRIX_PROMPT,
+        userPrompt: `Opportunity: ${opportunityTitle}\n\nDocument text:\n${truncated}`,
+        maxTokens: 4000,
       },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 4000,
-        messages: [
-          {
-            role: 'user',
-            content: `${MATRIX_PROMPT}\n\nOpportunity: ${opportunityTitle}\n\nDocument text:\n${truncated}`,
-          },
-        ],
-      }),
-    })
+      consultingFirmId ?? undefined,
+      { task: 'COMPLIANCE_MATRIX', useCache: true }
+    )
 
-    if (!response.ok) {
-      const errText = await response.text()
-      logger.error('Claude API error in matrix generation', { status: response.status, body: errText })
-      return fallbackMatrix()
-    }
-
-    const data = (await response.json()) as any
-    const rawText: string =
-      data.content
-        ?.filter((b: any) => b.type === 'text')
-        ?.map((b: any) => b.text)
-        ?.join('') || ''
-
-    const parsed = parseResponse(rawText)
+    const parsed = parseResponse(llmResponse.text)
     return parsed.map((r, i) => ({ ...r, sortOrder: i }))
   } catch (err) {
-    logger.error('Compliance matrix generation failed', { error: (err as Error).message })
+    const msg = (err as Error).message
+    if (msg !== 'NO_LLM_KEY') {
+      logger.error('Compliance matrix generation failed', { error: msg })
+    }
     return fallbackMatrix()
   }
 }
@@ -123,7 +97,7 @@ function parseResponse(raw: string): RawRequirement[] {
         farReference: r.farReference ? String(r.farReference) : null,
       }))
   } catch {
-    logger.warn('Failed to parse compliance matrix JSON response')
+    logger.warn('Failed to parse compliance matrix JSON')
     return []
   }
 }
@@ -141,6 +115,147 @@ export async function extractTextFromDocument(filePath: string): Promise<string>
     return fs.readFileSync(filePath, 'utf-8')
   } catch {
     return ''
+  }
+}
+
+// ---------------------------------------------------------------
+// Bid Guidance / Win Strategy
+// ---------------------------------------------------------------
+
+const GUIDANCE_PROMPT = `You are a federal contracting strategy expert. Analyze this government solicitation and produce a plain-language bid strategy guide for a small business pursing this contract.
+
+Return ONLY valid JSON — no markdown, no preamble:
+{
+  "agencyWants": "2-3 sentence plain-language description of what the agency needs and why",
+  "coreRequirements": ["top requirement 1", "top requirement 2"],
+  "evaluationCriteria": [
+    {
+      "criterion": "Technical Approach",
+      "relativeWeight": "high",
+      "description": "what the evaluators are looking for",
+      "winStrategy": "concrete advice to score well on this criterion"
+    }
+  ],
+  "winningApproach": ["concrete strategic action 1", "concrete strategic action 2"],
+  "redFlags": ["risk or obstacle to flag"],
+  "keyDifferentiators": ["differentiator that would stand out to evaluators"],
+  "submissionMustDos": ["critical must-do for the proposal response"]
+}
+
+relativeWeight must be one of: "high", "medium", "low".
+evaluationCriteria: extract every criterion you can find; include Section M items explicitly.
+winningApproach: 3–5 concrete, actionable items.
+redFlags: things that could disqualify or weaken the bid.
+keyDifferentiators: certifications, past performance angles, or technical strengths to emphasize.
+submissionMustDos: compliance items that cannot be missed (page limits, certifications, formats).`
+
+export interface EvaluationCriterion {
+  criterion: string
+  relativeWeight: 'high' | 'medium' | 'low'
+  description: string
+  winStrategy: string
+}
+
+export interface BidGuidance {
+  agencyWants: string
+  coreRequirements: string[]
+  evaluationCriteria: EvaluationCriterion[]
+  winningApproach: string[]
+  redFlags: string[]
+  keyDifferentiators: string[]
+  submissionMustDos: string[]
+}
+
+export interface EnrichmentContext {
+  historicalWinner?: string | null
+  historicalAvgAward?: number | null
+  historicalAwardCount?: number | null
+  competitionCount?: number | null
+  incumbentProbability?: number | null
+  agencySmallBizRate?: number | null
+  agencySdvosbRate?: number | null
+  recompeteFlag?: boolean
+  setAsideType?: string | null
+  naicsCode?: string
+  agency?: string
+}
+
+function buildEnrichmentBlock(ctx: EnrichmentContext): string {
+  const lines: string[] = []
+  if (ctx.agency) lines.push(`Agency: ${ctx.agency}`)
+  if (ctx.naicsCode) lines.push(`NAICS Code: ${ctx.naicsCode}`)
+  if (ctx.setAsideType) lines.push(`Set-Aside: ${ctx.setAsideType}`)
+  if (ctx.recompeteFlag) lines.push(`Recompete: Yes — an incumbent contractor likely holds this work`)
+  if (ctx.historicalWinner) lines.push(`Most Recent Winner: ${ctx.historicalWinner}`)
+  if (ctx.historicalAvgAward != null) lines.push(`Historical Avg Award: $${Number(ctx.historicalAvgAward).toLocaleString()}`)
+  if (ctx.historicalAwardCount != null) lines.push(`Times Competed (5yr): ${ctx.historicalAwardCount}`)
+  if (ctx.competitionCount != null) lines.push(`Avg Competitors per Award: ${ctx.competitionCount}`)
+  if (ctx.incumbentProbability != null) lines.push(`Incumbent Win Probability: ${Math.round(ctx.incumbentProbability * 100)}%`)
+  if (ctx.agencySmallBizRate != null) lines.push(`Agency Small Biz Award Rate: ${Math.round(ctx.agencySmallBizRate * 100)}%`)
+  if (ctx.agencySdvosbRate != null) lines.push(`Agency SDVOSB Award Rate: ${Math.round(ctx.agencySdvosbRate * 100)}%`)
+  if (lines.length === 0) return ''
+  return `\n\n=== USASpending Historical Intelligence ===\n${lines.join('\n')}\n\nUse this data to inform pricing anchors, incumbent risk, competitive positioning, and set-aside strategy.`
+}
+
+export async function generateBidGuidance(
+  text: string,
+  opportunityTitle: string,
+  enrichment?: EnrichmentContext,
+  consultingFirmId?: string | null
+): Promise<BidGuidance | null> {
+  const truncated = text.substring(0, 55000)
+  const enrichmentBlock = enrichment ? buildEnrichmentBlock(enrichment) : ''
+
+  try {
+    const llmResponse = await generateWithRouter(
+      {
+        systemPrompt: GUIDANCE_PROMPT,
+        userPrompt: `Opportunity: ${opportunityTitle}${enrichmentBlock}\n\nSolicitation text:\n${truncated}`,
+        maxTokens: 4000,
+      },
+      consultingFirmId ?? undefined,
+      { task: 'BID_GUIDANCE', useCache: true }
+    )
+
+    return parseBidGuidance(llmResponse.text)
+  } catch (err) {
+    const msg = (err as Error).message
+    if (msg !== 'NO_LLM_KEY') {
+      logger.error('Bid guidance generation failed', { error: msg })
+    }
+    return null
+  }
+}
+
+function parseBidGuidance(raw: string): BidGuidance | null {
+  try {
+    const cleaned = raw
+      .replace(/```json\n?/g, '')
+      .replace(/```\n?/g, '')
+      .trim()
+    const start = cleaned.indexOf('{')
+    const end = cleaned.lastIndexOf('}')
+    if (start === -1 || end === -1) return null
+    const obj = JSON.parse(cleaned.slice(start, end + 1))
+    return {
+      agencyWants: String(obj.agencyWants || ''),
+      coreRequirements: Array.isArray(obj.coreRequirements) ? obj.coreRequirements.map(String) : [],
+      evaluationCriteria: Array.isArray(obj.evaluationCriteria)
+        ? obj.evaluationCriteria.map((c: any) => ({
+            criterion: String(c.criterion || ''),
+            relativeWeight: ['high', 'medium', 'low'].includes(c.relativeWeight) ? c.relativeWeight : 'medium',
+            description: String(c.description || ''),
+            winStrategy: String(c.winStrategy || ''),
+          }))
+        : [],
+      winningApproach: Array.isArray(obj.winningApproach) ? obj.winningApproach.map(String) : [],
+      redFlags: Array.isArray(obj.redFlags) ? obj.redFlags.map(String) : [],
+      keyDifferentiators: Array.isArray(obj.keyDifferentiators) ? obj.keyDifferentiators.map(String) : [],
+      submissionMustDos: Array.isArray(obj.submissionMustDos) ? obj.submissionMustDos.map(String) : [],
+    }
+  } catch {
+    logger.warn('Failed to parse bid guidance JSON response')
+    return null
   }
 }
 

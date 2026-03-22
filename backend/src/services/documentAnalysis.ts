@@ -1,16 +1,14 @@
 // =============================================================
 // Document Analysis Service
-// Claude API via fetch — SOW scope analysis for probability enrichment
+// SOW scope analysis for probability enrichment
 // =============================================================
 import * as fs from 'fs';
 import * as path from 'path';
 import { logger } from '../utils/logger';
 import { DocumentAnalysisResult } from '../types';
+import { generateWithRouter } from './llm/llmRouter';
 
-const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
-const MODEL = 'claude-sonnet-4-20250514';
-
-const ANALYSIS_PROMPT = `You are a federal contracting intelligence analyst. Analyze this government contract document (SOW, amendment, or solicitation) and return a structured JSON analysis.
+const ANALYSIS_SYSTEM_PROMPT = `You are a federal contracting intelligence analyst. Analyze this government contract document (SOW, amendment, or solicitation) and return a structured JSON analysis.
 
 Return ONLY valid JSON with this exact structure — no markdown, no preamble:
 {
@@ -44,14 +42,9 @@ export class DocumentAnalysisService {
       naicsCode?: string;
       clientNaicsCodes?: string[];
       clientCertifications?: string[];
-    }
+    },
+    consultingFirmId?: string | null
   ): Promise<DocumentAnalysisResult> {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      logger.warn('ANTHROPIC_API_KEY not set — skipping document analysis');
-      return this.defaultResult();
-    }
-
     try {
       const ext = path.extname(filePath).toLowerCase();
       let content: string;
@@ -79,41 +72,25 @@ export class DocumentAnalysisService {
 - Client certifications: ${opportunityContext.clientCertifications?.join(', ') || 'Unknown'}\n`;
       }
 
-      const response = await fetch(ANTHROPIC_API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
+      const llmResponse = await generateWithRouter(
+        {
+          systemPrompt: ANALYSIS_SYSTEM_PROMPT,
+          userPrompt: `${contextBlock}\n\n${truncated}`,
+          maxTokens: 2000,
         },
-        body: JSON.stringify({
-          model: MODEL,
-          max_tokens: 2000,
-          messages: [
-            {
-              role: 'user',
-              content: `${ANALYSIS_PROMPT}${contextBlock}\n\n${truncated}`,
-            },
-          ],
-        }),
-      });
+        consultingFirmId ?? undefined,
+        { task: 'DOCUMENT_ANALYSIS', useCache: false }
+      );
 
-      if (!response.ok) {
-        const errText = await response.text();
-        logger.error('Claude API error', { status: response.status, body: errText });
-        return this.defaultResult();
-      }
-
-      const data = await response.json() as any;
-      const rawText: string = data.content
-        ?.filter((b: any) => b.type === 'text')
-        ?.map((b: any) => b.text)
-        ?.join('') || '';
-
-      const parsed = this.parseResponse(rawText);
+      const parsed = this.parseResponse(llmResponse.text);
       return this.buildResult(parsed);
     } catch (err) {
-      logger.error('Document analysis failed', { filePath, error: (err as Error).message });
+      const msg = (err as Error).message;
+      if (msg === 'NO_LLM_KEY') {
+        logger.warn('No AI provider key configured — skipping document analysis');
+      } else {
+        logger.error('Document analysis failed', { filePath, error: msg });
+      }
       return this.defaultResult();
     }
   }
@@ -169,7 +146,7 @@ export class DocumentAnalysisService {
       const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       return JSON.parse(cleaned);
     } catch {
-      logger.warn('Failed to parse Claude JSON response');
+      logger.warn('Failed to parse AI JSON response (document analysis)');
       return {};
     }
   }

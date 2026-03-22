@@ -6,10 +6,27 @@ import { enforceTenantScope, getTenantId } from '../middleware/tenant'
 import { AuthenticatedRequest } from '../types'
 import { NotFoundError, ValidationError } from '../utils/errors'
 import { logger } from '../utils/logger'
-import { generateComplianceMatrix, extractTextFromDocument } from '../services/complianceMatrixService'
+import { generateComplianceMatrix, extractTextFromDocument, generateBidGuidance, EnrichmentContext } from '../services/complianceMatrixService'
 
 const router = Router()
 router.use(authenticateJWT, enforceTenantScope)
+
+/** Strip null bytes that PostgreSQL UTF-8 rejects */
+function stripNulls(s: string): string {
+  return s.replace(/\x00/g, '')
+}
+
+/** Recursively strip null bytes from any JSON-serializable value */
+function deepStripNulls(val: unknown): unknown {
+  if (typeof val === 'string') return stripNulls(val)
+  if (Array.isArray(val)) return val.map(deepStripNulls)
+  if (val !== null && typeof val === 'object') {
+    return Object.fromEntries(
+      Object.entries(val as Record<string, unknown>).map(([k, v]) => [k, deepStripNulls(v)])
+    )
+  }
+  return val
+}
 
 // ---------------------------------------------------------------
 // POST /api/compliance-matrix/:opportunityId/generate
@@ -51,19 +68,20 @@ router.post('/:opportunityId/generate', async (req: AuthenticatedRequest, res: R
       )
     }
 
-    const requirements = await generateComplianceMatrix(sourceText, opp.title)
+    const requirements = await generateComplianceMatrix(sourceText, opp.title, consultingFirmId)
+    const safeSourceText = stripNulls(sourceText).substring(0, 5000)
 
     // Upsert matrix record
     const matrix = await prisma.complianceMatrix.upsert({
       where: { opportunityId },
       update: {
-        sourceText: sourceText.substring(0, 5000),
+        sourceText: safeSourceText,
         generatedAt: new Date(),
       },
       create: {
         opportunityId,
         consultingFirmId,
-        sourceText: sourceText.substring(0, 5000),
+        sourceText: safeSourceText,
       },
     })
 
@@ -72,11 +90,11 @@ router.post('/:opportunityId/generate', async (req: AuthenticatedRequest, res: R
     await prisma.matrixRequirement.createMany({
       data: requirements.map((r) => ({
         matrixId: matrix.id,
-        section: r.section,
-        sectionType: r.sectionType,
-        requirementText: r.requirementText,
+        section: stripNulls(r.section),
+        sectionType: stripNulls(r.sectionType),
+        requirementText: stripNulls(r.requirementText),
         isMandatory: r.isMandatory,
-        farReference: r.farReference ?? null,
+        farReference: r.farReference ? stripNulls(r.farReference) : null,
         sortOrder: r.sortOrder,
       })),
     })
@@ -93,6 +111,96 @@ router.post('/:opportunityId/generate', async (req: AuthenticatedRequest, res: R
     })
 
     res.json({ success: true, data: full })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ---------------------------------------------------------------
+// POST /api/compliance-matrix/:opportunityId/bid-guidance
+// Generate plain-language win strategy from solicitation text.
+// ---------------------------------------------------------------
+router.post('/:opportunityId/bid-guidance', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const consultingFirmId = getTenantId(req)
+    const { opportunityId } = req.params
+
+    const opp = await prisma.opportunity.findFirst({
+      where: { id: opportunityId, consultingFirmId },
+      include: {
+        documents: {
+          where: { analysisStatus: 'COMPLETE' },
+          orderBy: { uploadedAt: 'desc' },
+          take: 3,
+        },
+      },
+    })
+    if (!opp) throw new NotFoundError('Opportunity')
+
+    // Build source text: uploaded docs first, then description
+    let sourceText = ''
+    for (const doc of opp.documents) {
+      const filePath = path.join(process.cwd(), 'uploads', doc.storageKey)
+      const txt = await extractTextFromDocument(filePath)
+      if (txt.length > 200) sourceText += `\n\n=== ${doc.fileName} ===\n${txt}`
+    }
+    if (sourceText.length < 200 && opp.description) sourceText = opp.description
+    if (!sourceText.trim()) {
+      throw new ValidationError('No solicitation text available. Upload the RFP/SOW or ensure the opportunity has a description.')
+    }
+
+    const enrichment: EnrichmentContext = {
+      agency: opp.agency,
+      naicsCode: opp.naicsCode,
+      setAsideType: opp.setAsideType ?? null,
+      recompeteFlag: opp.recompeteFlag,
+      historicalWinner: opp.historicalWinner ?? null,
+      historicalAvgAward: opp.historicalAvgAward ? Number(opp.historicalAvgAward) : null,
+      historicalAwardCount: opp.historicalAwardCount ?? null,
+      competitionCount: opp.competitionCount ?? null,
+      incumbentProbability: opp.incumbentProbability ?? null,
+      agencySmallBizRate: opp.agencySmallBizRate ?? null,
+      agencySdvosbRate: opp.agencySdvosbRate ?? null,
+    }
+
+    let guidance
+    try {
+      guidance = await generateBidGuidance(sourceText, opp.title, enrichment, consultingFirmId)
+    } catch (llmErr) {
+      if ((llmErr as Error).message === 'NO_LLM_KEY') {
+        return res.status(422).json({
+          success: false,
+          error: 'NO_AI_KEY',
+          message: 'Add your AI provider API key in Settings → AI Intelligence Provider.',
+        })
+      }
+      throw llmErr
+    }
+    if (!guidance) {
+      return res.status(500).json({ success: false, error: 'Bid guidance generation failed. Check server logs.' })
+    }
+
+    const safeGuidance = deepStripNulls(guidance) as any
+    const safeSourceText = stripNulls(sourceText).substring(0, 5000)
+
+    // Upsert into compliance_matrices so guidance is co-located
+    const matrix = await prisma.complianceMatrix.upsert({
+      where: { opportunityId },
+      update: {
+        bidGuidanceJson: safeGuidance,
+        bidGuidanceAt: new Date(),
+      },
+      create: {
+        opportunityId,
+        consultingFirmId,
+        sourceText: safeSourceText,
+        bidGuidanceJson: safeGuidance,
+        bidGuidanceAt: new Date(),
+      },
+    })
+
+    logger.info('Bid guidance generated', { opportunityId, consultingFirmId })
+    res.json({ success: true, data: { ...guidance, generatedAt: matrix.bidGuidanceAt } })
   } catch (err) {
     next(err)
   }

@@ -45,9 +45,12 @@ export function OpportunityMatchCard({ suggestions }: { suggestions?: MatchSugge
                 </span>
               </div>
 
-              <p className="text-[11px] text-gray-500 mb-1.5">
-                {s.agency} &middot; {s.clientName} &middot; {s.daysToDeadline}d left
-              </p>
+              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-900/50 text-blue-300 font-medium border border-blue-700/50">
+                  {s.clientName}
+                </span>
+                <span className="text-[10px] text-gray-500">{s.agency} &middot; {s.daysToDeadline}d left</span>
+              </div>
 
               <ProbabilityBar probability={s.winProbability} />
 

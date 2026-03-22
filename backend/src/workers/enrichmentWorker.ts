@@ -94,6 +94,8 @@ export function startEnrichmentWorker(): Worker<EnrichmentJobData> {
           historicalAvgAward: enrichment.historicalAvgAward,
           historicalAwardCount: enrichment.historicalAwardCount,
           competitionCount: enrichment.competitionCount,
+          offersReceived: enrichment.offersReceived,
+          extentCompeted: enrichment.extentCompeted,
           incumbentProbability: enrichment.incumbentProbability,
           agencySmallBizRate: enrichment.agencySmallBizRate,
           agencySdvosbRate: enrichment.agencySdvosbRate,
@@ -120,7 +122,6 @@ export function startEnrichmentWorker(): Worker<EnrichmentJobData> {
       for (const client of clients) {
         const result = scoreOpportunityForClient({
           opportunityNaics: opportunity.naicsCode,
-          opportunitySetAside: opportunity.setAsideType,
           opportunityEstimatedValue: opportunity.estimatedValue ? Number(opportunity.estimatedValue) : null,
           opportunityAgency: opportunity.agency,
           clientNaics: client.naicsCodes,
@@ -132,6 +133,7 @@ export function startEnrichmentWorker(): Worker<EnrichmentJobData> {
           },
           incumbentProbability: enrichment.incumbentProbability,
           competitionCount: enrichment.competitionCount,
+          offersReceived: enrichment.offersReceived,
           agencySdvosbRate: enrichment.agencySdvosbRate,
           historicalDistribution: enrichment.historicalAwardCount > 0
             ? Math.min(enrichment.historicalAwardCount / 1000, 0.8)

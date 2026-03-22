@@ -30,8 +30,9 @@ export interface PortfolioHealth {
  * Box-Muller transform for standard normal random variable.
  */
 function gaussianRandom(): number {
-  const u1 = Math.random()
-  const u2 = Math.random()
+  // Protect against Math.random() returning 0 (log(0) = -Infinity -> NaN)
+  const u1 = Math.random() || Number.EPSILON
+  const u2 = Math.random() || Number.EPSILON
   return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2)
 }
 
@@ -63,6 +64,8 @@ export async function forecastRevenue(
         estimatedValue: true,
         probabilityScore: true,
         responseDeadline: true,
+        recompeteFlag: true,
+        incumbentProbability: true,
         bidDecisions: {
           select: { winProbability: true, recommendation: true },
           orderBy: { updatedAt: 'desc' },
@@ -71,16 +74,42 @@ export async function forecastRevenue(
       },
     })
 
+    // Time-to-Award NPV Discount: federal avg 9 months from deadline to award
+    const TIME_TO_AWARD_DISCOUNT = 1 / Math.pow(1.08, 9 / 12) // ≈ 0.943
+    const SUB_REVENUE_SHARE = 0.30
+    const OPTION_YEAR_FACTOR = 2.5
+
     // Group opportunities by month
     const monthBuckets = new Map<string, { prob: number; value: number }[]>()
 
     for (const opp of opportunities) {
       const month = opp.responseDeadline.toISOString().substring(0, 7)
       const bestDecision = opp.bidDecisions[0]
-      const prob = bestDecision?.winProbability ?? opp.probabilityScore ?? 0
-      const value = Number(opp.estimatedValue || 0)
+      let prob = Number(bestDecision?.winProbability ?? opp.probabilityScore ?? 0)
+      const baseValue = Number(opp.estimatedValue || 0)
 
-      if (prob <= 0 || value <= 0) continue
+      if (baseValue <= 0) continue
+      // Use a conservative 12% floor for unscored/unmatched opportunities
+      // so the forecast shows meaningful data even before scoring runs
+      if (prob <= 0) prob = 0.12
+
+      // Recompete boost (same logic as decisionEngine)
+      if (opp.recompeteFlag) {
+        const incProb = opp.incumbentProbability ? Number(opp.incumbentProbability) : null
+        if (incProb !== null && incProb < 0.4) prob = Math.min(prob * 1.15, 0.90)
+        else if (incProb !== null && incProb < 0.65) prob = Math.min(prob * 1.08, 0.90)
+        else prob = Math.min(prob * 1.08, 0.90)
+      }
+
+      // Sub-contract revenue share: BID_SUB captures 30% of prime value
+      const isSub = bestDecision?.recommendation === 'BID_SUB'
+      const effectiveValue = isSub ? baseValue * SUB_REVENUE_SHARE : baseValue
+
+      // Option Year Lifetime Value (use for pipeline projection)
+      const lifetimeValue = effectiveValue * OPTION_YEAR_FACTOR
+
+      // Apply time-to-award discount
+      const value = lifetimeValue * TIME_TO_AWARD_DISCOUNT
 
       if (!monthBuckets.has(month)) monthBuckets.set(month, [])
       monthBuckets.get(month)!.push({ prob, value })

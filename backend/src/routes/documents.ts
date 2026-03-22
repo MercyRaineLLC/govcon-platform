@@ -1,6 +1,7 @@
 import { Router, Response, NextFunction } from 'express'
 import path from 'path'
 import fs from 'fs'
+import AdmZip from 'adm-zip'
 import { prisma } from '../config/database'
 import { authenticateJWT } from '../middleware/auth'
 import { enforceTenantScope, getTenantId } from '../middleware/tenant'
@@ -8,6 +9,10 @@ import { AuthenticatedRequest } from '../types'
 import { upload } from '../middleware/upload'
 import { NotFoundError, ValidationError } from '../utils/errors'
 import { logger } from '../utils/logger'
+
+const ALLOWED_EXTRACTED = new Set(['.docx', '.doc', '.txt', '.md', '.pdf'])
+const MAX_ZIP_ENTRIES = 20
+const MAX_EXTRACTED_SIZE = 10 * 1024 * 1024 // 10 MB per file
 
 const router = Router()
 router.use(authenticateJWT, enforceTenantScope)
@@ -56,6 +61,73 @@ router.post('/upload', upload.single('file'), async (req: AuthenticatedRequest, 
         fileUrl: `/api/documents/download/${document.id}`,
       },
     })
+  } catch (err) { next(err) }
+})
+
+// POST /api/documents/upload-zip
+// Accepts a .zip file, extracts allowed document types, creates a DB record for each
+router.post('/upload-zip', upload.single('file'), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const consultingFirmId = getTenantId(req)
+    const { opportunityId } = req.body
+    if (!opportunityId) throw new ValidationError('opportunityId required')
+    if (!req.file) throw new ValidationError('File required')
+    if (!req.file.originalname.toLowerCase().endsWith('.zip')) {
+      fs.unlinkSync(req.file.path)
+      throw new ValidationError('Only .zip files are accepted on this endpoint')
+    }
+
+    const opportunity = await prisma.opportunity.findFirst({ where: { id: opportunityId, consultingFirmId } })
+    if (!opportunity) { fs.unlinkSync(req.file.path); throw new NotFoundError('Opportunity not found') }
+
+    const zip = new AdmZip(req.file.path)
+    const entries = zip.getEntries().filter((e) => {
+      if (e.isDirectory) return false
+      const ext = path.extname(e.entryName).toLowerCase()
+      if (!ALLOWED_EXTRACTED.has(ext)) return false
+      if (e.header.size > MAX_EXTRACTED_SIZE) return false
+      return true
+    }).slice(0, MAX_ZIP_ENTRIES)
+
+    if (entries.length === 0) {
+      fs.unlinkSync(req.file.path)
+      return res.status(422).json({ success: false, error: 'No supported files found in zip. Supported: .docx .doc .txt .md .pdf (max 10 MB each)' })
+    }
+
+    const uploadsDir = path.join(process.cwd(), 'uploads')
+    const created: any[] = []
+
+    for (const entry of entries) {
+      const baseName = path.basename(entry.entryName)
+      const ext = path.extname(baseName).toLowerCase()
+      const storageKey = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`
+      const destPath = path.join(uploadsDir, storageKey)
+
+      const existing = await prisma.opportunityDocument.findFirst({ where: { opportunityId, fileName: baseName } })
+      if (existing) continue // skip duplicates silently
+
+      zip.extractEntryTo(entry, uploadsDir, false, true, false, storageKey)
+
+      const doc = await prisma.opportunityDocument.create({
+        data: {
+          opportunityId,
+          fileName: baseName,
+          fileUrl: null,
+          storageKey,
+          fileType: ext === '.pdf' ? 'application/pdf' : ext === '.docx' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'text/plain',
+          fileSize: fs.existsSync(destPath) ? fs.statSync(destPath).size : entry.header.size,
+          isAmendment: false,
+          analysisStatus: 'PENDING',
+        },
+      })
+      created.push({ ...doc, fileUrl: `/api/documents/download/${doc.id}` })
+    }
+
+    // Clean up the uploaded zip
+    fs.unlinkSync(req.file.path)
+
+    logger.info('Zip extracted', { opportunityId, count: created.length })
+    res.json({ success: true, data: created, message: `Extracted ${created.length} file(s) from zip` })
   } catch (err) { next(err) }
 })
 

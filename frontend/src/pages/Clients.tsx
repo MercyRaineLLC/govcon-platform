@@ -1,9 +1,224 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { clientsApi, clientPortalUsersApi } from '../services/api';
 import { PageHeader, Spinner, EmptyState, ErrorBanner, formatCurrency } from '../components/ui';
-import { Plus, CheckCircle, XCircle, Shield, KeyRound, X, Search, Loader2, MapPin, Phone, Globe } from 'lucide-react';
+import { Plus, CheckCircle, XCircle, Shield, KeyRound, X, Search, Loader2, Upload, Download, FileSpreadsheet, AlertTriangle } from 'lucide-react';
+
+// ── CSV template definition ───────────────────────────────────────────────────
+const CSV_HEADERS = [
+  'company_name', 'uei', 'cage', 'ein', 'naics_codes',
+  'sdvosb', 'wosb', 'hubzone', 'small_business',
+  'phone', 'website', 'street_address', 'city', 'state', 'zip_code',
+];
+
+const CSV_EXAMPLE_ROWS = [
+  [
+    'Acme Defense Solutions LLC', 'QDFNQQ83G946', '9V5E3', '12-3456789', '484121|541614',
+    'yes', 'no', 'no', 'yes',
+    '(555) 123-4567', 'https://acmedefense.com', '123 Main St', 'Arlington', 'VA', '22201',
+  ],
+  [
+    'Apex Federal Advisory LLC', '', '', '', '541611',
+    'no', 'yes', 'no', 'yes',
+    '(703) 555-0100', '', '456 Oak Ave', 'Reston', 'VA', '20190',
+  ],
+];
+
+function downloadTemplate() {
+  const rows = [CSV_HEADERS, ...CSV_EXAMPLE_ROWS];
+  const csv = rows.map((r) => r.map((v) => (v.includes(',') ? `"${v}"` : v)).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'mercy_raine_client_import_template.csv';
+  a.click(); URL.revokeObjectURL(url);
+}
+
+// ── Import Modal ─────────────────────────────────────────────────────────────
+function ImportCsvModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<{ created: number; skipped: number; errors: string[]; total: number } | null>(null);
+  const [importError, setImportError] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const onDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault(); setDragging(false);
+    const f = e.dataTransfer.files[0];
+    if (f && f.name.endsWith('.csv')) setFile(f);
+    else setImportError('Please upload a .csv file');
+  }, []);
+
+  const handleImport = async () => {
+    if (!file) return;
+    setLoading(true); setImportError('');
+    try {
+      const res = await clientsApi.importCsv(file);
+      setResult(res.data);
+      if (res.data.created > 0) onSuccess();
+    } catch (err: any) {
+      setImportError(err?.response?.data?.error || 'Import failed — please check your file format');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-xl rounded-xl relative"
+        style={{ background: '#0f1e33', border: '1px solid #1a2e4a' }}>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 pt-5 pb-4"
+          style={{ borderBottom: '1px solid #1a2e4a' }}>
+          <div className="flex items-center gap-2">
+            <FileSpreadsheet className="w-5 h-5 text-amber-400" />
+            <h3 className="font-bold text-slate-100">Import Client Roster</h3>
+          </div>
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-300 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-4">
+
+          {/* Download template */}
+          <div className="rounded-lg px-4 py-3 flex items-center justify-between"
+            style={{ background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.2)' }}>
+            <div>
+              <p className="text-sm font-semibold text-amber-300">Step 1 — Download the template</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Fill in your client data. Use <span className="font-mono text-slate-400">|</span> to separate multiple NAICS codes.
+                Use <span className="font-mono text-slate-400">yes</span> / <span className="font-mono text-slate-400">no</span> for certifications.
+              </p>
+            </div>
+            <button onClick={downloadTemplate}
+              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg flex-shrink-0 ml-3 transition-colors"
+              style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.3)' }}>
+              <Download className="w-3.5 h-3.5" /> Template
+            </button>
+          </div>
+
+          {/* Column guide */}
+          <div className="rounded-lg px-4 py-3 text-xs space-y-1"
+            style={{ background: '#071120', border: '1px solid #1a2e4a' }}>
+            <p className="font-semibold text-slate-400 mb-1.5">Column reference</p>
+            {[
+              ['company_name', 'Required · Legal company name'],
+              ['uei', 'Optional · 12-char SAM.gov identifier'],
+              ['cage', 'Optional · 5-char CAGE code'],
+              ['ein', 'Optional · Tax ID (XX-XXXXXXX)'],
+              ['naics_codes', 'Optional · 6-digit codes separated by |'],
+              ['sdvosb / wosb / hubzone', 'Optional · yes or no'],
+              ['small_business', 'Optional · yes or no (defaults to yes)'],
+              ['phone, website, address fields', 'Optional · contact & location info'],
+            ].map(([col, desc]) => (
+              <div key={col} className="flex gap-2">
+                <span className="font-mono text-amber-400/80 w-44 flex-shrink-0">{col}</span>
+                <span className="text-slate-600">{desc}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Upload zone */}
+          {!result && (
+            <>
+              <p className="text-sm font-semibold text-slate-400">Step 2 — Upload your completed file</p>
+              <div
+                onClick={() => inputRef.current?.click()}
+                onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={onDrop}
+                className="rounded-xl cursor-pointer flex flex-col items-center justify-center py-10 gap-3 transition-all"
+                style={{
+                  border: `2px dashed ${dragging ? '#f59e0b' : file ? '#10b981' : '#1a2e4a'}`,
+                  background: dragging ? 'rgba(245,158,11,0.05)' : file ? 'rgba(16,185,129,0.04)' : '#071120',
+                }}
+              >
+                <Upload className={`w-8 h-8 ${file ? 'text-emerald-400' : 'text-slate-600'}`} />
+                {file ? (
+                  <>
+                    <p className="text-sm font-semibold text-emerald-400">{file.name}</p>
+                    <p className="text-xs text-slate-500">{(file.size / 1024).toFixed(1)} KB · Click to replace</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-slate-400">Drag & drop your CSV here, or <span className="text-amber-400 underline">browse</span></p>
+                    <p className="text-xs text-slate-600">CSV files only · Max 2 MB</p>
+                  </>
+                )}
+                <input ref={inputRef} type="file" accept=".csv" className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) setFile(f); }} />
+              </div>
+            </>
+          )}
+
+          {/* Error */}
+          {importError && (
+            <div className="flex items-start gap-2 text-sm rounded-lg px-3 py-2.5"
+              style={{ background: 'rgba(127,29,29,0.35)', border: '1px solid rgba(185,28,28,0.4)', color: '#fca5a5' }}>
+              <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" /> {importError}
+            </div>
+          )}
+
+          {/* Results */}
+          {result && (
+            <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #1a2e4a' }}>
+              <div className="px-4 py-3 flex items-center gap-2"
+                style={{ background: result.created > 0 ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.08)' }}>
+                <CheckCircle className={`w-4 h-4 ${result.created > 0 ? 'text-emerald-400' : 'text-amber-400'}`} />
+                <p className="font-semibold text-slate-200 text-sm">Import complete</p>
+              </div>
+              <div className="px-4 py-3 grid grid-cols-3 gap-3 text-center"
+                style={{ background: '#071120' }}>
+                <div>
+                  <p className="text-2xl font-black text-emerald-400">{result.created}</p>
+                  <p className="text-xs text-slate-500">Clients added</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-black text-amber-400">{result.skipped}</p>
+                  <p className="text-xs text-slate-500">Already existed</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-black text-red-400">{result.errors.length}</p>
+                  <p className="text-xs text-slate-500">Errors</p>
+                </div>
+              </div>
+              {result.errors.length > 0 && (
+                <div className="px-4 py-3 space-y-1" style={{ borderTop: '1px solid #1a2e4a' }}>
+                  <p className="text-xs font-semibold text-red-400 mb-1">Row errors:</p>
+                  {result.errors.map((e, i) => (
+                    <p key={i} className="text-xs text-slate-500 font-mono">{e}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex gap-2 pt-1">
+            {!result ? (
+              <>
+                <button onClick={handleImport} disabled={!file || loading}
+                  className="btn-primary flex items-center gap-2 flex-1 justify-center disabled:opacity-50">
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                  {loading ? 'Importing...' : 'Import Clients'}
+                </button>
+                <button onClick={onClose} className="btn-secondary">Cancel</button>
+              </>
+            ) : (
+              <button onClick={onClose} className="btn-primary w-full justify-center flex items-center gap-2">
+                <CheckCircle className="w-4 h-4" /> Done
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const EMPTY_FORM = {
   name: '', cage: '', uei: '', ein: '', naicsCodes: '',
@@ -14,6 +229,7 @@ const EMPTY_FORM = {
 export function ClientsPage() {
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [formError, setFormError] = useState('');
 
@@ -113,11 +329,22 @@ export function ClientsPage() {
   return (
     <div>
       <PageHeader title="Client Companies" subtitle="Government contractor portfolio">
+        <button onClick={() => setShowImport(true)} className="btn-secondary flex items-center gap-2">
+          <Upload className="w-4 h-4" />
+          Import CSV
+        </button>
         <button onClick={() => { setShowCreate(!showCreate); setLookupResult(null); }} className="btn-primary flex items-center gap-2">
           <Plus className="w-4 h-4" />
           Add Client
         </button>
       </PageHeader>
+
+      {showImport && (
+        <ImportCsvModal
+          onClose={() => setShowImport(false)}
+          onSuccess={() => qc.invalidateQueries({ queryKey: ['clients'] })}
+        />
+      )}
 
       {/* SAM.gov Quick Lookup */}
       <div className="card mb-6">

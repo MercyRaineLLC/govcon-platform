@@ -1,59 +1,83 @@
+import { lazy, Suspense } from "react"
 import { Routes, Route } from "react-router-dom"
-
-import DashboardPage from "./pages/Dashboard"
-import { OpportunitiesPage } from "./pages/Opportunities"
-import OpportunityDetail from "./pages/OpportunityDetail"
-import { LoginPage } from "./pages/Login"
-import { RegisterPage } from "./pages/Register"
-import { ClientsPage } from "./pages/Clients"
-import { SubmissionsPage } from "./pages/Submissions"
-import { PenaltiesPage } from "./pages/Penalties"
-import { SettingsPage } from "./pages/Settings"
-import { DocRequirementsPage } from "./pages/DocRequirements"
-import { TemplatesPage } from "./pages/Templates"
-import AnalyticsPage from "./pages/Analytics"
-import DecisionsPage from "./pages/Decisions"
-import ComplianceLogsPage from "./pages/ComplianceLogs"
+import { Spinner } from "./components/ui"
 import { Layout } from "./components/layout"
 import { ProtectedRoute } from "./components/ProtectedRoute"
-import ClientPortalLogin from "./pages/ClientPortalLogin"
-import ClientPortalDashboard from "./pages/ClientPortalDashboard"
-import ClientDetail from "./pages/ClientDetail"
-import TemplateLibrary from "./pages/TemplateLibrary"
+import { ErrorBoundary } from "./components/ErrorBoundary"
+
+// Lazy-loaded pages — each chunk loads on demand, reducing initial bundle
+const DashboardPage        = lazy(() => import("./pages/Dashboard"))
+const OpportunitiesPage    = lazy(() => import("./pages/Opportunities").then(m => ({ default: m.OpportunitiesPage })))
+const OpportunityDetail    = lazy(() => import("./pages/OpportunityDetail"))
+const LoginPage            = lazy(() => import("./pages/Login").then(m => ({ default: m.LoginPage })))
+const RegisterPage         = lazy(() => import("./pages/Register").then(m => ({ default: m.RegisterPage })))
+const ClientsPage          = lazy(() => import("./pages/Clients").then(m => ({ default: m.ClientsPage })))
+const ClientDetail         = lazy(() => import("./pages/ClientDetail"))
+const SubmissionsPage      = lazy(() => import("./pages/Submissions").then(m => ({ default: m.SubmissionsPage })))
+const PenaltiesPage        = lazy(() => import("./pages/Penalties").then(m => ({ default: m.PenaltiesPage })))
+const SettingsPage         = lazy(() => import("./pages/Settings").then(m => ({ default: m.SettingsPage })))
+const DocRequirementsPage  = lazy(() => import("./pages/DocRequirements").then(m => ({ default: m.DocRequirementsPage })))
+const TemplatesPage        = lazy(() => import("./pages/Templates").then(m => ({ default: m.TemplatesPage })))
+const TemplateLibrary      = lazy(() => import("./pages/TemplateLibrary"))
+const AnalyticsPage        = lazy(() => import("./pages/Analytics"))
+const DecisionsPage        = lazy(() => import("./pages/Decisions"))
+const ComplianceLogsPage   = lazy(() => import("./pages/ComplianceLogs"))
+const ClientPortalLogin    = lazy(() => import("./pages/ClientPortalLogin"))
+const ClientPortalDashboard = lazy(() => import("./pages/ClientPortalDashboard"))
+const RewardsPage          = lazy(() => import("./pages/Rewards").then(m => ({ default: m.RewardsPage })))
+const BillingPage          = lazy(() => import("./pages/Billing"))
+const NotFoundPage         = lazy(() => import("./pages/NotFound"))
+
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center min-h-[40vh]">
+      <Spinner />
+    </div>
+  )
+}
 
 export default function App() {
   return (
-    <Routes>
-      {/* Consultant auth */}
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
+    <ErrorBoundary>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          {/* Consultant auth */}
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
 
-      {/* Client portal (standalone, no consultant layout) */}
-      <Route path="/client-login" element={<ClientPortalLogin />} />
-      <Route path="/client-portal" element={<ClientPortalDashboard />} />
+          {/* Client portal (standalone, no consultant layout) */}
+          <Route path="/client-login" element={<ClientPortalLogin />} />
+          <Route path="/client-portal" element={<ClientPortalDashboard />} />
 
-      {/* Consultant platform */}
-      <Route element={<ProtectedRoute />}>
-        <Route element={<Layout />}>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/opportunities" element={<OpportunitiesPage />} />
-          <Route path="/opportunities/:id" element={<OpportunityDetail />} />
-          <Route path="/clients" element={<ClientsPage />} />
-          <Route path="/clients/:id" element={<ClientDetail />} />
-          <Route path="/template-library" element={<TemplateLibrary />} />
-          <Route path="/decisions" element={<DecisionsPage />} />
-          <Route path="/templates" element={<TemplatesPage />} />
-          <Route path="/doc-requirements" element={<DocRequirementsPage />} />
-          <Route path="/submissions" element={<SubmissionsPage />} />
-          <Route path="/penalties" element={<PenaltiesPage />} />
-          <Route path="/analytics" element={<AnalyticsPage />} />
+          {/* Consultant platform */}
+          <Route element={<ProtectedRoute />}>
+            <Route element={<Layout />}>
+              <Route path="/" element={<DashboardPage />} />
+              <Route path="/opportunities" element={<OpportunitiesPage />} />
+              <Route path="/opportunities/:id" element={<OpportunityDetail />} />
+              <Route path="/clients" element={<ClientsPage />} />
+              <Route path="/clients/:id" element={<ClientDetail />} />
+              <Route path="/template-library" element={<TemplateLibrary />} />
+              <Route path="/decisions" element={<DecisionsPage />} />
+              <Route path="/templates" element={<TemplatesPage />} />
+              <Route path="/doc-requirements" element={<DocRequirementsPage />} />
+              <Route path="/submissions" element={<SubmissionsPage />} />
+              <Route path="/penalties" element={<PenaltiesPage />} />
+              <Route path="/analytics" element={<AnalyticsPage />} />
+              <Route path="/rewards" element={<RewardsPage />} />
+              <Route path="/billing" element={<BillingPage />} />
 
-          <Route element={<ProtectedRoute roles={["ADMIN"]} />}>
-            <Route path="/compliance" element={<ComplianceLogsPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
+              <Route element={<ProtectedRoute roles={["ADMIN"]} />}>
+                <Route path="/compliance" element={<ComplianceLogsPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+              </Route>
+            </Route>
           </Route>
-        </Route>
-      </Route>
-    </Routes>
+
+          {/* 404 catch-all */}
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </Suspense>
+    </ErrorBoundary>
   )
 }

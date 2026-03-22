@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { firmApi, analyticsApi } from '../services/api'
+import { OnboardingWizard, useOnboarding } from '../components/OnboardingWizard'
 import {
   PageHeader,
   StatCard,
@@ -11,6 +12,9 @@ import {
   ErrorBanner,
 } from '../components/ui'
 import { Link } from 'react-router-dom'
+import { useAuth } from '../hooks/useAuth'
+import { useRecentlyViewed } from '../hooks/useRecentlyViewed'
+import { useFavorites } from '../hooks/useFavorites'
 import {
   TrendingUp,
   AlertTriangle,
@@ -20,6 +24,10 @@ import {
   Database,
   CheckCircle,
   BarChart3,
+  LogOut,
+  Clock,
+  Star,
+  X,
 } from 'lucide-react'
 
 // Charts
@@ -38,6 +46,10 @@ import { DecisionRecommendationCard } from '../components/cards/DecisionRecommen
 export default function Dashboard() {
   const [seeding, setSeeding] = useState(false)
   const [seedResult, setSeedResult] = useState<string | null>(null)
+  const { logout, user } = useAuth()
+  const { items: recentItems, clearHistory } = useRecentlyViewed()
+  const { favorites, removeFavorite } = useFavorites()
+  const { showWizard, dismiss: dismissWizard } = useOnboarding()
 
   const handleSeedDemo = async () => {
     setSeeding(true)
@@ -103,6 +115,7 @@ export default function Dashboard() {
 
   return (
     <div>
+      {showWizard && <OnboardingWizard onDismiss={dismissWizard} />}
       <PageHeader
         title="Advisory Dashboard"
         subtitle="Real-time intelligence overview"
@@ -121,6 +134,13 @@ export default function Dashboard() {
             <BarChart3 className="w-3.5 h-3.5" />
             Deep Analytics
           </Link>
+          <button
+            onClick={logout}
+            className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-red-400 border border-gray-700 hover:border-red-700 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            Sign Out
+          </button>
         </div>
       </PageHeader>
 
@@ -132,6 +152,117 @@ export default function Dashboard() {
         }`}>
           <CheckCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
           {seedResult}
+        </div>
+      )}
+
+      {/* Quick Access: Favorites + Recently Viewed */}
+      {(favorites.length > 0 || recentItems.length > 0) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+          {/* Favorites */}
+          <div className="card">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Star className="w-4 h-4 text-yellow-400" />
+                <h2 className="font-semibold text-gray-200 text-sm">Starred Contracts</h2>
+                <span className="text-xs bg-yellow-900/40 text-yellow-400 px-1.5 py-0.5 rounded-full">
+                  {favorites.length}
+                </span>
+              </div>
+              <Link to="/opportunities" className="text-xs text-gray-600 hover:text-blue-400">
+                All contracts →
+              </Link>
+            </div>
+            {favorites.length === 0 ? (
+              <p className="text-sm text-gray-600 py-2">
+                Star a contract on any opportunity page to pin it here.
+              </p>
+            ) : (
+              <div className="space-y-1.5">
+                {favorites.map((fav) => {
+                  const daysLeft = Math.round((new Date(fav.deadline || '').getTime() - Date.now()) / 86400000)
+                  return (
+                    <div key={fav.id} className="group flex items-center gap-2">
+                      <Link
+                        to={`/opportunities/${fav.id}`}
+                        className="flex-1 min-w-0 flex items-center justify-between gap-2 px-2 py-1.5 rounded hover:bg-gray-800 transition-colors"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-yellow-300 truncate">{fav.title}</p>
+                          <p className="text-[10px] text-gray-500 truncate">{fav.agency}</p>
+                        </div>
+                        {fav.deadline && daysLeft >= 0 && (
+                          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded flex-shrink-0 ${
+                            daysLeft <= 7 ? 'bg-red-900/40 text-red-300' :
+                            daysLeft <= 20 ? 'bg-yellow-900/40 text-yellow-300' :
+                            'bg-gray-800 text-gray-500'
+                          }`}>
+                            {daysLeft}d
+                          </span>
+                        )}
+                      </Link>
+                      <button
+                        onClick={() => removeFavorite(fav.id)}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-gray-600 hover:text-red-400 transition-all flex-shrink-0"
+                        title="Remove from favorites"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Recently Viewed */}
+          <div className="card">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-gray-400" />
+                <h2 className="font-semibold text-gray-200 text-sm">Recently Viewed</h2>
+              </div>
+              {recentItems.length > 0 && (
+                <button
+                  onClick={clearHistory}
+                  className="text-xs text-gray-600 hover:text-gray-400 transition-colors"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            {recentItems.length === 0 ? (
+              <p className="text-sm text-gray-600 py-2">
+                Open any contract to start building your history.
+              </p>
+            ) : (
+              <div className="space-y-1.5">
+                {recentItems.map((item) => {
+                  const daysLeft = Math.round((new Date(item.deadline || '').getTime() - Date.now()) / 86400000)
+                  return (
+                    <Link
+                      key={item.id}
+                      to={`/opportunities/${item.id}`}
+                      className="flex items-center justify-between gap-2 px-2 py-1.5 rounded hover:bg-gray-800 transition-colors group"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-gray-300 group-hover:text-white truncate">{item.title}</p>
+                        <p className="text-[10px] text-gray-500 truncate">{item.agency}</p>
+                      </div>
+                      {item.deadline && daysLeft >= 0 && (
+                        <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded flex-shrink-0 ${
+                          daysLeft <= 7 ? 'bg-red-900/40 text-red-300' :
+                          daysLeft <= 20 ? 'bg-yellow-900/40 text-yellow-300' :
+                          'bg-gray-800 text-gray-500'
+                        }`}>
+                          {daysLeft}d
+                        </span>
+                      )}
+                    </Link>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -266,11 +397,8 @@ export default function Dashboard() {
 
                 <p className="text-xs text-gray-500 mb-2">{opp.agency}</p>
 
-                <div className="flex items-center justify-between">
+                <div className="flex items-center">
                   <ProbabilityBar probability={opp.probabilityScore || 0} />
-                  <span className="text-xs font-mono text-green-400 ml-3">
-                    EV: {formatCurrency(opp.expectedValue)}
-                  </span>
                 </div>
 
                 {/* Bid decision badges */}

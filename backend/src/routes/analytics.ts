@@ -256,4 +256,132 @@ router.get(
   }
 )
 
+// =============================================================
+// GET /api/analytics/pipeline-analysis
+// Markov chain pipeline transitions + Wilson CI win rate by agency
+// =============================================================
+router.get(
+  '/pipeline-analysis',
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const consultingFirmId = getTenantId(req)
+
+      // Gather pipeline stage counts
+      const [ingested, scored, decided, submitted, wonStats] = await Promise.all([
+        prisma.opportunity.count({ where: { consultingFirmId } }),
+        prisma.opportunity.count({ where: { consultingFirmId, isScored: true } }),
+        prisma.bidDecision.count({
+          where: { consultingFirmId, recommendation: { not: null } },
+        }),
+        prisma.submissionRecord.count({ where: { consultingFirmId } }),
+        prisma.performanceStats.aggregate({
+          where: { clientCompany: { consultingFirmId } },
+          _sum: { totalWon: true },
+        }),
+      ])
+
+      const totalWon = wonStats._sum.totalWon ?? 0
+
+      // Markov chain transition probabilities
+      const pScoredGivenIngested = scored / Math.max(ingested, 1)
+      const pDecidedGivenScored = decided / Math.max(scored, 1)
+      const pSubmittedGivenDecided = submitted / Math.max(decided, 1)
+      const pWonGivenSubmitted = totalWon / Math.max(submitted, 1)
+
+      const endToEnd =
+        pScoredGivenIngested *
+        pDecidedGivenScored *
+        pSubmittedGivenDecided *
+        pWonGivenSubmitted
+
+      const markovChain = [
+        {
+          from: 'Ingested',
+          to: 'Scored',
+          probability: pScoredGivenIngested,
+          fromCount: ingested,
+          toCount: scored,
+        },
+        {
+          from: 'Scored',
+          to: 'Decided',
+          probability: pDecidedGivenScored,
+          fromCount: scored,
+          toCount: decided,
+        },
+        {
+          from: 'Decided',
+          to: 'Submitted',
+          probability: pSubmittedGivenDecided,
+          fromCount: decided,
+          toCount: submitted,
+        },
+        {
+          from: 'Submitted',
+          to: 'Won',
+          probability: pWonGivenSubmitted,
+          fromCount: submitted,
+          toCount: totalWon,
+        },
+      ]
+
+      // Agency win rate with Wilson 90% CI (z = 1.645)
+      const submissions = await prisma.submissionRecord.findMany({
+        where: { consultingFirmId },
+        select: {
+          wasOnTime: true,
+          status: true,
+          opportunity: { select: { agency: true, status: true } },
+        },
+      })
+
+      const agencyMap: Record<string, { wins: number; n: number }> = {}
+      for (const s of submissions) {
+        const agency = s.opportunity?.agency ?? 'Unknown'
+        if (!agencyMap[agency]) agencyMap[agency] = { wins: 0, n: 0 }
+        agencyMap[agency].n += 1
+        // Count as a win when the related opportunity was awarded
+        if (s.opportunity?.status === 'AWARDED') agencyMap[agency].wins += 1
+      }
+
+      const z = 1.645
+      const agencyWinRates = Object.entries(agencyMap)
+        .filter(([, v]) => v.n >= 2)
+        .map(([agency, v]) => {
+          const { wins, n } = v
+          const phat = wins / n
+          const denom = 1 + (z * z) / n
+          const center = (phat + (z * z) / (2 * n)) / denom
+          const margin =
+            (z * Math.sqrt((phat * (1 - phat)) / n + (z * z) / (4 * n * n))) / denom
+          const ciLower = Math.max(0, center - margin)
+          const ciUpper = Math.min(1, center + margin)
+          return {
+            agency,
+            wins,
+            losses: n - wins,
+            n,
+            winRate: phat,
+            ciLower,
+            ciUpper,
+          }
+        })
+        .sort((a, b) => b.n - a.n)
+        .slice(0, 10)
+
+      res.json({
+        success: true,
+        data: {
+          markovChain,
+          agencyWinRates,
+          endToEndConversion: endToEnd,
+          expectedWinsPerHundred: endToEnd * 100,
+        },
+      })
+    } catch (err) {
+      next(err)
+    }
+  }
+)
+
 export default router

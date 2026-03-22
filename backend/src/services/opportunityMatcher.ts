@@ -85,7 +85,6 @@ export async function findTopMatches(
 
         const result = scoreOpportunityForClient({
           opportunityNaics: opp.naicsCode,
-          opportunitySetAside: opp.setAsideType || 'NONE',
           opportunityEstimatedValue: estValue,
           opportunityAgency: opp.agency,
           clientNaics: client.naicsCodes,
@@ -113,7 +112,7 @@ export async function findTopMatches(
         if (f.naicsOverlapScore >= 0.8) matchReasons.push('Strong NAICS alignment')
         else if (f.naicsOverlapScore >= 0.5) matchReasons.push('Partial NAICS match')
 
-        if (f.setAsideAlignmentScore === 1.0) matchReasons.push('Qualifies for set-aside')
+        if (f.agencyAlignmentScore >= 0.8) matchReasons.push('Favorable agency set-aside profile')
         if (f.incumbentWeaknessScore > 0.7) matchReasons.push('Weak incumbent — opportunity to compete')
         if (f.documentAlignmentScore > 0.7) matchReasons.push('Strong SOW alignment')
         if (f.agencyAlignmentScore > 0.7) matchReasons.push('Favorable agency alignment')

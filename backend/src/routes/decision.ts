@@ -11,6 +11,7 @@ import {
   transitionBidDecisionStatus,
   ComplianceStatus,
 } from "../services/complianceStateMachine"
+import { logger } from "../utils/logger"
 
 const StatusTransitionSchema = z.object({
   status: z.enum(["PENDING", "APPROVED", "BLOCKED", "REJECTED"]),
@@ -76,6 +77,10 @@ router.post("/run", async (req: AuthenticatedRequest, res) => {
     )
 
     let deadlineSummary: string | null = null
+    let lifetimeValue: number | null = null
+    let expectedLifetimeValue: number | null = null
+    let subContractShare: number | null = null
+    let timeToAwardDiscount: number | null = null
 
     if (
       decision.explanationJson &&
@@ -83,11 +88,20 @@ router.post("/run", async (req: AuthenticatedRequest, res) => {
       !Array.isArray(decision.explanationJson)
     ) {
       const explanation = decision.explanationJson as Prisma.JsonObject
-      if (
-        "daysToDeadline" in explanation &&
-        typeof explanation.daysToDeadline === "number"
-      ) {
+      if ("daysToDeadline" in explanation && typeof explanation.daysToDeadline === "number") {
         deadlineSummary = `${Math.floor(explanation.daysToDeadline)}d remaining`
+      }
+      if ("lifetimeValue" in explanation && typeof explanation.lifetimeValue === "number") {
+        lifetimeValue = explanation.lifetimeValue
+      }
+      if ("expectedLifetimeValue" in explanation && typeof explanation.expectedLifetimeValue === "number") {
+        expectedLifetimeValue = explanation.expectedLifetimeValue
+      }
+      if ("subContractShare" in explanation && typeof explanation.subContractShare === "number") {
+        subContractShare = explanation.subContractShare
+      }
+      if ("timeToAwardDiscount" in explanation && typeof explanation.timeToAwardDiscount === "number") {
+        timeToAwardDiscount = explanation.timeToAwardDiscount
       }
     }
 
@@ -104,10 +118,14 @@ router.post("/run", async (req: AuthenticatedRequest, res) => {
         expectedRevenue: decision.expectedRevenue,
         netExpectedValue: decision.netExpectedValue,
         deadlineSummary,
+        lifetimeValue,
+        expectedLifetimeValue,
+        subContractShare,
+        timeToAwardDiscount,
       },
     })
   } catch (error: any) {
-    console.error("Decision engine error:", error.message)
+    logger.error("Decision engine error", { error: error.message })
     return res.status(500).json({ success: false, error: "Decision evaluation failed" })
   }
 })
@@ -122,7 +140,7 @@ router.post("/run-all", async (req: AuthenticatedRequest, res) => {
     const results = await runPortfolioEvaluation(consultingFirmId)
     return res.status(200).json({ success: true, data: results })
   } catch (error: any) {
-    console.error("Portfolio decision error:", error.message)
+    logger.error("Portfolio decision error", { error: error.message })
     return res.status(500).json({ success: false, error: "Portfolio evaluation failed" })
   }
 })
@@ -159,7 +177,7 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
 
     return res.status(200).json({ success: true, count: decisions.length, data: decisions })
   } catch (error: any) {
-    console.error("Decision fetch error:", error.message)
+    logger.error("Decision fetch error", { error: error.message })
     return res.status(500).json({ success: false, error: "Failed to fetch decisions" })
   }
 })
@@ -223,7 +241,7 @@ router.get("/metrics", async (req: AuthenticatedRequest, res) => {
       },
     })
   } catch (error: any) {
-    console.error("Decision metrics error:", error.message)
+    logger.error("Decision metrics error", { error: error.message })
     return res.status(500).json({ success: false, error: "Failed to compute metrics" })
   }
 })

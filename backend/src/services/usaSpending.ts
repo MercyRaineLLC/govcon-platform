@@ -7,6 +7,50 @@ import { config } from '../config/config';
 import { logger } from '../utils/logger';
 import { EnrichmentResult, AwardRecord } from '../types';
 
+/**
+ * Normalizes SAM.gov agency strings to USASpending toptier agency names.
+ * SAM.gov returns strings like "VETERANS AFFAIRS, DEPARTMENT OF.PCAC (36C776)"
+ * USASpending expects "Department of Veterans Affairs"
+ */
+function normalizeAgencyName(samAgency: string): string {
+  // Take only the part before the first dot (removes subtier/office suffixes)
+  const topLevel = samAgency.split('.')[0].trim().toUpperCase()
+
+  const MAP: Record<string, string> = {
+    'VETERANS AFFAIRS, DEPARTMENT OF': 'Department of Veterans Affairs',
+    'DEFENSE, DEPARTMENT OF': 'Department of Defense',
+    'HOMELAND SECURITY, DEPARTMENT OF': 'Department of Homeland Security',
+    'HEALTH AND HUMAN SERVICES, DEPARTMENT OF': 'Department of Health and Human Services',
+    'TRANSPORTATION, DEPARTMENT OF': 'Department of Transportation',
+    'AGRICULTURE, DEPARTMENT OF': 'Department of Agriculture',
+    'ENERGY, DEPARTMENT OF': 'Department of Energy',
+    'INTERIOR, DEPARTMENT OF THE': 'Department of the Interior',
+    'JUSTICE, DEPARTMENT OF': 'Department of Justice',
+    'LABOR, DEPARTMENT OF': 'Department of Labor',
+    'STATE, DEPARTMENT OF': 'Department of State',
+    'TREASURY, DEPARTMENT OF THE': 'Department of the Treasury',
+    'COMMERCE, DEPARTMENT OF': 'Department of Commerce',
+    'EDUCATION, DEPARTMENT OF': 'Department of Education',
+    'HOUSING AND URBAN DEVELOPMENT, DEPARTMENT OF': 'Department of Housing and Urban Development',
+    'GENERAL SERVICES ADMINISTRATION': 'General Services Administration',
+    'NATIONAL AERONAUTICS AND SPACE ADMINISTRATION': 'National Aeronautics and Space Administration',
+    'SMALL BUSINESS ADMINISTRATION': 'Small Business Administration',
+    'SOCIAL SECURITY ADMINISTRATION': 'Social Security Administration',
+    'ENVIRONMENTAL PROTECTION AGENCY': 'Environmental Protection Agency',
+    'NUCLEAR REGULATORY COMMISSION': 'Nuclear Regulatory Commission',
+    'NATIONAL SCIENCE FOUNDATION': 'National Science Foundation',
+    'OFFICE OF PERSONNEL MANAGEMENT': 'Office of Personnel Management',
+    'FEDERAL EMERGENCY MANAGEMENT AGENCY': 'Federal Emergency Management Agency',
+    'ARMY, DEPARTMENT OF THE': 'Department of the Army',
+    'NAVY, DEPARTMENT OF THE': 'Department of the Navy',
+    'AIR FORCE, DEPARTMENT OF THE': 'Department of the Air Force',
+    'FEDERAL AVIATION ADMINISTRATION': 'Federal Aviation Administration',
+    'CENTERS FOR MEDICARE AND MEDICAID SERVICES': 'Centers for Medicare and Medicaid Services',
+  }
+
+  return MAP[topLevel] || topLevel
+}
+
 class UsaSpendingService {
   private client: AxiosInstance;
 
@@ -34,15 +78,17 @@ class UsaSpendingService {
         .toISOString()
         .split('T')[0];
 
+      const normalizedAgency = params.agency ? normalizeAgencyName(params.agency) : null
+
       const filters: any = {
         time_period: [{ start_date: startDate, end_date: endDate }],
         naics_codes: [params.naicsCode],
         award_type_codes: ['A', 'B', 'C', 'D'], // Contract types only
       };
 
-      if (params.agency) {
+      if (normalizedAgency) {
         filters.agencies = [
-          { type: 'awarding', tier: 'toptier', name: params.agency },
+          { type: 'awarding', tier: 'toptier', name: normalizedAgency },
         ];
       }
 
@@ -57,6 +103,8 @@ class UsaSpendingService {
           'Award Type',
           'Contract Award Type',
           'generated_internal_id',
+          'Number of Offers Received',
+          'Extent Competed',
         ],
         page: 1,
         limit: 100,
@@ -80,7 +128,19 @@ class UsaSpendingService {
         baseAndAllOptions: r['Base and All Options Value'] || undefined,
         awardType: r['Award Type'] || undefined,
         contractNumber: r['generated_internal_id'] || undefined,
-      }));
+      }))
+
+      // Compute average offers received across all awards in result set
+      const offerCounts = results
+        .map((r: any) => r['Number of Offers Received'])
+        .filter((v: any) => v !== null && v !== undefined && !isNaN(Number(v)))
+        .map(Number)
+      const avgOffersReceived = offerCounts.length > 0
+        ? Math.round(offerCounts.reduce((a: number, b: number) => a + b, 0) / offerCounts.length)
+        : null
+
+      // Extent competed from most recent award
+      const extentCompeted: string | null = results[0]?.['Extent Competed'] || null;
 
       // Compute winner analysis
       const recipientCounts: Record<string, number> = {};
@@ -117,6 +177,8 @@ class UsaSpendingService {
         agencySdvosbRate: agencyRates.sdvosbRate,
         recompeteFlag,
         awards,
+        offersReceived: avgOffersReceived,
+        extentCompeted,
       };
     } catch (err) {
       logger.warn('USASpending enrichment failed', {
@@ -141,10 +203,12 @@ class UsaSpendingService {
         .toISOString()
         .split('T')[0];
 
+      const normalizedAgency = normalizeAgencyName(agencyName)
+
       const [sbResponse, sdvosbResponse, totalResponse] = await Promise.allSettled([
         this.client.post('/search/spending_by_award/', {
           filters: {
-            agencies: [{ type: 'awarding', tier: 'toptier', name: agencyName }],
+            agencies: [{ type: 'awarding', tier: 'toptier', name: normalizedAgency }],
             time_period: [{ start_date: startDate, end_date: endDate }],
             recipient_type_names: ['small_business'],
           },
@@ -154,7 +218,7 @@ class UsaSpendingService {
         }),
         this.client.post('/search/spending_by_award/', {
           filters: {
-            agencies: [{ type: 'awarding', tier: 'toptier', name: agencyName }],
+            agencies: [{ type: 'awarding', tier: 'toptier', name: normalizedAgency }],
             time_period: [{ start_date: startDate, end_date: endDate }],
             recipient_type_names: ['service_disabled_veteran_owned_small_business'],
           },
@@ -164,7 +228,7 @@ class UsaSpendingService {
         }),
         this.client.post('/search/spending_by_award/', {
           filters: {
-            agencies: [{ type: 'awarding', tier: 'toptier', name: agencyName }],
+            agencies: [{ type: 'awarding', tier: 'toptier', name: normalizedAgency }],
             time_period: [{ start_date: startDate, end_date: endDate }],
           },
           fields: ['Award Amount'],
@@ -207,6 +271,8 @@ class UsaSpendingService {
       agencySdvosbRate: 0.05,
       recompeteFlag: false,
       awards: [],
+      offersReceived: null,
+      extentCompeted: null,
     };
   }
 

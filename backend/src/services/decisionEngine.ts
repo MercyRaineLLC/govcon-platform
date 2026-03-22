@@ -1,8 +1,32 @@
+// =============================================================
+// Decision Engine — 3-Layer Scoring Architecture
+//
+// Layer 1: Compliance Gate (complianceGate.ts)
+//   → INELIGIBLE = hard stop, NO_BID immediately
+//   → CONDITIONAL = proceed with risk penalty
+//   → ELIGIBLE = proceed normally
+//
+// Layer 2: Fit Score (fitScoring.ts)
+//   → 0-100 client capability vs opportunity requirements
+//
+// Layer 3: Market Score (marketScoring.ts)
+//   → 0-100 opportunity attractiveness (independent of client)
+//
+// Win Probability: 7-factor logistic model (probabilityEngine.ts)
+//   → Set-aside alignment removed — now handled by compliance gate
+//
+// Decision Matrix (decisionResolver.ts):
+//   → fit ≥ 65 + market ≥ 60 → BID_PRIME
+//   → fit ≥ 40 + market ≥ 40 → BID_SUB
+//   → else → NO_BID
+// =============================================================
 import { prisma } from '../config/database'
 import { scoreOpportunityForClient } from '../engines/probabilityEngine'
+import { runComplianceGate } from '../engines/complianceGate'
+import { computeFitScore } from '../engines/fitScoring'
+import { computeMarketScore } from '../engines/marketScoring'
+import { resolveDecision } from '../engines/decisionResolver'
 import { logger } from '../utils/logger'
-
-type Recommendation = 'NO_BID' | 'BID_SUB' | 'BID_PRIME'
 
 export async function evaluateBidDecision(
   opportunityId: string,
@@ -18,9 +42,12 @@ export async function evaluateBidDecision(
       estimatedValue: true,
       agency: true,
       responseDeadline: true,
-      // USAspending enrichment fields
+      placeOfPerformance: true,
+      noticeType: true,
+      // USAspending enrichment
       incumbentProbability: true,
       competitionCount: true,
+      offersReceived: true,
       agencySdvosbRate: true,
       agencySmallBizRate: true,
       historicalAwardCount: true,
@@ -45,76 +72,146 @@ export async function evaluateBidDecision(
     throw new Error('Client does not belong to the same consulting firm')
   }
 
-  // ------------------------------------------------------------
-  // 1. Compliance Checks
-  // ------------------------------------------------------------
+  const consultingFirmId = opportunity.consultingFirmId
+  const estValue = opportunity.estimatedValue ? Number(opportunity.estimatedValue) : null
 
-  let complianceBlocked = false
-  let riskScore = 0
-  const triggeredFlags: string[] = []
-  const requiredActions: string[] = []
-
-  const naicsMatch = client.naicsCodes.some(
-    (code) => code.trim() === opportunity.naicsCode.trim()
+  // ──────────────────────────────────────────────────────────
+  // LAYER 1: Compliance Gate
+  // ──────────────────────────────────────────────────────────
+  const complianceResult = runComplianceGate(
+    {
+      sdvosb: client.sdvosb,
+      wosb: client.wosb,
+      hubzone: client.hubzone,
+      smallBusiness: client.smallBusiness,
+      naicsCodes: client.naicsCodes,
+      samRegStatus: client.samRegStatus,
+      samRegExpiry: client.samRegExpiry,
+    },
+    {
+      setAsideType: opportunity.setAsideType || 'NONE',
+      naicsCode: opportunity.naicsCode,
+    }
   )
 
-  if (!naicsMatch) {
-    complianceBlocked = true
-    triggeredFlags.push('NAICS code mismatch')
-    requiredActions.push('Verify NAICS code eligibility')
+  // ──────────────────────────────────────────────────────────
+  // SHORT CIRCUIT: INELIGIBLE → persist NO_BID and return
+  // ──────────────────────────────────────────────────────────
+  if (complianceResult.gate === 'INELIGIBLE') {
+    logger.info('Bid decision: INELIGIBLE (compliance gate)', {
+      opportunityId,
+      clientCompanyId,
+      blockers: complianceResult.blockers,
+    })
+
+    return prisma.bidDecision.upsert({
+      where: { opportunityId_clientCompanyId: { opportunityId, clientCompanyId } },
+      update: {
+        recommendation: 'NO_BID',
+        complianceGate: 'INELIGIBLE',
+        fitScore: null,
+        marketScore: null,
+        winProbability: 0,
+        complianceStatus: 'BLOCKED',
+        riskScore: 100,
+        rationale: complianceResult.blockers.join('; '),
+        explanationJson: {
+          complianceGate: 'INELIGIBLE',
+          blockers: complianceResult.blockers,
+          requiredActions: complianceResult.requiredActions,
+          fitScore: null,
+          marketScore: null,
+          triggeredFlags: complianceResult.blockers,
+          requiredActionsForClient: complianceResult.requiredActions,
+        },
+      },
+      create: {
+        consultingFirmId,
+        opportunityId,
+        clientCompanyId,
+        recommendation: 'NO_BID',
+        complianceGate: 'INELIGIBLE',
+        fitScore: null,
+        marketScore: null,
+        winProbability: 0,
+        complianceStatus: 'BLOCKED',
+        riskScore: 100,
+        rationale: complianceResult.blockers.join('; '),
+        explanationJson: {
+          complianceGate: 'INELIGIBLE',
+          blockers: complianceResult.blockers,
+          requiredActions: complianceResult.requiredActions,
+          fitScore: null,
+          marketScore: null,
+          triggeredFlags: complianceResult.blockers,
+          requiredActionsForClient: complianceResult.requiredActions,
+        },
+      },
+    })
   }
 
-  if (opportunity.setAsideType === 'SDVOSB' && !client.sdvosb) {
-    complianceBlocked = true
-    triggeredFlags.push('SDVOSB set-aside but client not SDVOSB certified')
-    requiredActions.push('Obtain SDVOSB certification')
-  }
+  // ──────────────────────────────────────────────────────────
+  // LAYER 2: Fit Score (client capability)
+  // ──────────────────────────────────────────────────────────
+  const fitResult = computeFitScore(
+    {
+      naicsCodes: client.naicsCodes,
+      sdvosb: client.sdvosb,
+      wosb: client.wosb,
+      hubzone: client.hubzone,
+      smallBusiness: client.smallBusiness,
+      state: client.state,
+      performanceStats: client.performanceStats
+        ? {
+            totalWon: client.performanceStats.totalWon,
+            totalLost: client.performanceStats.totalLost,
+            totalSubmitted: client.performanceStats.totalSubmitted,
+            completionRate: client.performanceStats.completionRate,
+            totalPenalties: String(client.performanceStats.totalPenalties),
+          }
+        : null,
+    },
+    {
+      naicsCode: opportunity.naicsCode,
+      estimatedValue: estValue,
+      responseDeadline: new Date(opportunity.responseDeadline),
+      placeOfPerformance: opportunity.placeOfPerformance,
+      historicalAvgAward: opportunity.historicalAvgAward ? Number(opportunity.historicalAvgAward) : null,
+    }
+  )
 
-  if (opportunity.setAsideType === 'WOSB' && !client.wosb) {
-    complianceBlocked = true
-    triggeredFlags.push('WOSB set-aside but client not WOSB certified')
-    requiredActions.push('Obtain WOSB certification')
-  }
+  // ──────────────────────────────────────────────────────────
+  // LAYER 3: Market Score (opportunity attractiveness)
+  // ──────────────────────────────────────────────────────────
+  const marketResult = computeMarketScore({
+    offersReceived: opportunity.offersReceived,
+    competitionCount: opportunity.competitionCount,
+    incumbentProbability: opportunity.incumbentProbability,
+    recompeteFlag: opportunity.recompeteFlag,
+    estimatedValue: estValue,
+    historicalAvgAward: opportunity.historicalAvgAward ? Number(opportunity.historicalAvgAward) : null,
+    noticeType: opportunity.noticeType,
+    setAsideType: opportunity.setAsideType || 'NONE',
+    agencySmallBizRate: opportunity.agencySmallBizRate,
+    agencySdvosbRate: opportunity.agencySdvosbRate,
+    clientProfile: {
+      sdvosb: client.sdvosb,
+      wosb: client.wosb,
+      hubzone: client.hubzone,
+      smallBusiness: client.smallBusiness,
+    },
+  })
 
-  if (opportunity.setAsideType === 'HUBZONE' && !client.hubzone) {
-    complianceBlocked = true
-    triggeredFlags.push('HUBZone set-aside but client not HUBZone certified')
-    requiredActions.push('Obtain HUBZone certification')
-  }
-
-  const daysToDeadline =
-    (new Date(opportunity.responseDeadline).getTime() - Date.now()) /
-    (1000 * 60 * 60 * 24)
-
-  if (daysToDeadline < 3) {
-    riskScore += 40
-    triggeredFlags.push('Critical time compression (<3 days)')
-  } else if (daysToDeadline < 7) {
-    riskScore += 25
-    triggeredFlags.push('High time compression risk (<7 days)')
-  } else if (daysToDeadline < 20) {
-    riskScore += 10
-    triggeredFlags.push('Moderate time compression risk (<20 days)')
-  }
-
-  // ------------------------------------------------------------
-  // 2. 8-Factor Win Probability Model (Logistic Sigmoid)
-  // ------------------------------------------------------------
-
-  const estValue = opportunity.estimatedValue
-    ? Number(opportunity.estimatedValue)
-    : null
-
-  // Compute historical distribution score from award count
-  let historicalDistribution = 0.3 // default (no data)
+  // ──────────────────────────────────────────────────────────
+  // WIN PROBABILITY: 7-factor logistic model
+  // ──────────────────────────────────────────────────────────
+  let historicalDistribution = 0.3
   if (opportunity.historicalAwardCount) {
-    // More historical awards = more predictable market
     historicalDistribution = Math.min(opportunity.historicalAwardCount / 1000, 0.8)
   }
 
   const probabilityResult = scoreOpportunityForClient({
     opportunityNaics: opportunity.naicsCode,
-    opportunitySetAside: opportunity.setAsideType || 'NONE',
     opportunityEstimatedValue: estValue,
     opportunityAgency: opportunity.agency,
     clientNaics: client.naicsCodes,
@@ -124,49 +221,30 @@ export async function evaluateBidDecision(
       hubzone: client.hubzone,
       smallBusiness: client.smallBusiness,
     },
-    // Tier 2: USAspending enrichment
     incumbentProbability: opportunity.incumbentProbability,
     competitionCount: opportunity.competitionCount,
+    offersReceived: opportunity.offersReceived,
     agencySdvosbRate: opportunity.agencySdvosbRate,
     historicalDistribution,
-    // Tier 3: Document intelligence
     documentAlignmentScore: opportunity.documentIntelScore,
   })
 
   let winProbability = probabilityResult.probability
 
-  // Log feature breakdown for transparency
-  triggeredFlags.push(
-    `8-factor model: raw=${probabilityResult.rawScore.toFixed(3)}, ` +
-    `sigmoid=${winProbability.toFixed(3)}`
-  )
+  const triggeredFlags: string[] = []
 
-  // ------------------------------------------------------------
-  // 3. Recompete & Award Size Signals
-  // ------------------------------------------------------------
-
-  if (opportunity.recompeteFlag && opportunity.incumbentProbability !== null) {
-    if (opportunity.incumbentProbability < 0.5) {
-      winProbability = Math.min(winProbability * 1.05, 0.95)
-      triggeredFlags.push('Recompete with weak incumbent — positive signal')
+  // Recompete boosts
+  if (opportunity.recompeteFlag) {
+    const incProb = opportunity.incumbentProbability
+    if (incProb !== null && incProb < 0.4) {
+      winProbability = Math.min(winProbability * 1.15, 0.90)
+      triggeredFlags.push('Recompete — weak incumbent detected (+15% probability boost)')
+    } else if (incProb !== null && incProb < 0.65) {
+      winProbability = Math.min(winProbability * 1.08, 0.90)
+      triggeredFlags.push(`Recompete — moderate incumbent (${(incProb * 100).toFixed(0)}% prior win rate, +8% boost)`)
     } else {
-      triggeredFlags.push(
-        `Recompete with strong incumbent (${(opportunity.incumbentProbability * 100).toFixed(0)}% win rate)`
-      )
-    }
-  }
-
-  if (opportunity.historicalAvgAward && estValue) {
-    const sizeRatio = estValue / Number(opportunity.historicalAvgAward)
-    if (sizeRatio > 2.0) {
-      triggeredFlags.push(
-        `Contract value ${sizeRatio.toFixed(1)}x historical avg — potential scope expansion`
-      )
-      riskScore += 5
-    } else if (sizeRatio < 0.5) {
-      triggeredFlags.push(
-        `Contract value ${sizeRatio.toFixed(1)}x historical avg — potential scope reduction`
-      )
+      winProbability = Math.min(winProbability * 1.08, 0.90)
+      triggeredFlags.push('Recompete detected — incumbent vulnerable (+8% boost)')
     }
   }
 
@@ -174,14 +252,9 @@ export async function evaluateBidDecision(
     triggeredFlags.push(`Historical incumbent: ${opportunity.historicalWinner}`)
   }
 
-  // ------------------------------------------------------------
-  // 4. Bayesian Performance Calibration (Beta-Binomial)
-  // ------------------------------------------------------------
-
+  // Bayesian Beta-Binomial calibration
   const stats = client.performanceStats
-
   if (stats && (stats.totalWon + stats.totalLost) > 0) {
-    // Prior from model: pseudo-count of 10 reflects moderate confidence
     const pseudoCount = 10
     const alpha0 = winProbability * pseudoCount
     const beta0 = (1 - winProbability) * pseudoCount
@@ -189,144 +262,150 @@ export async function evaluateBidDecision(
     const betaPosterior = beta0 + stats.totalLost
     winProbability = alphaPosterior / (alphaPosterior + betaPosterior)
 
-    // Penalty drag: exponential decay
     const totalPenalties = Number(stats.totalPenalties || 0)
     if (totalPenalties > 0) {
       const penaltyDrag = Math.exp(-totalPenalties / 200000)
       winProbability *= penaltyDrag
-      triggeredFlags.push(
-        `Penalty drag: ${(penaltyDrag * 100).toFixed(1)}% (${totalPenalties.toLocaleString()} total)`
-      )
+      triggeredFlags.push(`Penalty drag: ${(penaltyDrag * 100).toFixed(1)}% (${totalPenalties.toLocaleString()} total)`)
     }
 
     winProbability = Math.min(Math.max(winProbability, 0.01), 0.95)
-
     triggeredFlags.push(
-      `Bayesian calibrated: ${stats.totalWon}W/${stats.totalLost}L ` +
-      `(completion: ${((stats.completionRate || 0) * 100).toFixed(0)}%)`
+      `Bayesian calibrated: ${stats.totalWon}W/${stats.totalLost}L (completion: ${((stats.completionRate || 0) * 100).toFixed(0)}%)`
     )
-  } else if (stats && stats.totalSubmitted > 0) {
-    // No win/loss data but has submission history — use completion rate
-    const completionBoost = (stats.completionRate || 0.5) * 0.1
-    winProbability = Math.min(winProbability + completionBoost, 0.95)
-    triggeredFlags.push('Performance boost from submission history (no win/loss data)')
   }
 
-  // ------------------------------------------------------------
-  // 5. Financial Modeling
-  // ------------------------------------------------------------
+  // ──────────────────────────────────────────────────────────
+  // DECISION RESOLVER: combine all 3 layers
+  // ──────────────────────────────────────────────────────────
+  const allComplianceFlags = [...complianceResult.blockers, ...complianceResult.conditions]
+  const decisionOutput = resolveDecision(
+    complianceResult.gate,
+    fitResult.total,
+    marketResult.total,
+    allComplianceFlags
+  )
 
+  // Apply confidence modifier from resolver
+  winProbability = Math.min(Math.max(winProbability + decisionOutput.confidenceModifier, 0.01), 0.95)
+
+  const recommendation = decisionOutput.recommendation
+  const complianceStatus = complianceResult.gate === 'CONDITIONAL' ? 'PENDING' : 'APPROVED'
+
+  // ──────────────────────────────────────────────────────────
+  // FINANCIAL MODELING
+  // ──────────────────────────────────────────────────────────
   const estimatedValue = estValue || 100000
-  const proposalCostEstimate = estimatedValue * 0.05
-  const expectedValue = winProbability * estimatedValue
+  const OPTION_YEAR_FACTOR = 2.5
+  const SUB_REVENUE_SHARE = 0.30
+  const TIME_TO_AWARD_DISCOUNT = 1 / Math.pow(1.08, 9 / 12)
+
+  const isSubBid = recommendation === 'BID_SUB'
+  const effectiveContractValue = isSubBid ? estimatedValue * SUB_REVENUE_SHARE : estimatedValue
+  const proposalCostEstimate = isSubBid ? estimatedValue * 0.03 : estimatedValue * 0.05
+  const lifetimeValue = Math.round(estimatedValue * OPTION_YEAR_FACTOR)
+  const expectedValue = winProbability * effectiveContractValue * TIME_TO_AWARD_DISCOUNT
   const netExpectedValue = expectedValue - proposalCostEstimate
-  const roiRatio = proposalCostEstimate > 0
-    ? netExpectedValue / proposalCostEstimate
-    : 0
+  const roiRatio = proposalCostEstimate > 0 ? netExpectedValue / proposalCostEstimate : 0
+  const expectedLifetimeValue = Math.round(winProbability * lifetimeValue * TIME_TO_AWARD_DISCOUNT)
 
-  // Competition-adjusted risk
-  if (opportunity.competitionCount !== null && opportunity.competitionCount > 10) {
-    riskScore += 15
-    triggeredFlags.push(`High competition density (${opportunity.competitionCount} competitors)`)
+  // Deadline risk
+  const daysToDeadline = (new Date(opportunity.responseDeadline).getTime() - Date.now()) / 86400000
+  if (daysToDeadline < 3) triggeredFlags.push('Critical time compression (<3 days)')
+  else if (daysToDeadline < 7) triggeredFlags.push('High time compression (<7 days)')
+  else if (daysToDeadline < 20) triggeredFlags.push('Moderate time compression (<20 days)')
+
+  if (opportunity.competitionCount !== null && opportunity.competitionCount !== undefined && opportunity.competitionCount > 10) {
+    triggeredFlags.push(`High historical competition density (${opportunity.competitionCount} unique winners)`)
+  }
+  if (opportunity.offersReceived !== null && opportunity.offersReceived !== undefined && opportunity.offersReceived > 10) {
+    triggeredFlags.push(`High offer count per solicitation (${opportunity.offersReceived} offerors on record)`)
   }
 
-  // ------------------------------------------------------------
-  // 6. Recommendation Logic
-  // ------------------------------------------------------------
+  triggeredFlags.push(
+    `7-factor model: raw=${probabilityResult.rawScore.toFixed(3)}, sigmoid=${probabilityResult.probability.toFixed(3)}`
+  )
+  triggeredFlags.push(`Fit score: ${fitResult.total}/100 | Market score: ${marketResult.total}/100`)
+  triggeredFlags.push(`Decision resolver: ${decisionOutput.rationale}`)
 
-  let recommendation: Recommendation = 'NO_BID'
-  const complianceStatus = complianceBlocked ? 'BLOCKED' : 'APPROVED'
-
-  if (complianceBlocked) {
-    recommendation = 'NO_BID'
-    triggeredFlags.push('Compliance blocked — NO_BID enforced')
-  } else if (roiRatio > 3 && winProbability > 0.35) {
-    recommendation = 'BID_PRIME'
-    triggeredFlags.push(
-      `Strong opportunity: ROI ${roiRatio.toFixed(1)}x, probability ${(winProbability * 100).toFixed(0)}%`
-    )
-  } else if (roiRatio > 1.5 && winProbability > 0.2) {
-    recommendation = 'BID_PRIME'
-    triggeredFlags.push(
-      `Moderate-strong opportunity: ROI ${roiRatio.toFixed(1)}x, probability ${(winProbability * 100).toFixed(0)}%`
-    )
-  } else if (winProbability > 0.2) {
-    recommendation = 'BID_SUB'
-    triggeredFlags.push(
-      `Sub-contract opportunity: probability ${(winProbability * 100).toFixed(0)}%`
-    )
-  } else {
-    triggeredFlags.push(
-      `Below threshold: ROI ${roiRatio.toFixed(1)}x, probability ${(winProbability * 100).toFixed(0)}%`
-    )
+  // ──────────────────────────────────────────────────────────
+  // PERSIST DECISION
+  // ──────────────────────────────────────────────────────────
+  const explanationJson = {
+    // 3-layer breakdown
+    complianceGate: complianceResult.gate,
+    blockers: complianceResult.blockers,
+    conditions: complianceResult.conditions,
+    requiredActions: complianceResult.requiredActions,
+    fitScore: fitResult.total,
+    fitBreakdown: fitResult.breakdown,
+    marketScore: marketResult.total,
+    marketBreakdown: marketResult.breakdown,
+    // Probability model
+    featureBreakdown: { ...probabilityResult.features },
+    rawProbabilityScore: probabilityResult.rawScore,
+    // Context
+    triggeredFlags,
+    daysToDeadline,
+    enrichmentUsed: opportunity.isEnriched || false,
+    historicalWinner: opportunity.historicalWinner,
+    competitionCount: opportunity.competitionCount,
+    offersReceived: opportunity.offersReceived,
+    // Financial
+    lifetimeValue,
+    expectedLifetimeValue,
+    effectiveContractValue: Math.round(effectiveContractValue),
+    timeToAwardDiscount: Math.round(TIME_TO_AWARD_DISCOUNT * 1000) / 1000,
+    subContractShare: isSubBid ? SUB_REVENUE_SHARE : null,
+    optionYearFactor: OPTION_YEAR_FACTOR,
+    roiRatio: Math.round(roiRatio * 100) / 100,
   }
-
-  // ------------------------------------------------------------
-  // 7. Persist Decision
-  // ------------------------------------------------------------
-
-  const consultingFirmId = opportunity.consultingFirmId
 
   const decision = await prisma.bidDecision.upsert({
-    where: {
-      opportunityId_clientCompanyId: {
-        opportunityId,
-        clientCompanyId,
-      },
-    },
+    where: { opportunityId_clientCompanyId: { opportunityId, clientCompanyId } },
     update: {
-      winProbability,
       recommendation,
+      complianceGate: complianceResult.gate,
+      fitScore: fitResult.total,
+      marketScore: marketResult.total,
+      winProbability,
       expectedRevenue: estimatedValue,
       proposalCostEstimate,
       expectedValue,
       netExpectedValue,
       roiRatio,
       complianceStatus,
-      riskScore,
-      explanationJson: {
-        triggeredFlags,
-        requiredActions,
-        daysToDeadline,
-        naicsMatch,
-        featureBreakdown: { ...probabilityResult.features },
-        enrichmentUsed: opportunity.isEnriched || false,
-        historicalWinner: opportunity.historicalWinner,
-        competitionCount: opportunity.competitionCount,
-      },
+      riskScore: decisionOutput.riskScore,
+      explanationJson: { ...explanationJson },
     },
     create: {
       consultingFirmId,
       opportunityId,
       clientCompanyId,
-      winProbability,
       recommendation,
+      complianceGate: complianceResult.gate,
+      fitScore: fitResult.total,
+      marketScore: marketResult.total,
+      winProbability,
       expectedRevenue: estimatedValue,
       proposalCostEstimate,
       expectedValue,
       netExpectedValue,
       roiRatio,
       complianceStatus,
-      riskScore,
-      explanationJson: {
-        triggeredFlags,
-        requiredActions,
-        daysToDeadline,
-        naicsMatch,
-        featureBreakdown: { ...probabilityResult.features },
-        enrichmentUsed: opportunity.isEnriched || false,
-        historicalWinner: opportunity.historicalWinner,
-        competitionCount: opportunity.competitionCount,
-      },
+      riskScore: decisionOutput.riskScore,
+      explanationJson: { ...explanationJson },
     },
   })
 
-  logger.info('Bid decision evaluated', {
+  logger.info('Bid decision evaluated (3-layer)', {
     opportunityId,
     clientCompanyId,
+    complianceGate: complianceResult.gate,
+    fitScore: fitResult.total,
+    marketScore: marketResult.total,
     recommendation,
     winProbability: winProbability.toFixed(3),
-    enriched: opportunity.isEnriched,
   })
 
   return decision

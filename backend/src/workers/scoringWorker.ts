@@ -36,11 +36,11 @@ export function startScoringWorker(): Worker<ScoringJobData> {
         select: {
           id: true,
           naicsCode: true,
-          setAsideType: true,
           estimatedValue: true,
           agency: true,
           incumbentProbability: true,
           competitionCount: true,
+          offersReceived: true,
           agencySdvosbRate: true,
           historicalAwardCount: true,
           documentIntelScore: true,
@@ -76,7 +76,6 @@ export function startScoringWorker(): Worker<ScoringJobData> {
       for (const client of clients) {
         const result = scoreOpportunityForClient({
           opportunityNaics: opportunity.naicsCode,
-          opportunitySetAside: opportunity.setAsideType,
           opportunityEstimatedValue: opportunity.estimatedValue ? Number(opportunity.estimatedValue) : null,
           opportunityAgency: opportunity.agency,
           clientNaics: client.naicsCodes,
@@ -89,6 +88,7 @@ export function startScoringWorker(): Worker<ScoringJobData> {
           // Tier 2 enrichment signals (null-safe)
           incumbentProbability: opportunity.incumbentProbability,
           competitionCount: opportunity.competitionCount,
+          offersReceived: opportunity.offersReceived,
           agencySdvosbRate: opportunity.agencySdvosbRate,
           historicalDistribution: opportunity.historicalAwardCount
             ? Math.min(opportunity.historicalAwardCount / 1000, 0.8)

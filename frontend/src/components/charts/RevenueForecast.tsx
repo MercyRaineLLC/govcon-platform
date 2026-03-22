@@ -24,7 +24,7 @@ export function RevenueForecast({ data }: { data?: ForecastMonth[] }) {
   return (
     <div className="card">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold text-gray-200">Revenue Forecast (Monte Carlo)</h3>
+        <h3 className="font-semibold text-gray-200">Revenue Forecast</h3>
         <span className="text-xs font-mono text-green-400">
           Expected: {formatCurrency(totalExpected)}
         </span>

@@ -84,12 +84,10 @@ router.get('/', async (req: AuthenticatedRequest, res: Response, next: NextFunct
 
     const where: any = { consultingFirmId }
 
-    // By default, hide contracts expired more than 10 days ago.
+    // By default, hide expired contracts entirely.
     // Pass showExpired=true to include them (e.g. for historical review).
     if (q.showExpired !== 'true') {
-      const tenDaysAgo = new Date()
-      tenDaysAgo.setDate(tenDaysAgo.getDate() - 10)
-      where.responseDeadline = { gte: tenDaysAgo }
+      where.responseDeadline = { gte: new Date() }
     }
 
     if (q.naicsCode) where.naicsCode = { startsWith: String(q.naicsCode) }
@@ -195,10 +193,43 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response, next: NextFu
 
     if (!opportunity) throw new NotFoundError('Opportunity not found')
 
+    // If scoreBreakdown not stored on opportunity, build it from the latest bid decision
+    let scoreBreakdown: any = opportunity.scoreBreakdown || null
+    if (!scoreBreakdown) {
+      const WEIGHTS: Record<string, number> = {
+        naicsOverlapScore: 0.22, setAsideAlignmentScore: 0.20, incumbentWeaknessScore: 0.18,
+        documentAlignmentScore: 0.15, agencyAlignmentScore: 0.12, awardSizeFitScore: 0.08,
+        competitionDensityScore: 0.03, historicalDistribution: 0.02,
+      }
+      const latestDecision = await prisma.bidDecision.findFirst({
+        where: { opportunityId: id, consultingFirmId },
+        orderBy: { updatedAt: 'desc' },
+        select: { explanationJson: true, winProbability: true },
+      })
+      const features = (latestDecision?.explanationJson as any)?.featureBreakdown || null
+      if (features && Object.keys(features).length > 0) {
+        const rawZ = Object.entries(features).reduce((sum, [k, v]) => sum + (WEIGHTS[k] || 0) * Number(v), 0)
+        const factorContributions = Object.entries(features).map(([factor, score]) => {
+          const numeric = Number(score) || 0
+          const weight = WEIGHTS[factor] || 0
+          const contribution = weight * numeric
+          return { factor, score: numeric, weight, contribution, pct: Math.round(numeric * 100) }
+        })
+        scoreBreakdown = {
+          factorContributions,
+          formula: { equation: 'P(win) = 1 / (1 + e^-(6Z - 3))', rawZ },
+          rawScore: rawZ,
+          probability: latestDecision?.winProbability ? Number(latestDecision.winProbability) : undefined,
+          generatedAt: new Date().toISOString(),
+        }
+      }
+    }
+
     res.json({
       success: true,
       data: {
         ...opportunity,
+        scoreBreakdown,
         documents: opportunity.documents.map((doc) => ({
           ...doc,
           fileUrl: `/api/documents/download/${doc.id}`,

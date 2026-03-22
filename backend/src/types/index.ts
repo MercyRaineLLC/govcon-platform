@@ -29,17 +29,57 @@ export interface DeadlineClassification {
 }
 
 // -------------------------------------------------------------
-// Probability Engine — Full 8-factor model
+// Probability Engine — 7-factor model (set-aside moved to compliance gate)
 // -------------------------------------------------------------
 export interface ProbabilityFeatures {
   naicsOverlapScore: number;        // 0-1: NAICS domain match
-  setAsideAlignmentScore: number;   // 0-1: Set-aside qualification gate
   agencyAlignmentScore: number;     // 0-1: Historical agency award rate
   awardSizeFitScore: number;        // 0-1: Contract size within client capacity
   competitionDensityScore: number;  // 0-1: Fewer competitors = higher score
   historicalDistribution: number;   // 0-1: USAspending base win rate
   incumbentWeaknessScore: number;   // 0-1: Inverse of incumbent dominance
   documentAlignmentScore: number;   // 0-1: SOW scope match from document intel
+}
+
+// -------------------------------------------------------------
+// Compliance Gate — Layer 1: Hard eligibility filter
+// -------------------------------------------------------------
+export type ComplianceGate = 'ELIGIBLE' | 'CONDITIONAL' | 'INELIGIBLE'
+
+export interface ComplianceGateOutput {
+  gate: ComplianceGate
+  blockers: string[]     // Hard ineligibility reasons
+  conditions: string[]   // Soft warnings
+  requiredActions: string[]
+}
+
+// -------------------------------------------------------------
+// Fit Score — Layer 2: Client capability (0-100)
+// -------------------------------------------------------------
+export interface FitScoreOutput {
+  total: number
+  breakdown: {
+    naicsDepth: number
+    pastPerformance: number
+    capacityFit: number
+    geographicFit: number
+    resourceReadiness: number
+    financialStrength: number
+  }
+}
+
+// -------------------------------------------------------------
+// Market Score — Layer 3: Opportunity attractiveness (0-100)
+// -------------------------------------------------------------
+export interface MarketScoreOutput {
+  total: number
+  breakdown: {
+    competitionDensity: number
+    incumbentStrength: number
+    contractValueFit: number
+    agencyBuyingPatterns: number
+    timingAdvantage: number
+  }
 }
 
 export interface ProbabilityResult {
@@ -72,6 +112,8 @@ export interface EnrichmentResult {
   agencySdvosbRate: number;
   recompeteFlag: boolean;
   awards: AwardRecord[];
+  offersReceived: number | null;      // FPDS: actual bidder count per solicitation
+  extentCompeted: string | null;      // FPDS: competition extent
 }
 
 // -------------------------------------------------------------

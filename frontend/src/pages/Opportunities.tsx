@@ -2,16 +2,16 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { opportunitiesApi, jobsApi, clientsApi } from '../services/api';
-import { useQuery as useClientQuery } from '@tanstack/react-query';
 import {
   PageHeader, DeadlineBadge, ProbabilityBar, formatCurrency,
   Spinner, EmptyState, ErrorBanner
 } from '../components/ui';
 import {
   Search, Download, Filter, ChevronUp, ChevronDown,
-  CheckCircle, AlertCircle, Loader, Sparkles, X, SlidersHorizontal
+  CheckCircle, AlertCircle, Loader, Sparkles, X, SlidersHorizontal, Star
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { useFavorites } from '../hooks/useFavorites';
 
 const SET_ASIDE_LABELS: Record<string, string> = {
   NONE: 'Open',
@@ -22,6 +22,27 @@ const SET_ASIDE_LABELS: Record<string, string> = {
   SBA_8A: '8(a)',
   TOTAL_SMALL_BUSINESS: 'TSB',
 };
+
+// Notice type badges — highlight Sole Source and RFI/Sources Sought prominently
+function NoticeTypeBadge({ type }: { type?: string | null }) {
+  if (!type) return null;
+  const t = type.toLowerCase();
+  if (t.includes('sole source')) return (
+    <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-900/60 text-orange-300 border border-orange-700 flex-shrink-0">SOLE SOURCE</span>
+  );
+  if (t.includes('sources sought') || t.includes('rfi') || t.includes('request for information')) return (
+    <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-900/60 text-cyan-300 border border-cyan-700 flex-shrink-0">RFI</span>
+  );
+  if (t.includes('presolicitation')) return (
+    <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-900/60 text-purple-300 border border-purple-700 flex-shrink-0">PRESOL</span>
+  );
+  if (t.includes('award')) return (
+    <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-400 flex-shrink-0">AWARD</span>
+  );
+  return null;
+}
+
+const JOB_STORAGE_KEY = 'govcon_active_jobs';
 
 type PipelineStatus = 'idle' | 'running' | 'success' | 'error';
 
@@ -36,8 +57,36 @@ const defaultJobState = (): JobState => ({
   jobId: null, status: 'idle', message: '', detail: '',
 });
 
-function StatusBanner({ state, label, onRefresh }: { state: JobState; label: string; onRefresh?: () => void }) {
+function useElapsed(active: boolean) {
+  const [elapsed, setElapsed] = useState(0);
+  const startRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (active) {
+      startRef.current = Date.now();
+      setElapsed(0);
+      const t = setInterval(() => {
+        setElapsed(Math.floor((Date.now() - startRef.current!) / 1000));
+      }, 1000);
+      return () => clearInterval(t);
+    } else {
+      startRef.current = null;
+      setElapsed(0);
+    }
+  }, [active]);
+  return elapsed;
+}
+
+function fmtElapsed(s: number) {
+  if (s < 60) return `${s}s`;
+  return `${Math.floor(s / 60)}m ${s % 60}s`;
+}
+
+function StatusBanner({ state, label, estimatedSecs, onRefresh }: {
+  state: JobState; label: string; estimatedSecs?: number; onRefresh?: () => void;
+}) {
+  const elapsed = useElapsed(state.status === 'running');
   if (state.status === 'idle') return null;
+
   const configs = {
     running: { bg: 'bg-blue-900/30 border-blue-700', text: 'text-blue-300', icon: <Loader className="w-4 h-4 animate-spin flex-shrink-0 mt-0.5" /> },
     success: { bg: 'bg-green-900/30 border-green-700', text: 'text-green-300', icon: <CheckCircle className="w-4 h-4 flex-shrink-0 mt-0.5" /> },
@@ -45,17 +94,52 @@ function StatusBanner({ state, label, onRefresh }: { state: JobState; label: str
   };
   const c = configs[state.status as keyof typeof configs];
   if (!c) return null;
+
+  // Progress: clamp 0–95% based on elapsed vs estimate (never shows 100% until complete)
+  const progress = estimatedSecs && state.status === 'running'
+    ? Math.min(95, Math.round((elapsed / estimatedSecs) * 100))
+    : null;
+
+  const remaining = estimatedSecs && state.status === 'running' && elapsed < estimatedSecs
+    ? estimatedSecs - elapsed
+    : null;
+
   return (
-    <div className={`flex items-start gap-3 border ${c.bg} ${c.text} text-sm rounded px-4 py-3 mb-3`}>
-      {c.icon}
-      <div className="flex-1">
-        <p className="font-medium">{label}: {state.message}</p>
-        {state.detail && <p className="text-xs opacity-75 mt-0.5">{state.detail}</p>}
+    <div className={`border ${c.bg} ${c.text} text-sm rounded px-4 py-3 mb-3`}>
+      <div className="flex items-start gap-3">
+        {c.icon}
+        <div className="flex-1">
+          <div className="flex items-center justify-between">
+            <p className="font-medium">{label}: {state.message}</p>
+            {state.status === 'running' && (
+              <span className="text-xs opacity-60 ml-3 flex-shrink-0">
+                {fmtElapsed(elapsed)} elapsed{remaining ? ` · ~${fmtElapsed(remaining)} remaining` : ''}
+              </span>
+            )}
+          </div>
+          {state.detail && <p className="text-xs opacity-75 mt-0.5">{state.detail}</p>}
+        </div>
       </div>
-      {onRefresh && state.status === 'running' && (
-        <button onClick={onRefresh} className="text-xs underline opacity-75 hover:opacity-100 flex-shrink-0 mt-0.5">
-          Refresh list now
-        </button>
+      {/* Progress bar */}
+      {state.status === 'running' && (
+        <div className="mt-2.5">
+          <div className="h-1.5 bg-blue-950/60 rounded-full overflow-hidden">
+            {progress !== null ? (
+              <div
+                className="h-full bg-blue-400 rounded-full transition-all duration-1000"
+                style={{ width: `${progress}%` }}
+              />
+            ) : (
+              /* Indeterminate shimmer when no estimate */
+              <div className="h-full w-1/3 bg-blue-400 rounded-full animate-[shimmer_1.5s_ease-in-out_infinite]"
+                style={{ animation: 'shimmer 1.5s ease-in-out infinite' }}
+              />
+            )}
+          </div>
+          {progress !== null && (
+            <p className="text-[10px] opacity-50 mt-1">{progress}% estimated — auto-updating every 4s</p>
+          )}
+        </div>
       )}
     </div>
   );
@@ -63,6 +147,7 @@ function StatusBanner({ state, label, onRefresh }: { state: JobState; label: str
 
 export function OpportunitiesPage() {
   const qc = useQueryClient();
+  const { isFavorite, toggleFavorite } = useFavorites();
   const [filters, setFilters] = useState({
     naicsCode: '', agency: '', setAsideType: '', daysUntilDeadline: '',
     probabilityMin: '', estimatedValueMin: '', estimatedValueMax: '',
@@ -71,13 +156,12 @@ export function OpportunitiesPage() {
     sortBy: 'probability', sortOrder: 'desc', page: 1, limit: 25,
   });
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [showIngestPanel, setShowIngestPanel] = useState(false);
-  const [ingestNaics, setIngestNaics] = useState('');
-  const [ingestLimit, setIngestLimit] = useState('25');
   const [ingestState, setIngestState] = useState<JobState>(defaultJobState());
   const [enrichState, setEnrichState] = useState<JobState>(defaultJobState());
+  const [enrichEstSecs, setEnrichEstSecs] = useState(120);
   const ingestPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const enrichPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const restoredRef = useRef(false);
 
   const { data: clientsData } = useQuery({
     queryKey: ['clients-list-opp'],
@@ -91,6 +175,8 @@ export function OpportunitiesPage() {
     queryFn: () => import('../services/api').then(m => m.firmApi.get()),
     staleTime: 30000,
   });
+
+  const jobRunning = ingestState.status === 'running' || enrichState.status === 'running';
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['opportunities', filters],
@@ -109,6 +195,8 @@ export function OpportunitiesPage() {
       showExpired: filters.showExpired || undefined,
       clientId: filters.selectedClientId || undefined,
     }),
+    // Auto-refresh the list every 15s while a job is running — no manual refresh needed
+    refetchInterval: jobRunning ? 15000 : false,
   });
 
   // Reliable recursive poll — no overlapping requests, surfaces errors, caps at 5 min
@@ -116,11 +204,12 @@ export function OpportunitiesPage() {
     jobId: string,
     setState: React.Dispatch<React.SetStateAction<JobState>>,
     pollRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>,
-    onComplete: (job: any) => void
+    onComplete: (job: any) => void,
+    maxAttempts: number = 75 // 75 × 4s = 5 min default; pass 450 for 30 min
   ) => {
     if (pollRef.current) clearTimeout(pollRef.current as any);
     let attempts = 0;
-    const MAX_ATTEMPTS = 75; // 75 × 4s = 5 min max
+    const MAX_ATTEMPTS = maxAttempts;
 
     const tick = async () => {
       attempts++;
@@ -171,12 +260,13 @@ export function OpportunitiesPage() {
   }, []);
 
   const handleIngest = async () => {
-    setShowIngestPanel(false);
-    setIngestState({ jobId: null, status: 'running', message: 'Contacting SAM.gov...', detail: `NAICS: ${ingestNaics || 'all'} · Limit: ${ingestLimit}` });
+    const syncNaics = localStorage.getItem('govcon_sync_naics') || '';
+    const syncLimit = parseInt(localStorage.getItem('govcon_sync_limit') || '25', 10);
+    setIngestState({ jobId: null, status: 'running', message: 'Contacting SAM.gov...', detail: `Fetching up to ${syncLimit} contracts${syncNaics ? ` · NAICS ${syncNaics}` : ''}` });
     try {
       const res = await jobsApi.triggerIngest({
-        naicsCode: ingestNaics.trim() || undefined,
-        limit: parseInt(ingestLimit, 10) || 25,
+        naicsCode: syncNaics.trim() || undefined,
+        limit: syncLimit,
       });
       // Backend may return 409 if job already running
       if (!res.data?.jobId && res.data?.status === 'RUNNING') {
@@ -184,13 +274,15 @@ export function OpportunitiesPage() {
         return;
       }
       const jobId = res.data.jobId;
-      setIngestState((s) => ({ ...s, jobId, message: 'Ingesting from SAM.gov...', detail: `NAICS: ${ingestNaics || 'all'} · Limit: ${ingestLimit}` }));
+      saveJobToStorage('ingest', jobId);
+      setIngestState((s) => ({ ...s, jobId, message: 'Syncing contracts from SAM.gov...', detail: s.detail }));
       pollJob(jobId, setIngestState, ingestPollRef, (job) => {
-        setIngestState({ jobId, status: 'success', message: 'Ingest complete', detail: `${job.opportunitiesNew || 0} new · ${job.scoringJobsQueued || 0} scoring queued · ${job.errors || 0} errors` });
+        clearJobFromStorage('ingest');
+        setIngestState({ jobId, status: 'success', message: 'Sync complete', detail: `${job.opportunitiesNew || 0} new contracts added · ${job.scoringJobsQueued || 0} being scored · ${job.errors || 0} errors` });
         setTimeout(() => setIngestState(defaultJobState()), 15000);
-      });
+      }, 225); // 225 × 4s = 15 min max; SAM.gov can paginate many pages with 1.2s throttle each
     } catch (err: any) {
-      // Surface the actual error — 429, 401, etc.
+      clearJobFromStorage('ingest');
       const detail = err?.response?.data?.error || err?.message || 'SAM.gov unavailable';
       setIngestState({ jobId: null, status: 'error', message: 'Ingest failed', detail });
     }
@@ -206,19 +298,68 @@ export function OpportunitiesPage() {
         setTimeout(() => setEnrichState(defaultJobState()), 8000);
         return;
       }
+      saveJobToStorage('enrich', jobId);
       const toEnrich = res.data.opportunitiesToEnrich || 0;
+      // Estimate: concurrency=3 workers, ~1.5s per record → toEnrich/3 * 1.5s, min 120s
+      const estSecs = Math.max(120, Math.ceil((toEnrich / 3) * 1.5));
+      setEnrichEstSecs(estSecs);
       setEnrichState((s) => ({ ...s, jobId, message: `Enriching ${toEnrich.toLocaleString()} opportunities...`, detail: 'Pulling historical award data from USAspending' }));
+      // Use 450 attempts (30 min) — enrichment of 500 records takes ~3–5 minutes
       pollJob(jobId, setEnrichState, enrichPollRef, (job) => {
+        clearJobFromStorage('enrich');
         setEnrichState({ jobId, status: 'success', message: 'Enrichment complete', detail: `${job.enrichedCount || 0} opportunities enriched with award history` });
         setTimeout(() => setEnrichState(defaultJobState()), 12000);
-      });
+      }, 450);
     } catch (err: any) {
+      clearJobFromStorage('enrich');
       setEnrichState({ jobId: null, status: 'error', message: 'Enrichment failed', detail: err?.response?.data?.error || 'USAspending API unavailable' });
     }
   };
 
   const toggleSortOrder = () => setFilters((f) => ({ ...f, sortOrder: f.sortOrder === 'desc' ? 'asc' : 'desc', page: 1 }));
   const update = (key: string, value: string) => setFilters((f) => ({ ...f, [key]: value, page: 1 }));
+
+  // --- localStorage job persistence: survives page refresh ---
+  const saveJobToStorage = (type: 'ingest' | 'enrich', jobId: string) => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(JOB_STORAGE_KEY) || '{}');
+      stored[type] = { jobId, startedAt: Date.now() };
+      localStorage.setItem(JOB_STORAGE_KEY, JSON.stringify(stored));
+    } catch {}
+  };
+  const clearJobFromStorage = (type: 'ingest' | 'enrich') => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(JOB_STORAGE_KEY) || '{}');
+      delete stored[type];
+      localStorage.setItem(JOB_STORAGE_KEY, JSON.stringify(stored));
+    } catch {}
+  };
+
+  // On mount: reconnect to any jobs that were running before refresh
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    try {
+      const stored = JSON.parse(localStorage.getItem(JOB_STORAGE_KEY) || '{}');
+      const MAX_AGE = 20 * 60 * 1000; // 20 min max — ingest can take 10-15 min for larger limits
+      if (stored.ingest?.jobId && Date.now() - stored.ingest.startedAt < MAX_AGE) {
+        setIngestState({ jobId: stored.ingest.jobId, status: 'running', message: 'Reconnected — still syncing contracts...', detail: 'Refreshed while sync was running' });
+        pollJob(stored.ingest.jobId, setIngestState, ingestPollRef, (job) => {
+          clearJobFromStorage('ingest');
+          setIngestState({ jobId: stored.ingest.jobId, status: 'success', message: 'Sync complete', detail: `${job.opportunitiesNew || 0} new contracts added · ${job.errors || 0} errors` });
+          setTimeout(() => setIngestState(defaultJobState()), 15000);
+        }, 225);
+      } else if (stored.ingest) clearJobFromStorage('ingest');
+      if (stored.enrich?.jobId && Date.now() - stored.enrich.startedAt < MAX_AGE) {
+        setEnrichState({ jobId: stored.enrich.jobId, status: 'running', message: 'Reconnected — still enriching...', detail: 'Refreshed while job was running' });
+        pollJob(stored.enrich.jobId, setEnrichState, enrichPollRef, (job) => {
+          clearJobFromStorage('enrich');
+          setEnrichState({ jobId: stored.enrich.jobId, status: 'success', message: 'Enrichment complete', detail: `${job.enrichedCount || 0} enriched` });
+          setTimeout(() => setEnrichState(defaultJobState()), 12000);
+        }, 450);
+      } else if (stored.enrich) clearJobFromStorage('enrich');
+    } catch {}
+  }, [pollJob]);
 
   const forceRefresh = () => {
     qc.invalidateQueries({ queryKey: ['opportunities'] });
@@ -232,7 +373,7 @@ export function OpportunitiesPage() {
 
   return (
     <div>
-      <PageHeader title="Federal Opportunities" subtitle="SAM.gov intelligence pipeline">
+      <PageHeader title="Federal Opportunities" subtitle="Active federal contracts matched to your clients">
         <div className="flex gap-2 items-center flex-wrap">
           <button onClick={forceRefresh} className="btn-secondary flex items-center gap-2 text-sm">
             <CheckCircle className="w-4 h-4" /> Refresh
@@ -243,62 +384,22 @@ export function OpportunitiesPage() {
             className="btn-secondary flex items-center gap-2"
           >
             {enrichState.status === 'running' ? <Loader className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-            {enrichState.status === 'running' ? 'Enriching...' : 'Enrich Awards'}
+            {enrichState.status === 'running' ? 'Loading...' : 'Get Award History'}
           </button>
           <button
-            onClick={() => setShowIngestPanel((v) => !v)}
+            onClick={handleIngest}
             disabled={ingestState.status === 'running'}
             className="btn-primary flex items-center gap-2"
           >
             {ingestState.status === 'running' ? <Loader className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-            {ingestState.status === 'running' ? 'Ingesting...' : 'Ingest SAM.gov'}
+            {ingestState.status === 'running' ? 'Syncing...' : 'Sync Contracts'}
           </button>
         </div>
       </PageHeader>
 
-      {/* Ingest configuration panel */}
-      {showIngestPanel && ingestState.status !== 'running' && (
-        <div className="card mb-4 border-blue-800/50">
-          <h3 className="text-sm font-semibold text-gray-200 mb-3 flex items-center gap-2">
-            <Download className="w-4 h-4 text-blue-400" /> SAM.gov Ingest Configuration
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-            <div>
-              <label className="label">NAICS Code <span className="text-gray-600">(optional)</span></label>
-              <input
-                className="input font-mono"
-                placeholder="e.g. 541611 — leave blank for all"
-                value={ingestNaics}
-                onChange={(e) => setIngestNaics(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="label">Max records to fetch</label>
-              <select className="input" value={ingestLimit} onChange={(e) => setIngestLimit(e.target.value)}>
-                <option value="10">10 — quick test</option>
-                <option value="25">25 — default</option>
-                <option value="50">50</option>
-                <option value="100">100 — slow, may hit rate limit</option>
-              </select>
-            </div>
-            <div className="flex flex-col justify-end">
-              <p className="text-xs text-gray-600 mb-2">
-                SAM.gov limits: ~10 req/sec, ~1,000/day.
-                {lastIngested && ` Last ingest: ${new Date(lastIngested).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}.`}
-              </p>
-              <button onClick={handleIngest} className="btn-primary flex items-center gap-2 w-full justify-center">
-                <Download className="w-4 h-4" /> Start Ingest
-              </button>
-            </div>
-          </div>
-          <p className="text-xs text-yellow-500/80">
-            If you hit a 429 rate limit error, wait 15–60 minutes before trying again. SAM.gov enforces daily quotas on public API keys.
-          </p>
-        </div>
-      )}
-
-      <StatusBanner state={ingestState} label="Ingest" onRefresh={forceRefresh} />
-      <StatusBanner state={enrichState} label="Enrichment" onRefresh={forceRefresh} />
+      {/* estimatedSecs: SAM.gov paginates with 1.2s throttle per page + scoring queue; use conservative estimate */}
+      <StatusBanner state={ingestState} label="Syncing" estimatedSecs={Math.max(180, parseInt(localStorage.getItem('govcon_sync_limit') || '25', 10) * 12)} onRefresh={forceRefresh} />
+      <StatusBanner state={enrichState} label="Enrichment" estimatedSecs={enrichEstSecs} onRefresh={forceRefresh} />
 
       {/* Last ingested indicator */}
       {lastIngested && ingestState.status === 'idle' && enrichState.status === 'idle' && (
@@ -413,36 +514,47 @@ export function OpportunitiesPage() {
           </div>
           <div className="space-y-2">
             {opps.map((opp: any) => {
-              const isExpired = (opp.deadline?.daysUntilDeadline ?? 1) <= 0;
+              const starred = isFavorite(opp.id);
               return (
-                <Link key={opp.id} to={`/opportunities/${opp.id}`} className={`card flex items-center gap-4 transition-colors cursor-pointer ${isExpired ? 'opacity-50 border-red-900/50 hover:border-red-800' : 'hover:border-gray-600'}`}>
-                  <div className="flex-shrink-0 w-24">
-                    <DeadlineBadge priority={opp.deadline?.priority || 'GREEN'} label={opp.deadline?.label || ''} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className={`text-sm font-medium truncate ${isExpired ? 'text-gray-500 line-through' : 'text-gray-200'}`}>{opp.title}</p>
-                      {isExpired && <span className="flex-shrink-0 text-xs bg-red-900/40 text-red-400 border border-red-800 px-1.5 py-0.5 rounded">EXPIRED</span>}
+                <div key={opp.id} className="card flex items-center gap-3 transition-colors hover:border-gray-600">
+                  <button
+                    onClick={(e) => { e.preventDefault(); toggleFavorite({ id: opp.id, title: opp.title, agency: opp.agency, deadline: opp.responseDeadline, naicsCode: opp.naicsCode }); }}
+                    className={`flex-shrink-0 p-1 rounded transition-colors ${starred ? 'text-yellow-400 hover:text-yellow-300' : 'text-gray-700 hover:text-yellow-400'}`}
+                    title={starred ? 'Remove from favorites' : 'Add to favorites'}
+                  >
+                    <Star className="w-3.5 h-3.5" fill={starred ? 'currentColor' : 'none'} />
+                  </button>
+                  <Link to={`/opportunities/${opp.id}`} className="flex flex-1 min-w-0 items-center gap-4 cursor-pointer">
+                    <div className="flex-shrink-0 w-24">
+                      <DeadlineBadge priority={opp.deadline?.priority || 'GREEN'} label={opp.deadline?.label || ''} />
                     </div>
-                    <p className="text-xs text-gray-500">
-                      {opp.agency} · NAICS {opp.naicsCode} · {SET_ASIDE_LABELS[opp.setAsideType] || opp.setAsideType}
-                      {opp.isEnriched && <span className="ml-2 text-blue-400">· enriched</span>}
-                      {opp.recompeteFlag && <span className="ml-2 text-yellow-400">· recompete</span>}
-                    </p>
-                  </div>
-                  <div className="w-32 flex-shrink-0">
-                    <p className="text-xs text-gray-500 mb-1">Win Probability</p>
-                    <ProbabilityBar probability={opp.probabilityScore || 0} />
-                  </div>
-                  <div className="text-right flex-shrink-0 w-28">
-                    <p className="text-sm font-mono text-gray-200">{formatCurrency(opp.estimatedValue)}</p>
-                    <p className="text-xs text-green-400">EV: {formatCurrency(opp.expectedValue)}</p>
-                  </div>
-                  <div className="text-right flex-shrink-0 w-20">
-                    <p className="text-xs text-gray-500">Deadline</p>
-                    <p className={`text-xs ${isExpired ? 'text-red-500' : 'text-gray-300'}`}>{opp.responseDeadline ? format(new Date(opp.responseDeadline), 'MMM d') : 'N/A'}</p>
-                  </div>
-                </Link>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium truncate text-gray-200">{opp.title}</p>
+                        <NoticeTypeBadge type={opp.noticeType} />
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        {opp.agency} · NAICS {opp.naicsCode} · {SET_ASIDE_LABELS[opp.setAsideType] || opp.setAsideType}
+                        {opp.isEnriched && <span className="ml-2 text-blue-400">· enriched</span>}
+                        {opp.recompeteFlag && <span className="ml-2 text-yellow-400">· recompete</span>}
+                      </p>
+                    </div>
+                    <div className="w-32 flex-shrink-0">
+                      <p className="text-xs text-gray-500 mb-1">Win Probability</p>
+                      <ProbabilityBar probability={opp.probabilityScore || 0} />
+                    </div>
+                    <div className="text-right flex-shrink-0 w-28">
+                      {opp.estimatedValue
+                        ? <p className="text-sm font-mono text-gray-200">{formatCurrency(opp.estimatedValue)}</p>
+                        : <p className="text-xs text-gray-700">Value not published</p>
+                      }
+                    </div>
+                    <div className="text-right flex-shrink-0 w-20">
+                      <p className="text-xs text-gray-500">Deadline</p>
+                      <p className="text-xs text-gray-300">{opp.responseDeadline ? format(new Date(opp.responseDeadline), 'MMM d') : 'N/A'}</p>
+                    </div>
+                  </Link>
+                </div>
               );
             })}
           </div>

@@ -29,15 +29,19 @@ export const samApiService = {
     consultingFirmId: string
   ) {
     try {
-      if (!process.env.SAM_API_KEY) {
-        throw new Error("SAM API key not configured")
-      }
-
       const firm = await prisma.consultingFirm.findUnique({
         where: { id: consultingFirmId },
       })
 
       if (!firm) throw new Error("Consulting firm not found")
+
+      // Prefer firm-level key (set via Settings), fall back to env
+      const apiKey = firm.samApiKey || process.env.SAM_API_KEY
+      if (!apiKey) {
+        throw new Error(
+          "SAM API key not configured. Add your key in Settings → SAM API Key or set SAM_API_KEY in backend/.env"
+        )
+      }
 
       const now = new Date()
       const postedFrom = firm.lastIngestedAt
@@ -54,7 +58,7 @@ export const samApiService = {
       while (true) {
         const response = await axios.get(SAM_BASE_URL, {
           params: {
-            api_key: process.env.SAM_API_KEY,
+            api_key: apiKey,
             postedFrom,
             postedTo,
             naicsCode: params.naicsCode,
@@ -87,13 +91,22 @@ export const samApiService = {
                 record.organizationType ??
                 "Unknown Agency",
               naicsCode: record.naicsCode ?? "000000",
+              noticeType: record.type ?? null,
               setAsideType: mapSetAside(record.typeOfSetAside),
               postedDate: record.postedDate ? new Date(record.postedDate) : null,
               responseDeadline: record.responseDeadLine
                 ? new Date(record.responseDeadLine)
                 : now,
               archiveDate: record.archiveDate ? new Date(record.archiveDate) : null,
-              sourceUrl: record.uiLink ?? null,
+              sourceUrl: (() => {
+                const ui = record.uiLink
+                // SAM.gov sometimes returns an API URL (api.sam.gov/...) instead of
+                // the web UI URL. Always normalise to the canonical web UI link.
+                if (ui && ui.startsWith('https://sam.gov/')) return ui
+                // Fall back to canonical web UI pattern using noticeId
+                if (record.noticeId) return `https://sam.gov/opp/${record.noticeId}/view`
+                return ui ?? null
+              })(),
             }
 
             if (!existing) {
