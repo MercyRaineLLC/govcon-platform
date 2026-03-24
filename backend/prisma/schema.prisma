@@ -79,6 +79,7 @@ model ConsultingFirm {
   insightEngineApiKey String?
   localaiBaseUrl      String?
   localaiModel        String?
+  purchasedAddons     String[] @default([])
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
@@ -181,6 +182,9 @@ model ClientCompany {
   samRegStatus     String?   // "Active" | "Inactive"
   samRegExpiry     DateTime?
 
+  // Contract vehicles this client holds (e.g. ["OASIS+", "SEWP V"])
+  contractVehicles String[] @default([])
+
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -263,6 +267,11 @@ model Opportunity {
   scopeAlignmentScore     Float?
   technicalComplexScore   Float?
   incumbentSignalDetected Boolean @default(false)
+
+  // Contract vehicle tagging (detected from title/description during ingest)
+  contractVehicle   String?  // e.g. "OASIS+", "SEWP V", "GSA MAS"
+  vehicleType       String?  // "GWAC" | "IDIQ" | "BPA" | "MAS" | "BOA"
+  vehicleConfidence Float?   // 0-1 detection confidence
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

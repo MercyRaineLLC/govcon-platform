@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { billingApi } from '../services/api'
+import { billingApi, addonsApi } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import {
   CreditCard,
@@ -11,6 +11,8 @@ import {
   Building2,
   FileText,
   RefreshCw,
+  Package,
+  Lock,
 } from 'lucide-react'
 
 // ─── helpers ────────────────────────────────────────────────
@@ -112,12 +114,18 @@ export default function BillingPage() {
     queryFn: () => billingApi.getInvoices({ limit: 20 }),
     staleTime: 30_000,
   })
+  const { data: addonsData } = useQuery({
+    queryKey: ['addons'],
+    queryFn: () => addonsApi.list(),
+    staleTime: 30_000,
+  })
 
   const subscription = subData?.subscription
   const usage        = subData?.usage
   const plan         = subscription?.plan
   const plans        = (plansData?.plans ?? []) as any[]
   const invoices     = (invoicesData?.invoices ?? []) as any[]
+  const addons       = (addonsData?.data ?? []) as any[]
 
   const flash = (type: 'ok' | 'err', text: string) => {
     setMsg({ type, text })
@@ -160,12 +168,31 @@ export default function BillingPage() {
     onError: () => flash('err', 'Failed to update invoice'),
   })
 
+  const invalidateAddons = () => qc.invalidateQueries({ queryKey: ['addons'] })
+  const purchaseMut = useMutation({
+    mutationFn: (slug: string) => addonsApi.purchase(slug),
+    onSuccess: (_, slug) => {
+      invalidateAddons()
+      const a = addons.find((x: any) => x.slug === slug)
+      flash('ok', `${a?.name ?? 'Add-on'} activated`)
+    },
+    onError: (err: any) => flash('err', err?.response?.data?.error ?? 'Failed to activate add-on'),
+  })
+  const cancelAddonMut = useMutation({
+    mutationFn: (slug: string) => addonsApi.cancel(slug),
+    onSuccess: () => { invalidateAddons(); flash('ok', 'Add-on cancelled') },
+    onError: () => flash('err', 'Failed to cancel add-on'),
+  })
+
   // ── plan card styles ─────────────────────────────────────
   const planBorder: Record<string, string> = {
     starter: 'rgba(255,255,255,0.07)',
     professional: 'rgba(245,158,11,0.35)',
     enterprise: 'rgba(59,130,246,0.25)',
   }
+
+  const PLAN_RANK: Record<string, number> = { starter: 0, professional: 1, enterprise: 2 }
+  const currentRank = PLAN_RANK[plan?.slug ?? 'starter'] ?? 0
 
   if (subLoading) {
     return (
@@ -337,9 +364,9 @@ export default function BillingPage() {
                 key={p.id}
                 className="rounded-xl p-5 flex flex-col gap-4 transition-all"
                 style={{
-                  background: 'rgba(255,255,255,0.03)',
-                  border: `1px solid ${isCurrent ? 'rgba(245,158,11,0.4)' : (planBorder[p.slug] ?? 'rgba(255,255,255,0.07)')}`,
-                  boxShadow: p.slug === 'professional' ? '0 0 20px rgba(245,158,11,0.06)' : undefined,
+                  background: isCurrent ? 'rgba(34,197,94,0.04)' : 'rgba(255,255,255,0.03)',
+                  border: `1px solid ${isCurrent ? 'rgba(34,197,94,0.45)' : (planBorder[p.slug] ?? 'rgba(255,255,255,0.07)')}`,
+                  boxShadow: isCurrent ? '0 0 20px rgba(34,197,94,0.08)' : p.slug === 'professional' ? '0 0 20px rgba(245,158,11,0.06)' : undefined,
                 }}
               >
                 <div className="flex items-start justify-between">
@@ -348,8 +375,8 @@ export default function BillingPage() {
                     <h4 className="text-lg font-bold text-slate-100 mt-0.5">{p.name}</h4>
                   </div>
                   {isCurrent && (
-                    <span className="text-[10px] font-semibold px-2 py-0.5 mt-1 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
-                      Current
+                    <span className="text-[10px] font-semibold px-2 py-0.5 mt-1 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                      Current Plan
                     </span>
                   )}
                 </div>
@@ -372,29 +399,166 @@ export default function BillingPage() {
                 </ul>
 
                 {isAdmin && !isCurrent && (
-                  <button
-                    onClick={() => subscribeMut.mutate({ planId: p.id, cycle: selectedCycle })}
-                    disabled={subscribeMut.isPending}
-                    className="w-full py-2 rounded-lg text-sm font-semibold transition-all disabled:opacity-50"
-                    style={{
-                      background: p.slug === 'professional' ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.06)',
-                      border: p.slug === 'professional' ? '1px solid rgba(245,158,11,0.35)' : '1px solid rgba(255,255,255,0.1)',
-                      color: p.slug === 'professional' ? '#f59e0b' : '#94a3b8',
-                    }}
-                  >
-                    {subscribeMut.isPending ? 'Updating…' : 'Select Plan'}
-                  </button>
+                  (() => {
+                    const targetRank = PLAN_RANK[p.slug] ?? 0
+                    const isUpgrade = targetRank > currentRank
+                    return (
+                      <button
+                        onClick={() => subscribeMut.mutate({ planId: p.id, cycle: selectedCycle })}
+                        disabled={subscribeMut.isPending}
+                        className="w-full py-2 rounded-lg text-sm font-semibold transition-all disabled:opacity-50"
+                        style={{
+                          background: isUpgrade ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.04)',
+                          border: isUpgrade ? '1px solid rgba(245,158,11,0.35)' : '1px solid rgba(255,255,255,0.08)',
+                          color: isUpgrade ? '#f59e0b' : '#64748b',
+                        }}
+                      >
+                        {subscribeMut.isPending ? 'Updating…' : isUpgrade ? `Upgrade to ${p.name} →` : `Downgrade to ${p.name}`}
+                      </button>
+                    )
+                  })()
                 )}
                 {isCurrent && (
-                  <div className="w-full py-2 rounded-lg text-sm font-semibold text-center text-slate-600"
-                    style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                    Active Plan
+                  <div className="w-full py-2 rounded-lg text-sm font-semibold text-center text-emerald-500"
+                    style={{ background: 'rgba(34,197,94,0.05)', border: '1px solid rgba(34,197,94,0.25)' }}>
+                    Current Plan
                   </div>
                 )}
               </div>
             )
           })}
         </div>
+      </div>
+
+      {/* Add-On Features */}
+      <div>
+        <div className="mb-4">
+          <h3 className="text-base font-bold text-slate-200 flex items-center gap-2">
+            <Package className="w-4 h-4 text-amber-400" />
+            Add-On Features
+          </h3>
+          <p className="text-sm text-slate-500 mt-0.5">Extend your platform with specialized capabilities</p>
+        </div>
+
+        {addons.length === 0 ? (
+          <div className="flex items-center gap-2 py-4 text-slate-600 text-sm">
+            <RefreshCw className="w-4 h-4 animate-spin" /> Loading add-ons...
+          </div>
+        ) : (
+          <>
+            {/* Available add-ons */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+              {addons.filter((a: any) => a.status === 'available').map((addon: any) => (
+                <div
+                  key={addon.slug}
+                  className="rounded-xl p-5 flex flex-col gap-3 transition-all"
+                  style={{
+                    background: addon.purchased ? 'rgba(34,197,94,0.04)' : 'rgba(255,255,255,0.03)',
+                    border: `1px solid ${addon.purchased ? 'rgba(34,197,94,0.35)' : 'rgba(255,255,255,0.08)'}`,
+                  }}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl">{addon.icon}</span>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-100">{addon.name}</p>
+                        <p className="text-[11px] text-slate-500">{addon.tagline}</p>
+                      </div>
+                    </div>
+                    {addon.purchased && (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 whitespace-nowrap">
+                        {addon.includedInPlan ? 'Included' : 'Active'}
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-slate-400 leading-relaxed flex-1">{addon.description}</p>
+
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-base font-bold text-slate-200">${addon.priceMonthly}</span>
+                      <span className="text-slate-500 text-xs">/mo</span>
+                      <span className="text-emerald-400 text-[11px] ml-2">(${addon.priceAnnual}/mo annual)</span>
+                    </div>
+                  </div>
+
+                  {addon.purchased ? (
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 py-1.5 rounded-lg text-xs font-semibold text-center text-emerald-500"
+                        style={{ background: 'rgba(34,197,94,0.05)', border: '1px solid rgba(34,197,94,0.25)' }}>
+                        <CheckCircle2 className="w-3.5 h-3.5 inline mr-1" />
+                        {addon.includedInPlan ? 'Included in Plan' : 'Active'}
+                      </div>
+                      {isAdmin && !addon.includedInPlan && (
+                        <button
+                          onClick={() => { if (confirm(`Cancel ${addon.name}?`)) cancelAddonMut.mutate(addon.slug) }}
+                          disabled={cancelAddonMut.isPending}
+                          className="text-[11px] px-2 py-1.5 rounded-lg transition-all disabled:opacity-50"
+                          style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#f87171' }}
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+                  ) : isAdmin ? (
+                    <button
+                      onClick={() => purchaseMut.mutate(addon.slug)}
+                      disabled={purchaseMut.isPending}
+                      className="w-full py-1.5 rounded-lg text-xs font-semibold transition-all disabled:opacity-50"
+                      style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', color: '#f59e0b' }}
+                    >
+                      {purchaseMut.isPending ? 'Activating…' : `Add $${addon.priceMonthly}/mo →`}
+                    </button>
+                  ) : (
+                    <div className="w-full py-1.5 rounded-lg text-xs text-center text-slate-600"
+                      style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                      Contact admin to activate
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Coming soon add-ons */}
+            {addons.some((a: any) => a.status === 'coming_soon') && (
+              <div>
+                <p className="text-xs text-slate-600 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <Lock className="w-3.5 h-3.5" /> Coming Soon
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 opacity-60">
+                  {addons.filter((a: any) => a.status === 'coming_soon').map((addon: any) => (
+                    <div
+                      key={addon.slug}
+                      className="rounded-xl p-5 flex flex-col gap-3"
+                      style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-2xl">{addon.icon}</span>
+                        <div>
+                          <p className="text-sm font-semibold text-slate-300">{addon.name}</p>
+                          <p className="text-[11px] text-slate-600">{addon.tagline}</p>
+                        </div>
+                      </div>
+                      <p className="text-xs text-slate-500 leading-relaxed flex-1">{addon.description}</p>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="text-base font-bold text-slate-400">${addon.priceMonthly}</span>
+                          <span className="text-slate-600 text-xs">/mo</span>
+                        </div>
+                        <button
+                          className="text-xs px-3 py-1.5 rounded-lg"
+                          style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', color: '#64748b' }}
+                        >
+                          Notify Me
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {/* Invoice history */}

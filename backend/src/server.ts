@@ -37,6 +37,8 @@ import analyticsRoutes from './routes/analytics'
 import complianceMatrixRoutes from './routes/complianceMatrix'
 import billingRoutes from './routes/billing'
 import marketAnalyticsRoutes from './routes/marketAnalytics'
+import addonsRoutes from './routes/addons'
+import proposalAssistRoutes from './routes/proposalAssist'
 
 async function bootstrap(): Promise<void> {
   const app = express()
@@ -154,6 +156,8 @@ async function bootstrap(): Promise<void> {
   apiRouter.use('/compliance-matrix', complianceMatrixRoutes)
   apiRouter.use('/billing', billingRoutes)
   apiRouter.use('/market-analytics', marketAnalyticsRoutes)
+  apiRouter.use('/addons', addonsRoutes)
+  apiRouter.use('/proposal-assist', proposalAssistRoutes)
 
   app.use('/api', apiRouter)
 

@@ -152,7 +152,7 @@ export function OpportunitiesPage() {
     naicsCode: '', agency: '', setAsideType: '', daysUntilDeadline: '',
     probabilityMin: '', estimatedValueMin: '', estimatedValueMax: '',
     placeOfPerformance: '', recompeteOnly: '', enrichedOnly: '', showExpired: '',
-    selectedClientId: '',
+    selectedClientId: '', contractVehicle: '', hasVehicle: '',
     sortBy: 'probability', sortOrder: 'desc', page: 1, limit: 25,
   });
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -262,7 +262,7 @@ export function OpportunitiesPage() {
   const handleIngest = async () => {
     const syncNaics = localStorage.getItem('govcon_sync_naics') || '';
     const syncLimit = parseInt(localStorage.getItem('govcon_sync_limit') || '25', 10);
-    setIngestState({ jobId: null, status: 'running', message: 'Contacting SAM.gov...', detail: `Fetching up to ${syncLimit} contracts${syncNaics ? ` · NAICS ${syncNaics}` : ''}` });
+    setIngestState({ jobId: null, status: 'running', message: 'Contacting SAM.gov...', detail: `Fetching all available contracts${syncNaics ? ` · NAICS ${syncNaics}` : ''} (${syncLimit}/page)` });
     try {
       const res = await jobsApi.triggerIngest({
         naicsCode: syncNaics.trim() || undefined,
@@ -300,10 +300,15 @@ export function OpportunitiesPage() {
       }
       saveJobToStorage('enrich', jobId);
       const toEnrich = res.data.opportunitiesToEnrich || 0;
-      // Estimate: concurrency=3 workers, ~1.5s per record → toEnrich/3 * 1.5s, min 120s
-      const estSecs = Math.max(120, Math.ceil((toEnrich / 3) * 1.5));
+      // Worker only queues up to 500 records per run — estimate based on that batch, not total
+      const batchSize = Math.min(toEnrich, 500);
+      // Estimate: concurrency=3 workers, ~1.5s per record → batchSize/3 * 1.5s, min 60s
+      const estSecs = Math.max(60, Math.ceil((batchSize / 3) * 1.5));
       setEnrichEstSecs(estSecs);
-      setEnrichState((s) => ({ ...s, jobId, message: `Enriching ${toEnrich.toLocaleString()} opportunities...`, detail: 'Pulling historical award data from USAspending' }));
+      const batchLabel = toEnrich > 500
+        ? `Enriching ${batchSize} of ${toEnrich.toLocaleString()} opportunities (batched)`
+        : `Enriching ${batchSize.toLocaleString()} opportunities`;
+      setEnrichState((s) => ({ ...s, jobId, message: batchLabel, detail: 'Pulling historical award data from USAspending' }));
       // Use 450 attempts (30 min) — enrichment of 500 records takes ~3–5 minutes
       pollJob(jobId, setEnrichState, enrichPollRef, (job) => {
         clearJobFromStorage('enrich');
@@ -397,8 +402,8 @@ export function OpportunitiesPage() {
         </div>
       </PageHeader>
 
-      {/* estimatedSecs: SAM.gov paginates with 1.2s throttle per page + scoring queue; use conservative estimate */}
-      <StatusBanner state={ingestState} label="Syncing" estimatedSecs={Math.max(180, parseInt(localStorage.getItem('govcon_sync_limit') || '25', 10) * 12)} onRefresh={forceRefresh} />
+      {/* estimatedSecs: SAM.gov paginates all pages with 1.2s throttle — total depends on result count, use fixed 5-min estimate */}
+      <StatusBanner state={ingestState} label="Syncing" estimatedSecs={300} onRefresh={forceRefresh} />
       <StatusBanner state={enrichState} label="Enrichment" estimatedSecs={enrichEstSecs} onRefresh={forceRefresh} />
 
       {/* Last ingested indicator */}
@@ -416,11 +421,11 @@ export function OpportunitiesPage() {
             <Filter className="w-4 h-4" /><span>Filters</span>
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={() => setShowAdvanced((a: boolean) => !a)} className="text-xs text-gray-500 hover:text-gray-300 flex items-center gap-1">
-              <SlidersHorizontal className="w-3 h-3" />{showAdvanced ? 'Fewer filters' : 'More filters'}
+            <button onClick={() => setShowAdvanced((a: boolean) => !a)} className="text-sm text-amber-400 hover:text-amber-300 flex items-center gap-1.5 font-medium transition-colors">
+              <SlidersHorizontal className="w-3.5 h-3.5" />{showAdvanced ? 'Fewer filters' : 'More filters'}
             </button>
-            <button onClick={() => setFilters((f: any) => ({ ...f, naicsCode:'', agency:'', setAsideType:'', daysUntilDeadline:'', probabilityMin:'', estimatedValueMin:'', estimatedValueMax:'', placeOfPerformance:'', recompeteOnly:'', enrichedOnly:'', showExpired:'', selectedClientId:'', page:1 }))} className="text-xs text-gray-600 hover:text-red-400 flex items-center gap-1">
-              <X className="w-3 h-3" /> Clear
+            <button onClick={() => setFilters((f: any) => ({ ...f, naicsCode:'', agency:'', setAsideType:'', daysUntilDeadline:'', probabilityMin:'', estimatedValueMin:'', estimatedValueMax:'', placeOfPerformance:'', recompeteOnly:'', enrichedOnly:'', showExpired:'', selectedClientId:'', contractVehicle:'', hasVehicle:'', page:1 }))} className="text-sm text-gray-400 hover:text-red-400 flex items-center gap-1.5 font-medium transition-colors">
+              <X className="w-3.5 h-3.5" /> Clear
             </button>
           </div>
         </div>
@@ -475,7 +480,17 @@ export function OpportunitiesPage() {
                 <input type="checkbox" checked={filters.showExpired === 'true'} onChange={(e) => update('showExpired', e.target.checked ? 'true' : '')} className="w-3.5 h-3.5 rounded" />
                 Show expired
               </label>
+              <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer select-none">
+                <input type="checkbox" checked={filters.hasVehicle === 'true'} onChange={(e) => update('hasVehicle', e.target.checked ? 'true' : '')} className="w-3.5 h-3.5 rounded" />
+                Has vehicle only
+              </label>
             </div>
+            <input
+              className="input col-span-1"
+              placeholder="Contract vehicle (e.g. SEWP V)"
+              value={filters.contractVehicle}
+              onChange={(e) => update('contractVehicle', e.target.value)}
+            />
           </div>
         )}
       </div>
@@ -538,16 +553,42 @@ export function OpportunitiesPage() {
                         {opp.isEnriched && <span className="ml-2 text-blue-400">· enriched</span>}
                         {opp.recompeteFlag && <span className="ml-2 text-yellow-400">· recompete</span>}
                       </p>
+                      {opp.contractVehicle && (
+                        <span className="inline-flex items-center gap-1 mt-0.5 text-[10px] px-1.5 py-0.5 rounded bg-violet-900/50 text-violet-300 border border-violet-700/60 font-medium">
+                          {opp.vehicleType && <span className="text-violet-500">{opp.vehicleType}</span>}
+                          {opp.vehicleType && <span className="text-violet-600">·</span>}
+                          {opp.contractVehicle}
+                        </span>
+                      )}
                     </div>
                     <div className="w-32 flex-shrink-0">
                       <p className="text-xs text-gray-500 mb-1">Win Probability</p>
                       <ProbabilityBar probability={opp.probabilityScore || 0} />
                     </div>
                     <div className="text-right flex-shrink-0 w-28">
-                      {opp.estimatedValue
-                        ? <p className="text-sm font-mono text-gray-200">{formatCurrency(opp.estimatedValue)}</p>
-                        : <p className="text-xs text-gray-700">Value not published</p>
+                      <p className="text-xs text-gray-500 mb-0.5">Exp. Value</p>
+                      {opp.expectedValue
+                        ? <p className="text-sm font-mono text-emerald-400">{formatCurrency(opp.expectedValue)}</p>
+                        : <p className="text-xs text-gray-500">—</p>
                       }
+                    </div>
+                    <div className="text-right flex-shrink-0 w-28">
+                      {opp.estimatedValue ? (
+                        <>
+                          <p className="text-xs text-gray-500 mb-0.5">Est. Value</p>
+                          <p className="text-sm font-mono text-gray-200">{formatCurrency(opp.estimatedValue)}</p>
+                        </>
+                      ) : opp.historicalAvgAward ? (
+                        <>
+                          <p className="text-xs text-gray-500 mb-0.5">Hist. Avg Award</p>
+                          <p className="text-sm font-mono text-blue-300">{formatCurrency(opp.historicalAvgAward)}</p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-xs text-gray-500 mb-0.5">Value</p>
+                          <p className="text-xs text-gray-600 italic">Not disclosed</p>
+                        </>
+                      )}
                     </div>
                     <div className="text-right flex-shrink-0 w-20">
                       <p className="text-xs text-gray-500">Deadline</p>

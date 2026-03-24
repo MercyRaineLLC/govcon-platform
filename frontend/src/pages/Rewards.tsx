@@ -170,7 +170,7 @@ export function RewardsPage() {
       title: 'Perfect Compliance',
       badge: 'PERFECT_COMPLIANCE',
       description:
-        'Triggered when a client maintains a 100% on-time submission rate with at least 10 total submissions. Recognises sustained excellence.',
+        'Triggered when a client maintains a 100% on-time submission rate with at least 10 total submissions. Recognizes sustained excellence.',
       reward: 'Priority matching perk (permanent)',
       color: 'blue',
     },

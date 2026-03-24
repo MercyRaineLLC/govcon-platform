@@ -113,12 +113,27 @@ export async function generateWithRouter(
   try {
     result = await provider.generate(req)
   } catch (providerErr) {
-    // If LocalAI fails, fall back to Claude (if a key is available)
-    if (llmProvider === 'localai' && anthropicApiKey) {
-      logger.warn('LocalAI call failed — falling back to Claude', { error: (providerErr as Error).message })
-      result = await new ClaudeProvider(anthropicApiKey).generate(req)
+    const errMsg = (providerErr as Error).message
+    if (llmProvider === 'localai') {
+      // LocalAI failed — try Claude, then give up
+      if (anthropicApiKey) {
+        logger.warn('LocalAI call failed — falling back to Claude', { error: errMsg })
+        result = await new ClaudeProvider(anthropicApiKey).generate(req)
+      } else {
+        throw providerErr
+      }
     } else {
-      throw providerErr
+      // Any commercial provider failed (quota, outage, bad key) — fall back to LocalAI
+      const localaiUrl = localaiBaseUrl || process.env.LOCALAI_BASE_URL || 'http://local-ai:8080/v1'
+      logger.warn(`${llmProvider} call failed — falling back to LocalAI`, { error: errMsg, url: localaiUrl })
+      try {
+        result = await new LocalAIProvider(localaiUrl, localaiModel).generate(req)
+        result = { ...result, provider: `localai-fallback-from-${llmProvider}` }
+      } catch (localaiErr) {
+        // LocalAI also failed — surface the original error (more actionable)
+        logger.error('LocalAI fallback also failed', { error: (localaiErr as Error).message })
+        throw providerErr
+      }
     }
   }
   const durationMs = Date.now() - startMs

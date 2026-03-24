@@ -21,7 +21,7 @@ const STEPS: Step[] = [
   {
     icon: <Brain className="w-10 h-10 text-amber-400" />,
     title: 'Welcome to GovCon Advisory Intelligence',
-    body: 'This platform helps veteran-owned small businesses find, analyze, and win federal contracts. In the next few steps we\'ll walk you through the key features.',
+    body: 'This platform helps small businesses find, analyze, and win federal contracts. In the next few steps we\'ll walk you through the key features.',
   },
   {
     icon: <Key className="w-10 h-10 text-amber-400" />,

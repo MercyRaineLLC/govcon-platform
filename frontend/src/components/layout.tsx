@@ -286,7 +286,7 @@ export function Layout() {
         <div className="px-8 py-3 flex items-center justify-between"
           style={{ borderTop: '1px solid rgba(245,158,11,0.08)' }}>
           <p className="text-[10px] text-slate-700 tracking-widest">
-            © 2026 MERCY RAINE LLC · SDVOSB · "Transporting Freight, Lives."
+            © {new Date().getFullYear()} MERCY RAINE LLC · SDVOSB · All Rights Reserved
           </p>
           <p className="text-[10px] text-slate-700">GovCon Advisory Intelligence Platform</p>
         </div>

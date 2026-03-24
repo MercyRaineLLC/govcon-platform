@@ -2,10 +2,17 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { firmApi, clientDocumentsApi } from '../services/api';
 import { PageHeader, Spinner } from '../components/ui';
-import { Settings, Users, Key, Eye, EyeOff, CheckCircle, XCircle, BookOpen, Brain, RefreshCw, BarChart2, Zap } from 'lucide-react';
+import { Settings, Users, Key, Eye, EyeOff, CheckCircle, XCircle, BookOpen, Brain, RefreshCw, BarChart2 } from 'lucide-react';
 
 const SYNC_LIMIT_KEY = 'govcon_sync_limit';
 const SYNC_NAICS_KEY = 'govcon_sync_naics';
+
+const PROVIDER_LABELS: Record<string, { label: string; color: string }> = {
+  claude:         { label: 'Claude (Anthropic)',  color: 'purple' },
+  openai:         { label: 'OpenAI (GPT-4o)',     color: 'green'  },
+  insight_engine: { label: 'Insight Engine',      color: 'amber'  },
+  localai:        { label: 'LocalAI (On-Premise)', color: 'cyan'  },
+}
 
 export function SettingsPage() {
   const qc = useQueryClient();
@@ -15,24 +22,6 @@ export function SettingsPage() {
   const [showKey, setShowKey] = useState(false);
   const [revealSamKey, setRevealSamKey] = useState(false);
   const [samKeyMsg, setSamKeyMsg] = useState('');
-  const [anthropicKey, setAnthropicKey] = useState('');
-  const [showAnthropicKey, setShowAnthropicKey] = useState(false);
-  const [revealAnthropicKey, setRevealAnthropicKey] = useState(false);
-  const [anthropicKeyMsg, setAnthropicKeyMsg] = useState('');
-  // AI provider settings
-  const [llmProvider, setLlmProvider] = useState('claude');
-  const [providerMsg, setProviderMsg] = useState('');
-  const [openaiKey, setOpenaiKey] = useState('');
-  const [showOpenaiKey, setShowOpenaiKey] = useState(false);
-  const [revealOpenaiKey, setRevealOpenaiKey] = useState(false);
-  const [openaiKeyMsg, setOpenaiKeyMsg] = useState('');
-  const [insightKey, setInsightKey] = useState('');
-  const [showInsightKey, setShowInsightKey] = useState(false);
-  const [revealInsightKey, setRevealInsightKey] = useState(false);
-  const [insightKeyMsg, setInsightKeyMsg] = useState('');
-  const [localaiBaseUrl, setLocalaiBaseUrl] = useState('');
-  const [localaiModel, setLocalaiModel] = useState('');
-  const [localaiMsg, setLocalaiMsg] = useState('');
   const [showUsage, setShowUsage] = useState(false);
   const [reviewNote, setReviewNote] = useState<Record<string, string>>({});
   const [syncLimit, setSyncLimit] = useState(() => localStorage.getItem(SYNC_LIMIT_KEY) || '25');
@@ -66,9 +55,6 @@ export function SettingsPage() {
         flatLateFee: data.data.flatLateFee?.toString() || '',
         penaltyPercent: data.data.penaltyPercent ? (data.data.penaltyPercent * 100).toString() : '',
       });
-      setLlmProvider(data.data.llmProvider || 'claude');
-      setLocalaiBaseUrl(data.data.localaiBaseUrl || '');
-      setLocalaiModel(data.data.localaiModel || '');
     }
   }, [data]);
 
@@ -95,59 +81,6 @@ export function SettingsPage() {
     onError: (err: any) => setSamKeyMsg(err?.response?.data?.error || 'Save failed'),
   });
 
-  const anthropicKeyMutation = useMutation({
-    mutationFn: () => firmApi.updateAnthropicApiKey(anthropicKey),
-    onSuccess: () => {
-      setAnthropicKeyMsg('Anthropic API key saved. AI analysis is now enabled.');
-      setAnthropicKey('');
-      qc.invalidateQueries({ queryKey: ['firm'] });
-      setTimeout(() => setAnthropicKeyMsg(''), 4000);
-    },
-    onError: (err: any) => setAnthropicKeyMsg(err?.response?.data?.error || 'Save failed'),
-  });
-
-  const llmProviderMutation = useMutation({
-    mutationFn: () => firmApi.updateLlmProvider(llmProvider),
-    onSuccess: () => {
-      setProviderMsg('AI provider updated.');
-      qc.invalidateQueries({ queryKey: ['firm'] });
-      setTimeout(() => setProviderMsg(''), 3000);
-    },
-    onError: (err: any) => setProviderMsg(err?.response?.data?.error || 'Save failed'),
-  });
-
-  const openaiKeyMutation = useMutation({
-    mutationFn: () => firmApi.updateOpenaiApiKey(openaiKey),
-    onSuccess: () => {
-      setOpenaiKeyMsg('OpenAI API key saved.');
-      setOpenaiKey('');
-      qc.invalidateQueries({ queryKey: ['firm'] });
-      setTimeout(() => setOpenaiKeyMsg(''), 4000);
-    },
-    onError: (err: any) => setOpenaiKeyMsg(err?.response?.data?.error || 'Save failed'),
-  });
-
-  const insightKeyMutation = useMutation({
-    mutationFn: () => firmApi.updateInsightEngineApiKey(insightKey),
-    onSuccess: () => {
-      setInsightKeyMsg('Insight Engine API key saved.');
-      setInsightKey('');
-      qc.invalidateQueries({ queryKey: ['firm'] });
-      setTimeout(() => setInsightKeyMsg(''), 4000);
-    },
-    onError: (err: any) => setInsightKeyMsg(err?.response?.data?.error || 'Save failed'),
-  });
-
-  const localaiMutation = useMutation({
-    mutationFn: () => firmApi.updateLocalaiConfig({ localaiBaseUrl, localaiModel }),
-    onSuccess: () => {
-      setLocalaiMsg('LocalAI configuration saved.');
-      qc.invalidateQueries({ queryKey: ['firm'] });
-      setTimeout(() => setLocalaiMsg(''), 4000);
-    },
-    onError: (err: any) => setLocalaiMsg(err?.response?.data?.error || 'Save failed'),
-  });
-
   const reviewMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: 'APPROVED' | 'REJECTED' }) =>
       clientDocumentsApi.reviewTemplate(id, { status, reviewNotes: reviewNote[id] || undefined }),
@@ -161,6 +94,9 @@ export function SettingsPage() {
   const users = usersData?.data || [];
   const templates: any[] = templatesData?.data || [];
   const pendingTemplates = templates.filter((t) => t.status === 'PENDING');
+
+  const activeProvider = firm?.llmProvider || 'claude';
+  const providerInfo = PROVIDER_LABELS[activeProvider] ?? { label: activeProvider, color: 'gray' };
 
   if (isLoading) return <div className="flex justify-center mt-10"><Spinner /></div>;
 
@@ -178,7 +114,6 @@ export function SettingsPage() {
           <p className="text-xs text-gray-500 mb-4">
             Your SAM.gov API key is required for the Ingest SAM.gov feature. Keys expire every 90 days —
             renew yours at <span className="text-blue-400">sam.gov → My Account → API Keys</span>.
-            The stored key takes priority over the server environment variable.
           </p>
 
           {firm?.samApiKey && (
@@ -234,223 +169,36 @@ export function SettingsPage() {
           )}
         </div>
 
-        {/* AI Intelligence Provider */}
+        {/* AI Status — read-only, managed by platform */}
         <div className="card lg:col-span-2">
-          <div className="flex items-center gap-2 mb-2">
-            <Brain className="w-4 h-4 text-purple-400" />
-            <h2 className="font-semibold text-gray-200">AI Intelligence Provider</h2>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Brain className="w-4 h-4 text-purple-400" />
+              <h2 className="font-semibold text-gray-200">AI Intelligence</h2>
+            </div>
+            <div className={`flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-medium ${
+              providerInfo.color === 'purple' ? 'bg-purple-900/20 border-purple-700 text-purple-300' :
+              providerInfo.color === 'green'  ? 'bg-green-900/20  border-green-700  text-green-300'  :
+              providerInfo.color === 'amber'  ? 'bg-amber-900/20  border-amber-700  text-amber-300'  :
+              providerInfo.color === 'cyan'   ? 'bg-cyan-900/20   border-cyan-700   text-cyan-300'   :
+                                                'bg-gray-800      border-gray-700   text-gray-300'
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${
+                providerInfo.color === 'purple' ? 'bg-purple-400' :
+                providerInfo.color === 'green'  ? 'bg-green-400'  :
+                providerInfo.color === 'amber'  ? 'bg-amber-400'  :
+                providerInfo.color === 'cyan'   ? 'bg-cyan-400'   : 'bg-gray-400'
+              }`} />
+              {providerInfo.label} · Active
+            </div>
           </div>
           <p className="text-xs text-gray-500 mb-4">
-            Powers AI document analysis, compliance matrix generation, and bid strategy guidance.
-            Choose your preferred provider and add the corresponding API key below.
-            The active provider is used for all AI features across the platform.
+            AI-powered document analysis, compliance matrix generation, and bid strategy guidance are
+            managed at the platform level. Contact your account representative to make changes.
           </p>
 
-          {/* Provider Selector */}
-          <div className="mb-5 p-4 rounded-lg bg-gray-800/40 border border-gray-700">
-            <label className="label mb-2">Active AI Provider</label>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-              {[
-                { value: 'claude', label: 'Claude (Anthropic)', desc: 'Premium — best for complex analysis', color: 'purple' },
-                { value: 'openai', label: 'OpenAI (GPT-4o)', desc: 'Reliable — cost-effective option', color: 'green' },
-                { value: 'insight_engine', label: 'Insight Engine', desc: 'Budget-friendly — great for high volume', color: 'amber' },
-                { value: 'localai', label: 'LocalAI', desc: 'Free — runs entirely on your hardware', color: 'cyan' },
-              ].map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setLlmProvider(opt.value)}
-                  className={`text-left px-3 py-2.5 rounded-lg border transition-colors ${
-                    llmProvider === opt.value
-                      ? opt.color === 'purple' ? 'border-purple-500 bg-purple-900/20 text-purple-200'
-                        : opt.color === 'green' ? 'border-green-500 bg-green-900/20 text-green-200'
-                        : opt.color === 'amber' ? 'border-amber-500 bg-amber-900/20 text-amber-200'
-                        : 'border-cyan-500 bg-cyan-900/20 text-cyan-200'
-                      : 'border-gray-700 hover:border-gray-600 text-gray-400'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-0.5">
-                    {llmProvider === opt.value && <Zap className="w-3.5 h-3.5" />}
-                    <span className="text-sm font-medium">{opt.label}</span>
-                  </div>
-                  <span className="text-[11px] opacity-70">{opt.desc}</span>
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => llmProviderMutation.mutate()}
-                disabled={llmProviderMutation.isPending}
-                className="btn-primary disabled:opacity-50 text-sm"
-              >
-                {llmProviderMutation.isPending ? 'Saving...' : 'Save Provider'}
-              </button>
-              {providerMsg && <p className={`text-sm ${providerMsg.includes('updated') ? 'text-green-400' : 'text-red-400'}`}>{providerMsg}</p>}
-            </div>
-          </div>
-
-          {/* API Key Inputs — one per provider */}
-          <div className="space-y-4">
-            {/* Claude key */}
-            <div className="border border-gray-800 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <span className={`w-2 h-2 rounded-full ${llmProvider === 'claude' ? 'bg-purple-400' : 'bg-gray-600'}`} />
-                <span className="text-sm font-medium text-gray-300">Claude (Anthropic) Key</span>
-                {llmProvider === 'claude' && <span className="text-[10px] bg-purple-900 text-purple-300 px-1.5 py-0.5 rounded">Active</span>}
-              </div>
-              {firm?.anthropicApiKey && (
-                <div className="mb-3 flex items-center gap-3 px-3 py-2 rounded bg-gray-800/60 border border-gray-700">
-                  <CheckCircle className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />
-                  <span className="font-mono text-xs text-gray-200 flex-1 truncate">
-                    {revealAnthropicKey ? firm.anthropicApiKey : `${firm.anthropicApiKey.substring(0, 10)}${'•'.repeat(16)}${firm.anthropicApiKey.slice(-4)}`}
-                  </span>
-                  <button type="button" onClick={() => setRevealAnthropicKey((v) => !v)} className="text-gray-500 hover:text-gray-300">
-                    {revealAnthropicKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-              )}
-              <div className="flex gap-3 items-end">
-                <div className="flex-1 relative">
-                  <input type={showAnthropicKey ? 'text' : 'password'} className="input pr-10 font-mono text-sm"
-                    placeholder="sk-ant-..." value={anthropicKey} onChange={(e) => setAnthropicKey(e.target.value)} />
-                  <button type="button" onClick={() => setShowAnthropicKey((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
-                    {showAnthropicKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-                <button onClick={() => anthropicKeyMutation.mutate()} disabled={!anthropicKey.trim() || anthropicKeyMutation.isPending}
-                  className="btn-primary disabled:opacity-50 text-sm">
-                  {anthropicKeyMutation.isPending ? 'Saving...' : 'Save'}
-                </button>
-              </div>
-              {anthropicKeyMsg && <p className={`text-xs mt-1.5 ${anthropicKeyMsg.includes('saved') ? 'text-green-400' : 'text-red-400'}`}>{anthropicKeyMsg}</p>}
-            </div>
-
-            {/* OpenAI key */}
-            <div className="border border-gray-800 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <span className={`w-2 h-2 rounded-full ${llmProvider === 'openai' ? 'bg-green-400' : 'bg-gray-600'}`} />
-                <span className="text-sm font-medium text-gray-300">OpenAI (GPT-4o) Key</span>
-                {llmProvider === 'openai' && <span className="text-[10px] bg-green-900 text-green-300 px-1.5 py-0.5 rounded">Active</span>}
-              </div>
-              {firm?.openaiApiKey && (
-                <div className="mb-3 flex items-center gap-3 px-3 py-2 rounded bg-gray-800/60 border border-gray-700">
-                  <CheckCircle className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />
-                  <span className="font-mono text-xs text-gray-200 flex-1 truncate">
-                    {revealOpenaiKey ? firm.openaiApiKey : `${firm.openaiApiKey.substring(0, 8)}${'•'.repeat(16)}${firm.openaiApiKey.slice(-4)}`}
-                  </span>
-                  <button type="button" onClick={() => setRevealOpenaiKey((v) => !v)} className="text-gray-500 hover:text-gray-300">
-                    {revealOpenaiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-              )}
-              <div className="flex gap-3 items-end">
-                <div className="flex-1 relative">
-                  <input type={showOpenaiKey ? 'text' : 'password'} className="input pr-10 font-mono text-sm"
-                    placeholder="sk-..." value={openaiKey} onChange={(e) => setOpenaiKey(e.target.value)} />
-                  <button type="button" onClick={() => setShowOpenaiKey((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
-                    {showOpenaiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-                <button onClick={() => openaiKeyMutation.mutate()} disabled={!openaiKey.trim() || openaiKeyMutation.isPending}
-                  className="btn-primary disabled:opacity-50 text-sm">
-                  {openaiKeyMutation.isPending ? 'Saving...' : 'Save'}
-                </button>
-              </div>
-              {openaiKeyMsg && <p className={`text-xs mt-1.5 ${openaiKeyMsg.includes('saved') ? 'text-green-400' : 'text-red-400'}`}>{openaiKeyMsg}</p>}
-            </div>
-
-            {/* Insight Engine key */}
-            <div className="border border-gray-800 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <span className={`w-2 h-2 rounded-full ${llmProvider === 'insight_engine' ? 'bg-amber-400' : 'bg-gray-600'}`} />
-                <span className="text-sm font-medium text-gray-300">Insight Engine Key</span>
-                {llmProvider === 'insight_engine' && <span className="text-[10px] bg-amber-900 text-amber-300 px-1.5 py-0.5 rounded">Active</span>}
-              </div>
-              {firm?.insightEngineApiKey && (
-                <div className="mb-3 flex items-center gap-3 px-3 py-2 rounded bg-gray-800/60 border border-gray-700">
-                  <CheckCircle className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />
-                  <span className="font-mono text-xs text-gray-200 flex-1 truncate">
-                    {revealInsightKey ? firm.insightEngineApiKey : `${firm.insightEngineApiKey.substring(0, 6)}${'•'.repeat(16)}${firm.insightEngineApiKey.slice(-4)}`}
-                  </span>
-                  <button type="button" onClick={() => setRevealInsightKey((v) => !v)} className="text-gray-500 hover:text-gray-300">
-                    {revealInsightKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-              )}
-              <div className="flex gap-3 items-end">
-                <div className="flex-1 relative">
-                  <input type={showInsightKey ? 'text' : 'password'} className="input pr-10 font-mono text-sm"
-                    placeholder="API key..." value={insightKey} onChange={(e) => setInsightKey(e.target.value)} />
-                  <button type="button" onClick={() => setShowInsightKey((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
-                    {showInsightKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-                <button onClick={() => insightKeyMutation.mutate()} disabled={!insightKey.trim() || insightKeyMutation.isPending}
-                  className="btn-primary disabled:opacity-50 text-sm">
-                  {insightKeyMutation.isPending ? 'Saving...' : 'Save'}
-                </button>
-              </div>
-              {insightKeyMsg && <p className={`text-xs mt-1.5 ${insightKeyMsg.includes('saved') ? 'text-green-400' : 'text-red-400'}`}>{insightKeyMsg}</p>}
-            </div>
-
-            {/* LocalAI config */}
-            <div className="border border-gray-800 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <span className={`w-2 h-2 rounded-full ${llmProvider === 'localai' ? 'bg-cyan-400' : 'bg-gray-600'}`} />
-                <span className="text-sm font-medium text-gray-300">LocalAI — Self-Hosted</span>
-                {llmProvider === 'localai' && <span className="text-[10px] bg-cyan-900 text-cyan-300 px-1.5 py-0.5 rounded">Active</span>}
-              </div>
-              <p className="text-xs text-gray-500 mb-3">
-                No API key required. Runs on your own hardware — no per-token cost.
-                Install LocalAI, download a model, then set the URL and model name below.
-              </p>
-              {(firm?.localaiBaseUrl || firm?.localaiModel) && (
-                <div className="mb-3 flex items-center gap-3 px-3 py-2 rounded bg-gray-800/60 border border-gray-700">
-                  <CheckCircle className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-mono text-xs text-gray-200 truncate">{firm.localaiBaseUrl || 'http://localhost:8080/v1'}</p>
-                    {firm?.localaiModel && <p className="font-mono text-xs text-gray-400 truncate">model: {firm.localaiModel}</p>}
-                  </div>
-                </div>
-              )}
-              <div className="space-y-2 mb-3">
-                <div>
-                  <label className="label text-xs">Base URL</label>
-                  <input
-                    type="text"
-                    className="input font-mono text-sm"
-                    placeholder="http://localhost:8080/v1"
-                    value={localaiBaseUrl}
-                    onChange={(e) => setLocalaiBaseUrl(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="label text-xs">Model Name</label>
-                  <input
-                    type="text"
-                    className="input font-mono text-sm"
-                    placeholder="llama-3.2-1b-instruct:q4_k_m"
-                    value={localaiModel}
-                    onChange={(e) => setLocalaiModel(e.target.value)}
-                  />
-                </div>
-              </div>
-              <button
-                onClick={() => localaiMutation.mutate()}
-                disabled={localaiMutation.isPending}
-                className="btn-primary disabled:opacity-50 text-sm"
-              >
-                {localaiMutation.isPending ? 'Saving...' : 'Save LocalAI Config'}
-              </button>
-              {localaiMsg && <p className={`text-xs mt-1.5 ${localaiMsg.includes('saved') ? 'text-green-400' : 'text-red-400'}`}>{localaiMsg}</p>}
-            </div>
-          </div>
-
           {/* Usage Summary */}
-          <div className="mt-4 border-t border-gray-800 pt-4">
+          <div className="border-t border-gray-800 pt-4">
             <button
               type="button"
               onClick={() => setShowUsage((v) => !v)}
@@ -496,19 +244,6 @@ export function SettingsPage() {
                         </div>
                       </div>
                     )}
-                    {(usageData.data?.byProvider?.length ?? 0) > 0 && (
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1.5">By Provider</p>
-                        <div className="space-y-1">
-                          {usageData.data.byProvider.map((p: any) => (
-                            <div key={p.provider} className="flex items-center justify-between text-xs">
-                              <span className="text-gray-400 capitalize">{p.provider.replace(/_/g, ' ')}</span>
-                              <span className="text-gray-300">{p.calls} calls · ${Number(p.costUsd).toFixed(4)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
                     {usageData.data?.totalCalls === 0 && (
                       <p className="text-xs text-gray-600 text-center py-2">No AI calls recorded in the last 30 days.</p>
                     )}
@@ -527,7 +262,6 @@ export function SettingsPage() {
           </div>
           <p className="text-xs text-gray-500 mb-4">
             Control how the <strong className="text-gray-400">Sync Contracts</strong> button works on the Opportunities page.
-            These defaults are used every time you sync — no configuration needed at sync time.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -665,8 +399,8 @@ export function SettingsPage() {
           </div>
           <p className="text-xs text-gray-500 mb-4">
             When a client shares a document to the template library it enters <strong className="text-gray-400">Pending Review</strong> status.
-            As an admin you review it here — approve to make it available to all firms in the library, or reject with a note explaining why.
-            Approved templates are anonymized before sharing; client names are never exposed.
+            Approve to make it available to all firms, or reject with a note.
+            Approved templates are anonymized before sharing.
           </p>
 
           {templates.length === 0 ? (

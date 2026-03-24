@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>GovCon Advisory Intelligence Platform — SRS v3.0</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; max-width: 980px; margin: 0 auto; padding: 48px 40px 80px; color: #111827; font-size: 13.5px; line-height: 1.7; background: #fff; }
+  .cover { text-align: center; padding: 60px 0 48px; border-bottom: 3px solid #1e3a5f; margin-bottom: 48px; }
+  .cover .logo-band { background: #1e3a5f; color: #fff; display: inline-block; padding: 8px 24px; border-radius: 4px; font-size: 11px; letter-spacing: .15em; text-transform: uppercase; margin-bottom: 24px; }
+  .cover h1 { font-size: 28px; font-weight: 800; color: #1e3a5f; margin: 0 0 8px; }
+  .cover h2 { font-size: 16px; font-weight: 400; color: #64748b; margin: 0 0 32px; }
+  .cover-meta { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; max-width: 700px; margin: 0 auto; }
+  .cover-meta div { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; }
+  .cover-meta label { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: #94a3b8; margin-bottom: 3px; }
+  .cover-meta p { margin: 0; font-weight: 700; color: #1e3a5f; font-size: 13px; }
+  .toc { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 24px 28px; margin-bottom: 40px; }
+  .toc h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: #64748b; margin: 0 0 12px; }
+  .toc ol { margin: 0; padding-left: 20px; column-count: 2; column-gap: 32px; }
+  .toc li { margin-bottom: 5px; font-size: 13px; color: #1e3a5f; }
+  h2.sec { font-size: 15px; font-weight: 800; color: #1e3a5f; border-left: 4px solid #1e3a5f; padding-left: 12px; margin: 44px 0 16px; }
+  h3.sub { font-size: 13px; font-weight: 700; color: #374151; margin: 22px 0 8px; }
+  .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  .feat { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 14px 16px; }
+  .feat h4 { margin: 0 0 5px; font-size: 13px; color: #1e3a5f; }
+  .feat p { margin: 0; font-size: 12.5px; color: #475569; }
+  .pill { display: inline-block; border-radius: 12px; padding: 2px 10px; font-size: 11px; font-weight: 600; margin: 2px 3px 2px 0; }
+  .pill.blue  { background: #dbeafe; color: #1e40af; }
+  .pill.green { background: #dcfce7; color: #166534; }
+  .pill.amber { background: #fef3c7; color: #92400e; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-bottom: 16px; }
+  th { background: #1e3a5f; color: #fff; padding: 8px 12px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+  td { padding: 8px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+  tr:nth-child(even) td { background: #f8fafc; }
+  .box { border-radius: 6px; padding: 12px 16px; margin-bottom: 12px; font-size: 13px; }
+  .box.green { background: #f0fdf4; border: 1px solid #86efac; }
+  .box.amber { background: #fffbeb; border: 1px solid #fde68a; }
+  .box.blue  { background: #eff6ff; border: 1px solid #bfdbfe; }
+  .box.slate { background: #f8fafc; border: 1px solid #cbd5e1; }
+  ul { padding-left: 20px; margin: 6px 0 12px; }
+  li { margin-bottom: 4px; }
+  .badge-new { display: inline-block; background: #22c55e; color: #fff; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; padding: 1px 6px; border-radius: 10px; margin-left: 6px; vertical-align: middle; }
+  .changelog { background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 16px 20px; margin-bottom: 32px; }
+  .changelog h4 { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: #166534; }
+  .changelog ul { margin: 0; }
+  .footer { margin-top: 60px; border-top: 1px solid #e2e8f0; padding-top: 14px; display: flex; justify-content: space-between; font-size: 11px; color: #94a3b8; }
+  @media print { * { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .cover { page-break-after: always; } }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="logo-band">Software Requirements Specification</div>
+  <h1>GovCon Advisory Intelligence Platform</h1>
+  <h2>Beta Release — Full Feature Specification</h2>
+  <div class="cover-meta">
+    <div><label>Version</label><p>3.0</p></div>
+    <div><label>Date</label><p>March 22, 2026</p></div>
+    <div><label>Status</label><p>Beta Release</p></div>
+    <div><label>Prepared By</label><p>Mercy Raine LLC</p></div>
+  </div>
+</div>
+
+<div class="changelog">
+  <h4>What's New in v3.0 vs v2.0</h4>
+  <ul>
+    <li><strong>BigQuery Historical Analytics Layer</strong> — USAspending award data ingested into Google BigQuery; 2,000 pre-seeded records across 20 NAICS codes; HHI market concentration, agency profiles, contractor win history</li>
+    <li><strong>Market Analytics Module</strong> — 6 new API endpoints for competition profiles, agency profiles, contractor profiles, firm-wide market snapshots, and admin-triggered ingestion</li>
+    <li><strong>Frontend Code Splitting</strong> — React.lazy() for all 20 pages; 1 MB monolith reduced to 30+ on-demand chunks; vendor isolation (React, TanStack, Recharts, Lucide)</li>
+    <li><strong>Error Boundary</strong> — Global React crash handler with branded recovery UI</li>
+    <li><strong>404 / Catch-all Route</strong> — Proper not-found page for all unmatched URLs</li>
+    <li><strong>Onboarding Wizard</strong> — 5-step first-run modal (shown once per browser via localStorage) guiding new users from API key setup through first AI analysis</li>
+    <li><strong>Beta Hardening</strong> — Clean TypeScript on both frontend and backend; Docker containers rebuilt; Prisma schema verified in sync</li>
+  </ul>
+</div>
+
+<div class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li>Product Overview &amp; Mission</li>
+    <li>User Roles</li>
+    <li>Core Feature Modules</li>
+    <li>AI Intelligence Layer</li>
+    <li>Opportunity Management</li>
+    <li>Client &amp; Pipeline Management</li>
+    <li>Analytics &amp; Forecasting</li>
+    <li>BigQuery Market Analytics <span class="badge-new">New</span></li>
+    <li>Compliance &amp; Audit</li>
+    <li>Settings &amp; Administration</li>
+    <li>Frontend Architecture <span class="badge-new">Updated</span></li>
+    <li>Non-Functional Requirements &amp; Beta Readiness</li>
+    <li>Infrastructure &amp; Deployment</li>
+    <li>Pre-Production Checklist</li>
+  </ol>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2 class="sec">1. Product Overview &amp; Mission</h2>
+<p>The <strong>GovCon Advisory Intelligence Platform</strong> is a multi-tenant SaaS application purpose-built for government contracting consulting firms. It automates opportunity discovery, applies AI-driven analysis to solicitation documents, and generates actionable bid intelligence — replacing manual research workflows that currently consume dozens of analyst hours per pursuit.</p>
+
+<p>The platform ingests live federal opportunities from SAM.gov, scores them using a probabilistic 8-factor model, and surfaces only the highest-value matches per client. Consultants manage the full pursuit lifecycle — opportunity identification through bid decision, proposal planning, submission tracking, and compliance monitoring — in a single workspace. As of v3.0, the platform adds a <strong>BigQuery-powered historical market intelligence layer</strong> that surfaces competition profiles, agency buying patterns, and contractor win histories from real federal award data.</p>
+
+<div class="box blue"><strong>Launch Goal:</strong> Enable a consulting firm to onboard a client, ingest relevant federal opportunities, receive AI-scored bid recommendations, generate a compliance matrix and bid strategy document, and view historical competitive intelligence — all within 15 minutes of first login, guided by the built-in Onboarding Wizard.</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2 class="sec">2. User Roles</h2>
+<table>
+  <tr><th>Role</th><th>Capabilities</th></tr>
+  <tr><td><strong>Admin</strong></td><td>Full platform access. Manages firm settings, API keys, AI provider selection, user accounts, penalty configuration, BigQuery ingestion, and seed data. Only role that can access Settings and Compliance administration pages.</td></tr>
+  <tr><td><strong>Consultant</strong></td><td>Full operational access. Views and acts on all opportunities, clients, decisions, submissions, analytics, and AI features. Can view AI usage dashboard. Cannot modify firm-level configuration.</td></tr>
+  <tr><td><strong>Client (Portal)</strong></td><td>Read-only access to their own opportunity pipeline, bid decisions, submission status, and documents via the Client Portal. Cannot see other clients or firm internals.</td></tr>
+</table>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2 class="sec">3. Core Feature Modules</h2>
+<div class="feature-grid">
+  <div class="feat"><h4>Opportunity Intelligence</h4><p>Live SAM.gov ingestion, AI scoring, enrichment from USASpending, win probability display with disclaimer, deadline urgency classification, favorites and recently-viewed tracking.</p></div>
+  <div class="feat"><h4>AI Document Analysis</h4><p>Upload RFP/SOW/amendment documents. AI extracts scope keywords, complexity score, alignment score, and incumbent signals. Triggers re-scoring automatically on upload.</p></div>
+  <div class="feat"><h4>Compliance Matrix</h4><p>AI generates a structured requirement-by-requirement compliance checklist from solicitation text. Each row is trackable with status, notes, and proposal section assignment.</p></div>
+  <div class="feat"><h4>Bid Guidance</h4><p>AI produces a plain-language win strategy including discriminators, risks, teaming recommendations, pricing guidance, and past performance hooks.</p></div>
+  <div class="feat"><h4>Bid Decision Engine</h4><p>8-factor logistic probability model with Bayesian calibration produces BID_PRIME / BID_SUB / NO_BID recommendations with full factor breakdown per client-opportunity pair.</p></div>
+  <div class="feat"><h4>Client Portal</h4><p>Branded portal view for end-clients. Shows their active opportunities, bid decisions, submission history, and uploaded documents relevant to their engagements.</p></div>
+  <div class="feat"><h4>Analytics &amp; Forecasting</h4><p>Pipeline funnel, win distribution, penalty trends, submission velocity, Monte Carlo revenue forecast, client portfolio diversification (HHI index), and market intelligence.</p></div>
+  <div class="feat"><h4>BigQuery Market Analytics <span class="badge-new">New</span></h4><p>Historical federal award data from USAspending stored in Google BigQuery. Competition profiles (HHI, top winners, set-aside breakdown), agency buying profiles, contractor win histories, firm-wide NAICS market snapshots.</p></div>
+  <div class="feat"><h4>Rewards Program</h4><p>Points-based incentive system. Clients earn rewards for on-time submissions, compliance milestones, and referrals. Redeemable through the admin panel.</p></div>
+  <div class="feat"><h4>Billing &amp; Subscriptions</h4><p>Tiered subscription management, invoice history, plan upgrade/downgrade, and payment method tracking for the consulting firm's own service subscription.</p></div>
+  <div class="feat"><h4>Template Library</h4><p>Upload, approve/reject, and assign proposal document templates to clients. Clients download and complete templates through the portal.</p></div>
+  <div class="feat"><h4>Onboarding Wizard <span class="badge-new">New</span></h4><p>5-step guided setup shown once per browser on first login. Walks new consultants from API key configuration through first opportunity sync, client onboarding, and AI analysis.</p></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2 class="sec">4. AI Intelligence Layer</h2>
+<p>All AI calls route through a central <strong>LLM Router</strong> that resolves the active provider per firm, checks a Redis cache (7-day TTL) for repeated requests, calls the appropriate provider, logs token usage and cost, and returns the result. Business logic services have no direct knowledge of which AI provider is active.</p>
+
+<h3 class="sub">4.1 Supported AI Providers</h3>
+<table>
+  <tr><th>Provider</th><th>Display Name</th><th>Best For</th><th>Cost Estimate</th></tr>
+  <tr><td>Anthropic</td><td>Claude (Anthropic)</td><td>Complex analysis, highest accuracy</td><td>~$3–15 / 1M tokens</td></tr>
+  <tr><td>OpenAI</td><td>OpenAI (GPT-4o)</td><td>Balanced cost and performance</td><td>~$0.15–0.60 / 1M tokens</td></tr>
+  <tr><td>OpenAI-compatible</td><td>Insight Engine</td><td>High-volume, budget use</td><td>~$0.27–1.10 / 1M tokens</td></tr>
+  <tr><td>LocalAI (self-hosted)</td><td>LocalAI</td><td>Zero per-token cost, on-premise</td><td>$0 (hardware only)</td></tr>
+</table>
+
+<h3 class="sub">4.2 AI Feature Capabilities</h3>
+<table>
+  <tr><th>Feature</th><th>Task Type</th><th>Cached</th><th>Failure Behavior</th></tr>
+  <tr><td>Document Analysis</td><td>DOCUMENT_ANALYSIS</td><td>No</td><td>Returns default score silently</td></tr>
+  <tr><td>Compliance Matrix Generation</td><td>COMPLIANCE_MATRIX</td><td>Yes — 7 days</td><td>Returns minimal fallback matrix</td></tr>
+  <tr><td>Bid Guidance Generation</td><td>BID_GUIDANCE</td><td>Yes — 7 days</td><td>Returns null, surfaces message in UI</td></tr>
+</table>
+
+<h3 class="sub">4.3 Usage Tracking</h3>
+<p>Every AI call is logged in <code>ApiUsageLog</code> with provider, model, task type, input/output token counts, estimated cost (USD), cache hit flag, and latency. Admins and Consultants view a 30-day usage summary broken down by task and by provider in Settings. Cache hits are logged at $0 cost.</p>
+
+<h3 class="sub">4.4 LocalAI Integration</h3>
+<p>LocalAI runs as a containerized service alongside the platform. It exposes an OpenAI-compatible REST API with no external key required. If LocalAI fails during a call, the platform automatically falls back to Claude if a key is available. The backend transparently rewrites localhost URLs to the internal Docker hostname so consultants can enter the external URL in Settings regardless of deployment environment.</p>
+
+<h3 class="sub">4.5 Key Resolution Order</h3>
+<p>For each AI call: (1) read firm's configured provider from DB; (2) use firm's stored API key for that provider; (3) fall back to server environment variable if DB key is null; (4) throw <code>NO_LLM_KEY</code> if no key is available, which triggers a graceful fallback in all calling services.</p>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2 class="sec">5. Opportunity Management</h2>
+
+<h3 class="sub">5.1 Ingestion &amp; Enrichment</h3>
+<ul>
+  <li>Trigger SAM.gov ingest with optional NAICS code, agency, and set-aside filters (up to 100 results per run). Concurrent duplicate jobs are blocked per tenant.</li>
+  <li>Post-ingest, opportunities are automatically queued for probability scoring via BullMQ worker.</li>
+  <li>Enrichment job fetches historical award data from USASpending: incumbent, award history, competitor count, agency small-business and SDVOSB rates.</li>
+  <li>Enrichment fields stored: <code>historicalWinner</code>, <code>competitionCount</code>, <code>incumbentProbability</code>, <code>agencySdvosbRate</code>, <code>agencySmallBizRate</code>, <code>recompeteFlag</code>, <code>historicalAwardCount</code>, <code>historicalAvgAward</code>, <code>isEnriched</code>.</li>
+</ul>
+
+<h3 class="sub">5.2 Probability Scoring — 8 Factors</h3>
+<p>
+  <span class="pill blue">NAICS Alignment</span>
+  <span class="pill blue">Set-Aside Match</span>
+  <span class="pill blue">Incumbent Probability</span>
+  <span class="pill blue">Competition Density</span>
+  <span class="pill blue">Agency Relationship</span>
+  <span class="pill blue">Document Intel Score</span>
+  <span class="pill blue">Deadline Urgency</span>
+  <span class="pill blue">Penalty Drag</span>
+</p>
+<p>Scores are produced by an 8-factor logistic sigmoid model (weights sum to 1.0, SCALE=6.0, BIAS=−3.0) then Bayesian-calibrated using the firm's historical win/loss record (Beta-binomial, pseudo-count 10). Penalty drag applies an exponential decay: exp(−totalPenalties / 200,000). All displayed probabilities carry an "est." disclaimer badge.</p>
+
+<h3 class="sub">5.3 Opportunity Detail View</h3>
+<ul>
+  <li>Full solicitation metadata, POC, place of performance, set-aside eligibility</li>
+  <li>Document upload (PDF, DOCX, TXT, ZIP) with automatic AI analysis on upload</li>
+  <li>Score breakdown panel with per-factor contribution visualization</li>
+  <li>Compliance Matrix and Bid Guidance tabs generated on demand</li>
+  <li>Amendment tracking with plain-language AI interpretation per amendment</li>
+  <li>Client matching: run bid decision engine against any active client</li>
+  <li>Favorite / star to pin to sidebar; recently-viewed list auto-populates</li>
+  <li>Export Synopsis: professional HTML export with agency cleanup, deadline urgency badge, probability gauge, score breakdown bars, AI scope keyword tags, and competitive intelligence grid</li>
+</ul>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2 class="sec">6. Client &amp; Pipeline Management</h2>
+
+<h3 class="sub">6.1 Client Profiles</h3>
+<ul>
+  <li>Business certifications: SDVOSB, WOSB, HUBZone, Small Business, 8(a)</li>
+  <li>NAICS codes (multi-value) for opportunity matching</li>
+  <li>Performance stats: submitted, won, on-time rate, total penalties</li>
+  <li>Document requirements checklist with compliance status tracking</li>
+  <li>Active/inactive status with per-client penalty schedule override</li>
+</ul>
+
+<h3 class="sub">6.2 Bid Decisions</h3>
+<p>Generated per client-opportunity pair. Includes recommendation (BID_PRIME / BID_SUB / NO_BID), win probability, plain-language explanation, and full factor breakdown. Consultants can override and add notes. Decisions feed the analytics pipeline funnel.</p>
+
+<h3 class="sub">6.3 Submissions &amp; Penalties</h3>
+<ul>
+  <li>Submission records track status, on-time flag (<code>wasOnTime</code>), and contract value</li>
+  <li>Penalties auto-calculated on late or non-compliant submissions per firm penalty schedule</li>
+  <li>Penalty drag applied in real time to probability scoring via exponential decay</li>
+</ul>
+
+<h3 class="sub">6.4 Client Portal</h3>
+<p>Clients access a read-only branded portal showing their opportunity pipeline, bid decisions, and submission history. Portal tokens are scoped exclusively to the authenticated client's <code>clientCompanyId</code> and cannot access any other client or firm data.</p>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2 class="sec">7. Analytics &amp; Forecasting</h2>
+<div class="feature-grid">
+  <div class="feat"><h4>Pipeline Funnel</h4><p>Ingested → Scored → Decided → Submitted → Won. Real contract values at each stage with conversion rates.</p></div>
+  <div class="feat"><h4>Win Probability Distribution</h4><p>Histogram of scored opportunities by probability band. Identifies where the pipeline is concentrated.</p></div>
+  <div class="feat"><h4>Revenue Forecast</h4><p>Monte Carlo simulation (1,000 runs) over active pipeline with lognormal noise (Box-Muller). P10 / P50 / P90 confidence bands plus HHI portfolio diversification index.</p></div>
+  <div class="feat"><h4>Market Intelligence</h4><p>NAICS sector trend detection via linear regression slope. Agency profiles with small-business award rates and competitive landscape summary.</p></div>
+  <div class="feat"><h4>Submission Velocity</h4><p>EMA-smoothed (alpha = 2/(span+1)) trend of submissions over time. Late submission probability modeled via Beta distribution.</p></div>
+  <div class="feat"><h4>Risk Radar</h4><p>Flags deadline risk, compliance blocks, high late-submission probability (Beta distribution mean), and unpaid penalties requiring immediate attention.</p></div>
+  <div class="feat"><h4>Smart Match Engine</h4><p>Automatically surfaces top client-opportunity pairings ranked by combined probability score with NAICS pre-filter. Bounded concurrency (5 parallel) for large portfolios.</p></div>
+  <div class="feat"><h4>Penalty Trend</h4><p>Time-series of financial penalties applied across the portfolio. EMA-smoothed. Identifies compliance risk patterns per client over time.</p></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2 class="sec">8. BigQuery Market Analytics <span class="badge-new">New in v3.0</span></h2>
+<p>The platform maintains a Google BigQuery analytics store (<code>govcon_analytics</code> dataset, project <code>gov-con-491005</code>) that ingests federal award records from USAspending and makes them available for historical market intelligence queries. This layer is separate from the PostgreSQL operational database and is optimized for aggregate analytics.</p>
+
+<h3 class="sub">8.1 Data Pipeline</h3>
+<ul>
+  <li>Source: USAspending.gov public API — award transactions filtered by NAICS code and optional agency</li>
+  <li>Destination: BigQuery table <code>award_history</code> with fields: recipient name, award amount, action date, set-aside type, NAICS code, agency name, number of offers received</li>
+  <li>Ingestion: paginated (up to <code>maxPages × 100</code> records per call), 500-row insert batches, polite 1-second delay between NAICS codes in bulk mode</li>
+  <li>Pre-seeded: 2,000 award records across 20 federal NAICS codes covering IT, Engineering, Consulting, R&amp;D, Facilities, Defense, Healthcare, Staffing, Construction, and Manufacturing</li>
+  <li>Authentication: Google Application Default Credentials (ADC) via mounted credentials file</li>
+</ul>
+
+<h3 class="sub">8.2 BigQuery Tables</h3>
+<table>
+  <tr><th>Table</th><th>Purpose</th><th>Key Fields</th></tr>
+  <tr><td><code>award_history</code></td><td>Raw award transactions ingested from USAspending</td><td>recipient_name, award_amount, action_date, set_aside_type, naics_code, agency_name, num_offers</td></tr>
+  <tr><td><code>naics_profiles</code></td><td>Aggregated sector-level market summaries (reserved for Phase 2)</td><td>naics_code, avg_award, competition_index, trending_flag</td></tr>
+  <tr><td><code>agency_profiles</code></td><td>Agency-level buying pattern summaries (reserved for Phase 2)</td><td>agency_name, small_biz_rate, sdvosb_rate, top_naics</td></tr>
+</table>
+
+<h3 class="sub">8.3 API Endpoints — Market Analytics</h3>
+<table>
+  <tr><th>Endpoint</th><th>Description</th><th>Access</th></tr>
+  <tr><td>GET /api/market-analytics/status</td><td>BigQuery connectivity check + row count. Used by frontend to show "data available" badge.</td><td>All authenticated</td></tr>
+  <tr><td>GET /api/market-analytics/competition/:naicsCode</td><td>Full competition profile: HHI market concentration, top winners with share %, set-aside breakdown, offers received, yearly award trend. Optional <code>?agency=</code> filter.</td><td>All authenticated</td></tr>
+  <tr><td>GET /api/market-analytics/agency/:agencyName</td><td>Agency buying profile: small-business, SDVOSB, WOSB, HUBZone award rates; top NAICS codes; average award size.</td><td>All authenticated</td></tr>
+  <tr><td>GET /api/market-analytics/contractor/:name</td><td>Incumbent and competitor win history by recipient name. Total awarded, win count, NAICS breakdown.</td><td>All authenticated</td></tr>
+  <tr><td>GET /api/market-analytics/snapshot</td><td>Firm-wide multi-NAICS market snapshot. Auto-resolves NAICS codes from active clients. Override with <code>?naics=541511,541519</code>.</td><td>All authenticated</td></tr>
+  <tr><td>POST /api/market-analytics/ingest</td><td>Trigger USAspending → BigQuery ingestion. Body: <code>&#123; naicsCode, agency?, maxPages? &#125;</code> or <code>&#123; bulk: true &#125;</code> for all client NAICS codes. Bulk runs in background.</td><td>Admin only</td></tr>
+</table>
+
+<h3 class="sub">8.4 Analytics Engine — Key Metrics Computed</h3>
+<ul>
+  <li><strong>HHI (Herfindahl-Hirschman Index):</strong> sum of squared market share percentages per winner. HHI &lt; 1,500 = competitive; 1,500–2,500 = moderately concentrated; &gt; 2,500 = concentrated.</li>
+  <li><strong>Top Winners:</strong> ranked by total awarded value with market share percentage</li>
+  <li><strong>Set-Aside Breakdown:</strong> percentage of awards by set-aside type (SDVOSB, WOSB, SB, unrestricted)</li>
+  <li><strong>Yearly Trend:</strong> award volume by fiscal year for trajectory analysis</li>
+  <li><strong>Agency Rates:</strong> percentage of awards to small businesses, SDVOSB, WOSB, HUBZone per agency</li>
+  <li><strong>Average Offers Received:</strong> market signal for competition density — lower offers = less competitive field</li>
+</ul>
+
+<h3 class="sub">8.5 Frontend Integration</h3>
+<p>The Analytics page includes a "Deep Market Intelligence" section that shows BigQuery connection status (green/gray badge + row count), and when data is available: 4 top-line metric cards (total market volume, average contract size, unique competitor count, tracked NAICS codes), a NAICS market heatmap using HHI bar visualization, and a top contracting agencies table. If no data is present, a prompt guides the admin to trigger ingestion.</p>
+
+<h3 class="sub">8.6 Pre-Seeded NAICS Codes</h3>
+<p>The following 20 NAICS codes are pre-populated with 100 historical award records each (2,000 total rows) to ensure market intelligence is available immediately for the most common federal contracting sectors:</p>
+<p>
+  <span class="pill green">541511 — Custom Software</span>
+  <span class="pill green">541512 — Computer Systems Design</span>
+  <span class="pill green">541519 — Other IT</span>
+  <span class="pill green">518210 — Data Processing / Cloud</span>
+  <span class="pill green">541330 — Engineering Services</span>
+  <span class="pill green">541715 — R&amp;D Physical Sciences</span>
+  <span class="pill green">541611 — Management Consulting</span>
+  <span class="pill green">541618 — Other Management Consulting</span>
+  <span class="pill green">541990 — Professional &amp; Technical Services</span>
+  <span class="pill green">561210 — Facilities Support</span>
+  <span class="pill green">336411 — Aircraft Manufacturing</span>
+  <span class="pill green">237310 — Highway/Street Construction</span>
+  <span class="pill green">562910 — Remediation Services</span>
+  <span class="pill green">332710 — Machine Shops</span>
+  <span class="pill green">621111 — Healthcare / Physicians</span>
+  <span class="pill green">561320 — Temporary Staffing</span>
+  <span class="pill green">484110 — Trucking / General Freight</span>
+  <span class="pill green">541380 — Testing Laboratories</span>
+  <span class="pill green">541350 — Building Inspection</span>
+  <span class="pill green">611430 — Professional Training</span>
+</p>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2 class="sec">9. Compliance &amp; Audit</h2>
+<ul>
+  <li><strong>Compliance Logs:</strong> Every status change on opportunities, submissions, and documents generates an immutable audit log entry with entity type, from/to status, triggering user, and timestamp.</li>
+  <li><strong>Compliance Matrix:</strong> AI-generated requirement checklist per opportunity. Each row tracks requirement text, FAR reference, mandatory flag, status (NOT_STARTED / IN_PROGRESS / COMPLETE / WAIVED / NON_COMPLIANT), assigned proposal section, and notes.</li>
+  <li><strong>Document Requirements:</strong> Per-client checklists for certifications, past performance packages, and financial documents with due dates and compliance status.</li>
+  <li><strong>Compliance Report Export:</strong> Date-range filtered export of all audit events for a firm.</li>
+  <li><strong>Compliance State Machine:</strong> Enforces legal status transitions on submission records. Invalid transitions are rejected and logged.</li>
+</ul>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2 class="sec">10. Settings &amp; Administration</h2>
+
+<h3 class="sub">10.1 API Key Management</h3>
+<p>All API keys stored per-firm in the database, encrypted at rest. Masked in the UI (last 4 characters visible) with a reveal toggle. Saving a key immediately refreshes the stored-key confirmation row. Supported keys: SAM.gov, Claude (Anthropic), OpenAI, Insight Engine. LocalAI requires only a base URL and model name — no key.</p>
+
+<h3 class="sub">10.2 Firm Configuration</h3>
+<ul>
+  <li>Penalty schedule: flat late fee (USD) and/or percentage of contract value</li>
+  <li>SAM.gov sync preferences: default NAICS filter and result limit (stored in browser localStorage)</li>
+  <li>Active AI provider selection applied firm-wide (claude / openai / insight_engine / localai)</li>
+  <li>LocalAI base URL and model name configuration</li>
+  <li>User roster management with role display</li>
+  <li>Template library: upload, approve/reject, and assign document templates to clients</li>
+  <li>Demo seed: one-click realistic data population for demos and training</li>
+  <li>BigQuery ingest trigger: bulk ingest button for all client NAICS codes (Admin only)</li>
+</ul>
+
+<h3 class="sub">10.3 AI Usage Dashboard</h3>
+<p>Collapsible panel in Settings showing last 30 days: total calls, total tokens, estimated cost (USD), breakdown by task and by provider. Cache hits shown at $0 cost.</p>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2 class="sec">11. Frontend Architecture <span class="badge-new">Updated in v3.0</span></h2>
+
+<h3 class="sub">11.1 Technology Stack</h3>
+<table>
+  <tr><th>Layer</th><th>Technology</th><th>Notes</th></tr>
+  <tr><td>Framework</td><td>React 18 + TypeScript</td><td>Strict mode enabled</td></tr>
+  <tr><td>Build Tool</td><td>Vite 5</td><td>Code splitting + manual chunks configured</td></tr>
+  <tr><td>Routing</td><td>React Router v6</td><td>Nested protected routes with role guard</td></tr>
+  <tr><td>Data Fetching</td><td>TanStack Query v5</td><td>30s stale time, 1 retry, no window-focus refetch</td></tr>
+  <tr><td>Styling</td><td>Tailwind CSS v3</td><td>Brand design system with amber/navy palette</td></tr>
+  <tr><td>Charts</td><td>Recharts</td><td>Isolated to vendor-charts chunk — only loads on Analytics/Dashboard</td></tr>
+  <tr><td>Icons</td><td>Lucide React</td><td>Isolated to vendor-icons chunk</td></tr>
+  <tr><td>State</td><td>React Context + TanStack Query</td><td>Auth context, Toast context; no Redux</td></tr>
+</table>
+
+<h3 class="sub">11.2 Code Splitting Strategy</h3>
+<p>As of v3.0, all 20 pages are loaded via <code>React.lazy()</code> wrapped in a top-level <code>Suspense</code> with a branded spinner fallback. Vendor libraries are split into named chunks via Vite's <code>manualChunks</code> to prevent large libraries from blocking initial page load.</p>
+<table>
+  <tr><th>Chunk</th><th>Contents</th><th>Gzip Size</th></tr>
+  <tr><td>vendor-react</td><td>react, react-dom, react-router-dom</td><td>~53 KB</td></tr>
+  <tr><td>vendor-query</td><td>@tanstack/react-query</td><td>~13 KB</td></tr>
+  <tr><td>vendor-charts</td><td>recharts (only loaded on Analytics/Dashboard)</td><td>~113 KB</td></tr>
+  <tr><td>vendor-icons</td><td>lucide-react</td><td>~6 KB</td></tr>
+  <tr><td>Per-page chunks</td><td>Each page as its own chunk (2–62 KB each)</td><td>2–16 KB gzip</td></tr>
+</table>
+<p>Total initial JS payload (without charts): approximately <strong>72 KB gzipped</strong>. Charts load lazily only when a chart-containing page is first visited.</p>
+
+<h3 class="sub">11.3 Navigation Structure</h3>
+<table>
+  <tr><th>Route</th><th>Page</th><th>Access</th></tr>
+  <tr><td>/</td><td>Dashboard — KPI cards, 6 charts, 3 intelligence cards, OnboardingWizard</td><td>All roles</td></tr>
+  <tr><td>/opportunities</td><td>Opportunity list with search, filter, sync trigger</td><td>All roles</td></tr>
+  <tr><td>/opportunities/:id</td><td>Opportunity detail — docs, compliance matrix, bid guidance, decisions</td><td>All roles</td></tr>
+  <tr><td>/clients</td><td>Client roster with certifications and performance stats</td><td>All roles</td></tr>
+  <tr><td>/clients/:id</td><td>Client detail — NAICS, docs, submission history, portal link</td><td>All roles</td></tr>
+  <tr><td>/decisions</td><td>Bid decision recommendations across portfolio</td><td>All roles</td></tr>
+  <tr><td>/submissions</td><td>Submission tracking with on-time flag and status</td><td>All roles</td></tr>
+  <tr><td>/penalties</td><td>Financial penalty log with client filter</td><td>All roles</td></tr>
+  <tr><td>/analytics</td><td>Deep analytics — trends, forecasts, BigQuery market intelligence</td><td>All roles</td></tr>
+  <tr><td>/rewards</td><td>Client rewards management and redemption</td><td>All roles</td></tr>
+  <tr><td>/billing</td><td>Firm subscription and invoice management</td><td>All roles</td></tr>
+  <tr><td>/templates</td><td>Document template management</td><td>All roles</td></tr>
+  <tr><td>/template-library</td><td>Client-facing template library and downloads</td><td>All roles</td></tr>
+  <tr><td>/doc-requirements</td><td>Per-client document requirement checklists</td><td>All roles</td></tr>
+  <tr><td>/compliance</td><td>Immutable audit log viewer with date-range export</td><td>Admin only</td></tr>
+  <tr><td>/settings</td><td>Firm config, API keys, AI provider, usage dashboard</td><td>Admin only</td></tr>
+  <tr><td>/client-login</td><td>Client portal authentication (separate auth flow)</td><td>Public</td></tr>
+  <tr><td>/client-portal</td><td>Client portal dashboard (scoped to client JWT)</td><td>Client portal token</td></tr>
+  <tr><td>/*</td><td>404 Not Found with navigation links</td><td>All</td></tr>
+</table>
+
+<h3 class="sub">11.4 Error Handling</h3>
+<ul>
+  <li><strong>ErrorBoundary:</strong> Global class component wrapping the entire app. Catches any React render error, displays a branded recovery screen, and provides a "Return to Dashboard" button that resets state and navigates home.</li>
+  <li><strong>404 Route:</strong> Catch-all <code>path="*"</code> renders a styled Not Found page with links back to Dashboard and Opportunities.</li>
+  <li><strong>API Errors:</strong> All queries surface errors via TanStack Query's <code>isError</code> state; UI shows <code>ErrorBanner</code> component with the error message.</li>
+  <li><strong>AI Failures:</strong> All three AI task types (document analysis, compliance matrix, bid guidance) have explicit fallback paths — they never throw unhandled exceptions to the user.</li>
+</ul>
+
+<h3 class="sub">11.5 Onboarding Wizard</h3>
+<p>A 5-step modal overlay shown once per browser session on first Dashboard load (controlled via <code>localStorage['govcon_onboarded']</code>). Steps:</p>
+<ol>
+  <li><strong>Welcome</strong> — Platform overview and mission statement</li>
+  <li><strong>API Keys</strong> — Guide to Settings → Add SAM.gov and AI provider keys (with direct navigation link)</li>
+  <li><strong>Sync Opportunities</strong> — How to trigger SAM.gov ingest (with link to Opportunities page)</li>
+  <li><strong>Add Clients</strong> — Client onboarding and portal setup (with link to Clients page)</li>
+  <li><strong>Run AI Analysis</strong> — Compliance matrix and Analytics overview (with link to Analytics page)</li>
+</ol>
+<p>Each step includes a navigation shortcut button. The wizard can be dismissed at any step ("Skip setup guide"). Progress is indicated by a step progress bar at the top.</p>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2 class="sec">12. Non-Functional Requirements &amp; Beta Readiness</h2>
+
+<h3 class="sub">12.1 Security &amp; Multi-Tenancy</h3>
+<ul>
+  <li>Every database query scoped by <code>consultingFirmId</code> extracted from JWT — no cross-tenant data leakage is architecturally possible</li>
+  <li>Client portal tokens scoped exclusively to their <code>clientCompanyId</code></li>
+  <li>Role-based access control enforced at the route middleware level (<code>requireRole()</code> middleware)</li>
+  <li>API keys never returned in list endpoints — only masked previews exposed</li>
+  <li>BigQuery credentials mounted read-only (<code>:ro</code>) into the backend container</li>
+  <li>Rate limiting: 500 requests per 15-minute window per IP</li>
+</ul>
+
+<h3 class="sub">12.2 Reliability &amp; Resilience</h3>
+<ul>
+  <li>All AI provider failures return graceful fallbacks — no application crashes or unhandled promise rejections</li>
+  <li>LocalAI failures fall back to Claude automatically if a key is available</li>
+  <li>Background jobs (scoring, enrichment, ingestion) run in isolated BullMQ workers with error capture</li>
+  <li>Uploaded files persist in a named Docker volume independent of container lifecycle</li>
+  <li>Redis caching (7-day TTL) for compliance matrix and bid guidance reduces redundant AI cost</li>
+  <li>BigQuery operations are non-blocking for the main application — BQ failures surface as null data states, not crashes</li>
+</ul>
+
+<h3 class="sub">12.3 Performance Targets</h3>
+<table>
+  <tr><th>Operation</th><th>Target</th></tr>
+  <tr><td>Initial page load (authenticated, no charts)</td><td>&lt; 1.0 second (72 KB gzipped JS)</td></tr>
+  <tr><td>Page navigation (lazy chunk load)</td><td>&lt; 500 ms (2–16 KB per page)</td></tr>
+  <tr><td>SAM.gov ingest (25 opportunities)</td><td>&lt; 30 seconds</td></tr>
+  <tr><td>AI document analysis (per document)</td><td>&lt; 45 seconds</td></tr>
+  <tr><td>Compliance matrix generation</td><td>&lt; 60 seconds (cached: &lt; 200 ms)</td></tr>
+  <tr><td>Bid guidance generation</td><td>&lt; 60 seconds (cached: &lt; 200 ms)</td></tr>
+  <tr><td>Win probability scoring (batch 100)</td><td>&lt; 5 seconds</td></tr>
+  <tr><td>BigQuery competition profile query</td><td>&lt; 8 seconds (cold); &lt; 3 seconds (warm)</td></tr>
+  <tr><td>BigQuery market snapshot (multi-NAICS)</td><td>&lt; 15 seconds</td></tr>
+</table>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2 class="sec">13. Infrastructure &amp; Deployment</h2>
+
+<h3 class="sub">13.1 Container Stack (Docker Compose)</h3>
+<table>
+  <tr><th>Service</th><th>Image</th><th>Port</th><th>Purpose</th></tr>
+  <tr><td>govcon_postgres</td><td>postgres:16-alpine</td><td>5432</td><td>Primary operational database (PostgreSQL)</td></tr>
+  <tr><td>govcon_redis</td><td>redis:7-alpine</td><td>6379</td><td>Job queuing (BullMQ) + AI response cache</td></tr>
+  <tr><td>govcon_backend</td><td>./backend (custom)</td><td>3001</td><td>Express + TypeScript API server</td></tr>
+  <tr><td>govcon_frontend</td><td>./frontend (custom)</td><td>3000</td><td>React + Vite frontend (dev server in dev, static in prod)</td></tr>
+  <tr><td>local-ai</td><td>localai/localai:latest</td><td>8080</td><td>Self-hosted LLM inference (OpenAI-compatible API)</td></tr>
+</table>
+
+<h3 class="sub">13.2 External Integrations</h3>
+<table>
+  <tr><th>Service</th><th>Purpose</th><th>Auth</th></tr>
+  <tr><td>SAM.gov API</td><td>Federal opportunity ingestion</td><td>API key (per firm, stored in DB)</td></tr>
+  <tr><td>USAspending.gov API</td><td>Historical award data for enrichment and BigQuery ingestion</td><td>Public (no key required)</td></tr>
+  <tr><td>Google BigQuery</td><td>Historical analytics storage and query engine</td><td>Application Default Credentials (ADC) — mounted file</td></tr>
+  <tr><td>Anthropic API</td><td>Claude LLM for document analysis, compliance matrix, bid guidance</td><td>API key (per firm, stored in DB)</td></tr>
+  <tr><td>OpenAI API</td><td>GPT-4o (optional AI provider)</td><td>API key (per firm, stored in DB)</td></tr>
+  <tr><td>Insight Engine</td><td>OpenAI-compatible budget LLM provider (optional)</td><td>API key (per firm, stored in DB)</td></tr>
+</table>
+
+<h3 class="sub">13.3 Database Schema Highlights</h3>
+<ul>
+  <li><strong>ConsultingFirm:</strong> <code>llmProvider</code>, <code>anthropicApiKey</code>, <code>openaiApiKey</code>, <code>insightEngineApiKey</code>, <code>localaiBaseUrl</code>, <code>localaiModel</code>, <code>samApiKey</code>, penalty config</li>
+  <li><strong>ApiUsageLog:</strong> provider, model, task, inputTokens, outputTokens, estimatedCostUsd, cacheHit, durationMs, consultingFirmId</li>
+  <li><strong>Opportunity:</strong> Full SAM.gov metadata + 9 enrichment fields from USASpending + scoring outputs</li>
+  <li><strong>BidDecision:</strong> recommendation enum, winProbability, explanationJson (includes featureBreakdown), overrideReason</li>
+  <li><strong>ComplianceLog:</strong> entityType, fromStatus, toStatus, reason, triggeredBy (immutable audit trail)</li>
+  <li><strong>ComplianceMatrix / ComplianceMatrixRow:</strong> AI-generated per opportunity, row-level status tracking</li>
+</ul>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2 class="sec">14. Pre-Production Checklist</h2>
+
+<div class="box green">
+  <strong>Beta Release — Completed &amp; Working</strong>
+  <ul style="margin:8px 0 0">
+    <li>Multi-model AI abstraction layer — Claude, OpenAI, Insight Engine, LocalAI — with automatic failover</li>
+    <li>Per-firm AI provider selection and API key management with live UI confirmation</li>
+    <li>LocalAI self-hosted inference containerized and network-connected</li>
+    <li>BigQuery historical analytics — award_history table pre-seeded with 2,000 records across 20 NAICS codes</li>
+    <li>Market analytics endpoints: competition profile (HHI), agency profile, contractor history, market snapshot, admin ingest</li>
+    <li>Frontend code splitting — all 20 pages lazy-loaded, vendor chunks isolated, 72 KB initial gzip payload</li>
+    <li>ErrorBoundary + 404 catch-all route — no unhandled crashes visible to users</li>
+    <li>OnboardingWizard — 5-step guided setup for new users</li>
+    <li>Uploaded file persistence via named Docker volume (survives rebuilds)</li>
+    <li>AI usage tracking and cost dashboard in Settings (30-day window)</li>
+    <li>Professional opportunity synopsis HTML export with probability gauge and competitive intelligence</li>
+    <li>8-factor probability scoring with Bayesian calibration and penalty drag</li>
+    <li>Monte Carlo revenue forecasting and HHI portfolio diversification index</li>
+    <li>Full compliance matrix with per-row status tracking and FAR references</li>
+    <li>Client portal with scoped JWT authentication</li>
+    <li>Rewards program with evaluation and redemption</li>
+    <li>Billing and subscription management pages</li>
+    <li>Template library with admin approval workflow</li>
+    <li>TypeScript clean on both frontend and backend (zero errors)</li>
+    <li>Docker containers rebuilt and all services healthy</li>
+    <li>Prisma schema in sync with live database</li>
+  </ul>
+</div>
+
+<div class="box amber">
+  <strong>Before Go-Live (Production Hardening)</strong>
+  <ul style="margin:8px 0 0">
+    <li>Replace <code>JWT_SECRET: dev-secret-change-in-production</code> in docker-compose.yml with a cryptographically secure random string (32+ bytes)</li>
+    <li>Add HTTPS / TLS termination via nginx reverse proxy or cloud load balancer before any internet exposure</li>
+    <li>Enable PostgreSQL automated daily backups (pgdump cron or managed DB service)</li>
+    <li>Set <code>NODE_ENV=production</code> and switch frontend to a production build served by nginx (not Vite dev server)</li>
+    <li>Configure SAM.gov API key rotation reminder — keys expire every 90 days</li>
+    <li>Rotate Google BigQuery ADC credentials to a service account key scoped to BigQuery only (least privilege)</li>
+    <li>Set <code>LOG_LEVEL=warn</code> in production to reduce log volume</li>
+    <li>Configure Docker resource limits (memory, CPU) per container to prevent runaway processes</li>
+    <li>Add a health-check endpoint (<code>GET /api/health</code>) for load balancer integration</li>
+    <li>Enable Redis authentication (<code>requirepass</code>) if Redis is exposed beyond localhost</li>
+  </ul>
+</div>
+
+<div class="box slate">
+  <strong>Phase 2 Roadmap (Post-Launch Enhancements)</strong>
+  <ul style="margin:8px 0 0">
+    <li>BigQuery Phase 2: populate <code>naics_profiles</code> and <code>agency_profiles</code> tables with pre-computed aggregates for sub-second query response</li>
+    <li>BigQuery Phase 3: stream live PostgreSQL events (decisions, submissions, wins) to BigQuery for proprietary win-rate analytics per NAICS and agency</li>
+    <li>State &amp; Municipal opportunity module with subscription gating (schema and routes stubbed)</li>
+    <li>Stripe or payment-gateway integration for automated billing and card-on-file management</li>
+    <li>Email notification system: deadline alerts, new high-score matches, AI completion callbacks</li>
+    <li>Mobile-responsive layout pass (currently optimized for desktop)</li>
+    <li>Multi-user invite flow with email verification</li>
+    <li>SBIR/STTR opportunity source integration alongside SAM.gov</li>
+  </ul>
+</div>
+
+<div class="footer">
+  <span>GovCon Advisory Intelligence Platform — SRS v3.0 — March 22, 2026 — Beta Release</span>
+  <span>CONFIDENTIAL — Mercy Raine LLC · SDVOSB · Internal Use Only</span>
+</div>
+
+</body>
+</html>

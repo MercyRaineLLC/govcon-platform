@@ -102,7 +102,6 @@ export function ScoreBreakdown({ breakdown, probability, estimatedValue, expecte
 
   const factors = [...breakdown.factorContributions].sort((a, b) => b.weight - a.weight)
   const rawZ = breakdown.formula?.rawZ ?? breakdown.rawScore ?? 0
-  const equation = breakdown.formula?.equation ?? 'P(win) = 1 / (1 + e^-(6Z - 3))'
   const probPct = Math.round(probability * 100)
   const probColor = probPct >= 65 ? 'text-green-400' : probPct >= 40 ? 'text-yellow-400' : 'text-gray-400'
 
@@ -135,21 +134,6 @@ export function ScoreBreakdown({ breakdown, probability, estimatedValue, expecte
             </a>
           )}
         </div>
-      </div>
-
-      {/* Formula display */}
-      <div className="bg-gray-900 border border-gray-800 rounded-lg px-4 py-3 mb-4 font-mono text-xs text-gray-400">
-        <span className="text-gray-600">Formula: </span>
-        <span className="text-blue-300">{equation}</span>
-        <br />
-        <span className="text-gray-600">Z = </span>
-        <span className="text-yellow-300">{rawZ.toFixed(4)}</span>
-        {estimatedValue ? (
-          <>
-            <span className="text-gray-600 ml-4">Contract Value: </span>
-            <span className="text-gray-300">{fmt(estimatedValue)}</span>
-          </>
-        ) : null}
       </div>
 
       {/* Column headers */}

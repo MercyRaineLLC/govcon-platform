@@ -7,6 +7,7 @@ import {
   formatCurrency,
 } from '../components/ui'
 import { RevenueForecast } from '../components/charts/RevenueForecast'
+import { TierGate } from '../components/TierGate'
 import {
   BarChart,
   Bar,
@@ -116,45 +117,49 @@ export function AnalyticsPage() {
       />
 
       {/* Portfolio Health Summary */}
-      {health && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <div className="card">
-            <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Expected Revenue</p>
-            <p className="text-2xl font-bold text-green-400">
-              {formatCurrency(health.totalExpectedRevenue)}
-            </p>
-            <p className="text-xs text-gray-500 mt-1">6-month forward projection</p>
-          </div>
-          <div className="card">
-            <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">NAICS Concentration</p>
-            <p className="text-2xl font-bold text-blue-400">
-              {(health.diversification?.naicsConcentration * 100).toFixed(0)}%
-            </p>
-            <p className="text-xs text-gray-500 mt-1">HHI index (lower = more diverse)</p>
-          </div>
-          <div className="card">
-            <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Top Client Dependency</p>
-            <p className={`text-2xl font-bold ${health.riskIndicators?.singleClientDependency > 50 ? 'text-red-400' : 'text-yellow-400'}`}>
-              {health.riskIndicators?.singleClientDependency}%
-            </p>
-            <p className="text-xs text-gray-500 mt-1">Pipeline from top client</p>
-          </div>
-          <div className="card">
-            <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Late Submission Rate</p>
-            <p className={`text-2xl font-bold ${health.riskIndicators?.overdueSubmissionRate > 20 ? 'text-red-400' : 'text-green-400'}`}>
-              {health.riskIndicators?.overdueSubmissionRate}%
-            </p>
-            <p className="text-xs text-gray-500 mt-1">
-              Avg {health.riskIndicators?.avgDaysToDeadlineAtSubmission}d before deadline
-            </p>
-          </div>
-        </div>
-      )}
+      <TierGate feature="analytics" requiredTier="professional">
+        <>
+          {health && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+              <div className="card">
+                <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Expected Revenue</p>
+                <p className="text-2xl font-bold text-green-400">
+                  {formatCurrency(health.totalExpectedRevenue)}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">6-month forward projection</p>
+              </div>
+              <div className="card">
+                <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">NAICS Concentration</p>
+                <p className="text-2xl font-bold text-blue-400">
+                  {(health.diversification?.naicsConcentration * 100).toFixed(0)}%
+                </p>
+                <p className="text-xs text-gray-500 mt-1">HHI index (lower = more diverse)</p>
+              </div>
+              <div className="card">
+                <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Top Client Dependency</p>
+                <p className={`text-2xl font-bold ${health.riskIndicators?.singleClientDependency > 50 ? 'text-red-400' : 'text-yellow-400'}`}>
+                  {health.riskIndicators?.singleClientDependency}%
+                </p>
+                <p className="text-xs text-gray-500 mt-1">Pipeline from top client</p>
+              </div>
+              <div className="card">
+                <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Late Submission Rate</p>
+                <p className={`text-2xl font-bold ${health.riskIndicators?.overdueSubmissionRate > 20 ? 'text-red-400' : 'text-green-400'}`}>
+                  {health.riskIndicators?.overdueSubmissionRate}%
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Avg {health.riskIndicators?.avgDaysToDeadlineAtSubmission}d before deadline
+                </p>
+              </div>
+            </div>
+          )}
 
-      {/* Revenue Forecast */}
-      <div className="mb-8">
-        <RevenueForecast data={health?.revenueForecast} />
-      </div>
+          {/* Revenue Forecast */}
+          <div className="mb-8">
+            <RevenueForecast data={health?.revenueForecast} />
+          </div>
+        </>
+      </TierGate>
 
       {/* NAICS Sector Trends */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
@@ -411,141 +416,137 @@ export function AnalyticsPage() {
           </>
         )}
       </div>
-      {/* ── BigQuery Market Intelligence ── */}
-      <div className="card mb-8 border border-gray-800">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Database className="w-4 h-4 text-indigo-400" />
-            <h3 className="font-semibold text-gray-200">Deep Market Intelligence</h3>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-900/40 text-indigo-300 border border-indigo-800">
-              BigQuery
-            </span>
-          </div>
-          {bqStatusData?.data && (
-            <div className={`flex items-center gap-1.5 text-xs ${bqStatusData.data.connected ? 'text-green-400' : 'text-red-400'}`}>
-              <span className={`w-2 h-2 rounded-full ${bqStatusData.data.connected ? 'bg-green-400' : 'bg-red-400'}`} />
-              {bqStatusData.data.connected ? `${bqStatusData.data.awardRows.toLocaleString()} award records` : 'Not connected'}
+      {/* ── Deep Market Intelligence ── */}
+      <TierGate feature="deep_market_intel" requiredTier="enterprise">
+        <div className="card mb-8 border border-gray-800">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Database className="w-4 h-4 text-indigo-400" />
+              <h3 className="font-semibold text-gray-200">Deep Market Intelligence</h3>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-900/40 text-indigo-300 border border-indigo-800">
+                Historical Data
+              </span>
             </div>
-          )}
-        </div>
+            {bqStatusData?.data && (
+              <div className={`flex items-center gap-1.5 text-xs ${bqStatusData.data.connected ? 'text-green-400' : 'text-red-400'}`}>
+                <span className={`w-2 h-2 rounded-full ${bqStatusData.data.connected ? 'bg-green-400' : 'bg-red-400'}`} />
+                {bqStatusData.data.connected ? `${bqStatusData.data.awardRows.toLocaleString()} award records` : 'Not connected'}
+              </div>
+            )}
+          </div>
 
-        {/* No data state */}
-        {!bqStatusData?.data?.hasData && (
-          <div className="py-8 text-center space-y-3">
-            <AlertCircle className="w-8 h-8 text-gray-600 mx-auto" />
-            <p className="text-sm text-gray-400">No award history loaded yet.</p>
-            <p className="text-xs text-gray-500 max-w-md mx-auto">
-              Admins can trigger ingestion from Settings or via the API to load USAspending
-              historical award data into BigQuery for deep competitive analytics.
-            </p>
-            <div className="mt-4 px-4 py-3 rounded-lg bg-gray-800/60 border border-gray-700 text-left max-w-sm mx-auto">
-              <p className="text-[11px] text-gray-400 font-mono">
-                POST /api/market-analytics/ingest<br/>
-                {'{ "bulk": true }'}
+          {/* No data state */}
+          {!bqStatusData?.data?.hasData && (
+            <div className="py-8 text-center space-y-3">
+              <AlertCircle className="w-8 h-8 text-gray-600 mx-auto" />
+              <p className="text-sm text-gray-400">No award history loaded yet.</p>
+              <p className="text-xs text-gray-500 max-w-md mx-auto">
+                Historical award data from USAspending powers competitive intelligence, agency profiling,
+                and market trend analysis. Contact your administrator to enable this feature.
               </p>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Data available: market snapshot */}
-        {bqStatusData?.data?.hasData && (
-          <>
-            {bqSnapshotLoading ? (
-              <div className="flex justify-center py-8"><Spinner /></div>
-            ) : bqSnapshotData?.data ? (
-              <>
-                {/* Top-line metrics */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-                  <div className="bg-gray-800/50 rounded-lg p-3">
-                    <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Total Market Volume</p>
-                    <p className="text-lg font-bold text-indigo-400">
-                      {formatCurrency(bqSnapshotData.data.totalOpportunityVolume)}
-                    </p>
+          {/* Data available: market snapshot */}
+          {bqStatusData?.data?.hasData && (
+            <>
+              {bqSnapshotLoading ? (
+                <div className="flex justify-center py-8"><Spinner /></div>
+              ) : bqSnapshotData?.data ? (
+                <>
+                  {/* Top-line metrics */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+                    <div className="bg-gray-800/50 rounded-lg p-3">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Total Market Volume</p>
+                      <p className="text-lg font-bold text-indigo-400">
+                        {formatCurrency(bqSnapshotData.data.totalOpportunityVolume)}
+                      </p>
+                    </div>
+                    <div className="bg-gray-800/50 rounded-lg p-3">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Avg Contract Size</p>
+                      <p className="text-lg font-bold text-blue-400">
+                        {formatCurrency(bqSnapshotData.data.avgContractSize)}
+                      </p>
+                    </div>
+                    <div className="bg-gray-800/50 rounded-lg p-3">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Unique Competitors</p>
+                      <p className="text-lg font-bold text-purple-400">
+                        {bqSnapshotData.data.competitorCount.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="bg-gray-800/50 rounded-lg p-3">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">NAICS Codes Tracked</p>
+                      <p className="text-lg font-bold text-yellow-400">
+                        {bqSnapshotData.data.naicsCodes.length}
+                      </p>
+                    </div>
                   </div>
-                  <div className="bg-gray-800/50 rounded-lg p-3">
-                    <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Avg Contract Size</p>
-                    <p className="text-lg font-bold text-blue-400">
-                      {formatCurrency(bqSnapshotData.data.avgContractSize)}
-                    </p>
-                  </div>
-                  <div className="bg-gray-800/50 rounded-lg p-3">
-                    <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Unique Competitors</p>
-                    <p className="text-lg font-bold text-purple-400">
-                      {bqSnapshotData.data.competitorCount.toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="bg-gray-800/50 rounded-lg p-3">
-                    <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">NAICS Codes Tracked</p>
-                    <p className="text-lg font-bold text-yellow-400">
-                      {bqSnapshotData.data.naicsCodes.length}
-                    </p>
-                  </div>
-                </div>
 
-                {/* NAICS heatmap */}
-                {bqSnapshotData.data.heatmap?.length > 0 && (
-                  <div className="mb-6">
-                    <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">NAICS Competition Heatmap</h4>
-                    <div className="space-y-2">
-                      {bqSnapshotData.data.heatmap.map((h: any) => (
-                        <div key={h.naicsCode} className="flex items-center gap-3">
-                          <span className="text-xs text-gray-400 w-16 flex-shrink-0">{h.naicsCode}</span>
-                          <div className="flex-1 bg-gray-800 rounded-full h-2 overflow-hidden">
-                            <div
-                              className="h-full rounded-full bg-indigo-500"
-                              style={{ width: `${Math.min(h.concentration * 100, 100)}%` }}
-                            />
-                          </div>
-                          <span className="text-[10px] text-gray-500 w-24 text-right flex-shrink-0">
-                            {h.awards} awards · {formatCurrency(h.avgAmount)}
-                          </span>
-                          {h.avgOffers != null && (
-                            <span className="text-[10px] text-yellow-500 w-20 text-right flex-shrink-0">
-                              ~{h.avgOffers.toFixed(1)} offerors
+                  {/* NAICS heatmap */}
+                  {bqSnapshotData.data.heatmap?.length > 0 && (
+                    <div className="mb-6">
+                      <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">NAICS Competition Heatmap</h4>
+                      <div className="space-y-2">
+                        {bqSnapshotData.data.heatmap.map((h: any) => (
+                          <div key={h.naicsCode} className="flex items-center gap-3">
+                            <span className="text-xs text-gray-400 w-16 flex-shrink-0">{h.naicsCode}</span>
+                            <div className="flex-1 bg-gray-800 rounded-full h-2 overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-indigo-500"
+                                style={{ width: `${Math.min(h.concentration * 100, 100)}%` }}
+                              />
+                            </div>
+                            <span className="text-[10px] text-gray-500 w-24 text-right flex-shrink-0">
+                              {h.awards} awards · {formatCurrency(h.avgAmount)}
                             </span>
-                          )}
-                        </div>
-                      ))}
+                            {h.avgOffers != null && (
+                              <span className="text-[10px] text-yellow-500 w-20 text-right flex-shrink-0">
+                                ~{h.avgOffers.toFixed(1)} offerors
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-gray-600 mt-2">Bar width = winner concentration (HHI). Wider = fewer firms dominate.</p>
                     </div>
-                    <p className="text-[10px] text-gray-600 mt-2">Bar width = winner concentration (HHI). Wider = fewer firms dominate.</p>
-                  </div>
-                )}
+                  )}
 
-                {/* Top agencies from BQ */}
-                {bqSnapshotData.data.topAgencies?.length > 0 && (
-                  <div>
-                    <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-1">
-                      <Zap className="w-3 h-3" /> Top Contracting Agencies (by award count)
-                    </h4>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="text-left text-[10px] text-gray-500 border-b border-gray-700">
-                            <th className="pb-2 pr-6">Agency</th>
-                            <th className="pb-2 pr-6 text-right">Awards</th>
-                            <th className="pb-2 text-right">Total Value</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {bqSnapshotData.data.topAgencies.map((a: any) => (
-                            <tr key={a.agency} className="border-b border-gray-800/50 text-gray-300">
-                              <td className="py-1.5 pr-6 text-gray-200">{a.agency}</td>
-                              <td className="py-1.5 pr-6 text-right">{a.awards.toLocaleString()}</td>
-                              <td className="py-1.5 text-right">{formatCurrency(a.amount)}</td>
+                  {/* Top agencies from BQ */}
+                  {bqSnapshotData.data.topAgencies?.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-1">
+                        <Zap className="w-3 h-3" /> Top Contracting Agencies (by award count)
+                      </h4>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="text-left text-[10px] text-gray-500 border-b border-gray-700">
+                              <th className="pb-2 pr-6">Agency</th>
+                              <th className="pb-2 pr-6 text-right">Awards</th>
+                              <th className="pb-2 text-right">Total Value</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody>
+                            {bqSnapshotData.data.topAgencies.map((a: any) => (
+                              <tr key={a.agency} className="border-b border-gray-800/50 text-gray-300">
+                                <td className="py-1.5 pr-6 text-gray-200">{a.agency}</td>
+                                <td className="py-1.5 pr-6 text-right">{a.awards.toLocaleString()}</td>
+                                <td className="py-1.5 text-right">{formatCurrency(a.amount)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
-                  </div>
-                )}
-              </>
-            ) : (
-              <p className="text-sm text-gray-500 text-center py-6">No snapshot data returned.</p>
-            )}
-          </>
-        )}
-      </div>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-gray-500 text-center py-6">No snapshot data returned.</p>
+              )}
+            </>
+          )}
+        </div>
+      </TierGate>
     </div>
   )
 }

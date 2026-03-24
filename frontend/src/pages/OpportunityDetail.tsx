@@ -1,7 +1,9 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { opportunitiesApi, jobsApi, documentsApi, scoreApi, clientsApi, decisionsApi, complianceMatrixApi } from '../services/api'
+import { opportunitiesApi, jobsApi, documentsApi, scoreApi, clientsApi, decisionsApi, complianceMatrixApi, proposalAssistApi } from '../services/api'
 import { useQuery } from '@tanstack/react-query'
+import { useTier } from '../hooks/useTier'
+import { Link } from 'react-router-dom'
 import { ScoreBreakdown } from '../components/ScoreBreakdown'
 import { useRecentlyViewed } from '../hooks/useRecentlyViewed'
 import { useFavorites } from '../hooks/useFavorites'
@@ -109,6 +111,13 @@ export default function OpportunityDetail() {
   const [guidanceGenerating, setGuidanceGenerating] = useState(false)
   const [guidanceError, setGuidanceError] = useState('')
 
+  // Proposal Writing Assistant
+  const [proposalOutline, setProposalOutline] = useState<any>(null)
+  const [proposalGenerating, setProposalGenerating] = useState(false)
+  const [proposalError, setProposalError] = useState('')
+
+  const { hasAddon } = useTier()
+
   const fetchOpportunity = async () => {
     if (!id) return
     try {
@@ -154,7 +163,7 @@ export default function OpportunityDetail() {
     } catch (err: any) {
       const msg = err?.response?.data?.error
       if (msg === 'NO_AI_KEY') {
-        setGuidanceError('AI key not configured. Add ANTHROPIC_API_KEY to backend/.env and restart.')
+        setGuidanceError('AI key not configured — contact your administrator to enable AI features.')
       } else {
         setGuidanceError(err?.response?.data?.message || 'Generation failed')
       }
@@ -201,6 +210,27 @@ export default function OpportunityDetail() {
     } catch { /* non-fatal */ }
   }
 
+  const handleGenerateProposalOutline = async () => {
+    if (!id) return
+    setProposalGenerating(true)
+    setProposalError('')
+    try {
+      const res = await proposalAssistApi.generateOutline(id)
+      setProposalOutline(res.data)
+    } catch (err: any) {
+      const code = err?.response?.data?.error
+      if (code === 'AI_LIMIT') {
+        setProposalError(err?.response?.data?.message || 'AI call limit reached')
+      } else if (code === 'NO_AI_KEY') {
+        setProposalError('AI key not configured — contact your administrator.')
+      } else {
+        setProposalError(err?.response?.data?.message || 'Generation failed')
+      }
+    } finally {
+      setProposalGenerating(false)
+    }
+  }
+
   useEffect(() => {
     // Clear stale data immediately when opportunity ID changes
     setData(null)
@@ -211,6 +241,8 @@ export default function OpportunityDetail() {
     setMatrixLoading(false)
     setGuidance(null)
     setGuidanceError('')
+    setProposalOutline(null)
+    setProposalError('')
     setClientScore(null)
     setScoreError('')
     setAnalyzeStatus('idle')
@@ -1233,56 +1265,74 @@ ${data.amendments.map(a => `
 
                 {doc.analysisStatus === 'NO_AI_KEY' && (
                   <div className="mt-2 text-xs bg-yellow-950/30 border border-yellow-800/40 rounded-lg px-3 py-2 text-yellow-300">
-                    AI analysis is disabled. Add <span className="font-mono">ANTHROPIC_API_KEY=sk-ant-...</span> to{' '}
-                    <span className="font-mono">backend/.env</span> and restart the server to enable scope alignment scoring.
+                    AI analysis is not enabled for this account. Contact your administrator to configure AI-powered scope scoring.
                   </div>
                 )}
 
-                {doc.analysisStatus === 'COMPLETE' && (
-                  <div className="mt-2 grid grid-cols-2 gap-3 text-xs">
-                    {doc.alignmentScore != null && (
-                      <div>
-                        <p className="text-gray-500">Scope Alignment</p>
-                        <p className={`font-mono font-semibold ${
-                          doc.alignmentScore >= 0.7 ? 'text-green-400' :
-                          doc.alignmentScore >= 0.4 ? 'text-yellow-400' : 'text-gray-400'
-                        }`}>
-                          {Math.round(doc.alignmentScore * 100)}%
-                        </p>
-                      </div>
-                    )}
-                    {doc.complexityScore != null && (
-                      <div>
-                        <p className="text-gray-500">Technical Complexity</p>
-                        <p className="text-gray-200 font-mono">{Math.round(doc.complexityScore * 100)}%</p>
-                      </div>
-                    )}
-                    {doc.incumbentSignals && doc.incumbentSignals.length > 0 && (
-                      <div className="col-span-2">
-                        <p className="text-gray-500 mb-1">Incumbent Signals Detected</p>
-                        <div className="flex flex-wrap gap-1">
-                          {doc.incumbentSignals.map((s, i) => (
-                            <span key={i} className="bg-orange-900/30 text-orange-300 border border-orange-800 px-2 py-0.5 rounded">
-                              {s}
-                            </span>
-                          ))}
+                {doc.analysisStatus === 'COMPLETE' && (() => {
+                  const isDefaultFallback =
+                    doc.alignmentScore === 0.5 &&
+                    doc.complexityScore === 0.5 &&
+                    (!doc.scopeKeywords || doc.scopeKeywords.length === 0);
+                  return (
+                    <div className="mt-2 text-xs space-y-2">
+                      {isDefaultFallback && (
+                        <div className="flex items-start gap-2 bg-yellow-950/40 border border-yellow-800/50 rounded-lg px-3 py-2 text-yellow-300">
+                          <span className="text-base leading-none mt-0.5">⚠</span>
+                          <div>
+                            <p className="font-semibold">Analysis did not complete</p>
+                            <p className="text-yellow-400/80 mt-0.5">These scores are placeholder defaults (50%), not real AI output. The AI failed during analysis (likely a provider error). Delete this document and re-upload after confirming your AI provider is working in Settings.</p>
+                          </div>
                         </div>
-                      </div>
-                    )}
-                    {doc.scopeKeywords && doc.scopeKeywords.length > 0 && (
-                      <div className="col-span-2">
-                        <p className="text-gray-500 mb-1">Scope Keywords</p>
-                        <div className="flex flex-wrap gap-1">
-                          {doc.scopeKeywords.slice(0, 12).map((kw, i) => (
-                            <span key={i} className="bg-gray-800 text-gray-400 px-2 py-0.5 rounded">
-                              {kw}
-                            </span>
-                          ))}
+                      )}
+                      {!isDefaultFallback && (
+                        <div className="grid grid-cols-2 gap-3">
+                          {doc.alignmentScore != null && (
+                            <div>
+                              <p className="text-gray-500">Scope Alignment</p>
+                              <p className={`font-mono font-semibold ${
+                                doc.alignmentScore >= 0.7 ? 'text-green-400' :
+                                doc.alignmentScore >= 0.4 ? 'text-yellow-400' : 'text-gray-400'
+                              }`}>
+                                {Math.round(doc.alignmentScore * 100)}%
+                              </p>
+                            </div>
+                          )}
+                          {doc.complexityScore != null && (
+                            <div>
+                              <p className="text-gray-500">Technical Complexity</p>
+                              <p className="text-gray-200 font-mono">{Math.round(doc.complexityScore * 100)}%</p>
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    )}
-                  </div>
-                )}
+                      )}
+                      {doc.scopeKeywords && doc.scopeKeywords.length > 0 && (
+                        <div>
+                          <p className="text-gray-500 mb-1">Keywords extracted from document <span className="text-gray-600">(verify these match the actual SOW)</span></p>
+                          <div className="flex flex-wrap gap-1">
+                            {doc.scopeKeywords.slice(0, 15).map((kw, i) => (
+                              <span key={i} className="bg-gray-800 text-gray-300 border border-gray-700 px-2 py-0.5 rounded">
+                                {kw}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {doc.incumbentSignals && doc.incumbentSignals.length > 0 && (
+                        <div>
+                          <p className="text-gray-500 mb-1">Incumbent Signals Detected</p>
+                          <div className="flex flex-wrap gap-1">
+                            {doc.incumbentSignals.map((s, i) => (
+                              <span key={i} className="bg-orange-900/30 text-orange-300 border border-orange-800 px-2 py-0.5 rounded">
+                                {s}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             ))}
           </div>
@@ -1316,7 +1366,7 @@ ${data.amendments.map(a => `
           <div className="bg-gray-900/50 border border-gray-800 rounded-lg px-4 py-4 text-sm text-gray-500">
             <p className="font-medium text-gray-400 mb-1">No strategy analysis yet</p>
             <p>Click <span className="text-yellow-400">Analyze Solicitation</span> to extract plain-language bid strategy from the RFP — what the agency wants, how they'll score you, and how to win.</p>
-            <p className="mt-2 text-xs text-gray-600">Requires <span className="font-mono text-yellow-500">ANTHROPIC_API_KEY</span> in <span className="font-mono text-yellow-500">backend/.env</span>.</p>
+            <p className="mt-2 text-xs text-gray-600">Configure your AI provider in Settings to enable strategy extraction.</p>
           </div>
         )}
 
@@ -1580,7 +1630,7 @@ ${data.amendments.map(a => `
               <div className="bg-gray-900/50 border border-gray-800 rounded-lg px-4 py-4 text-sm text-gray-500">
                 <p className="font-medium text-gray-400 mb-1">No compliance matrix yet</p>
                 <p>Click <span className="text-blue-400">Generate Matrix</span> to extract Section L/M requirements from the opportunity description or any uploaded solicitation document.</p>
-                <p className="mt-2 text-xs text-gray-600">Tip: Upload the full RFP/SOW first for best results. Without <span className="font-mono text-yellow-500">ANTHROPIC_API_KEY</span> set in <span className="font-mono text-yellow-500">backend/.env</span>, a standard template will be used instead of AI extraction.</p>
+                <p className="mt-2 text-xs text-gray-600">Tip: Upload the full RFP/SOW first for best results. Configure your AI provider in Settings for AI-powered requirement extraction.</p>
               </div>
             )}
 
@@ -1693,6 +1743,186 @@ ${data.amendments.map(a => `
           </div>
         )
       })()}
+
+      {/* ── PROPOSAL WRITING ASSISTANT ───────────────────────── */}
+      {hasAddon('proposal_assistant') ? (
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-200 flex items-center gap-2">
+              <Lightbulb className="w-5 h-5 text-amber-400" />
+              Proposal Writing Assistant
+              <span className="text-xs font-normal text-amber-500 bg-amber-900/20 border border-amber-700/30 px-2 py-0.5 rounded-full ml-1">Add-On</span>
+            </h2>
+            <button
+              onClick={handleGenerateProposalOutline}
+              disabled={proposalGenerating}
+              className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg transition-colors"
+              style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', color: '#f59e0b' }}
+            >
+              {proposalGenerating
+                ? <><Loader className="w-3.5 h-3.5 animate-spin" /> Generating...</>
+                : <><Zap className="w-3.5 h-3.5" /> {proposalOutline ? 'Regenerate Outline' : 'Generate Proposal Outline'}</>}
+            </button>
+          </div>
+
+          {proposalError && <p className="text-red-400 text-xs mb-3">{proposalError}</p>}
+
+          {proposalGenerating && (
+            <p className="text-gray-500 text-sm flex items-center gap-2">
+              <Loader className="w-4 h-4 animate-spin" /> Analyzing requirements and generating proposal outline — this may take 15–30 seconds...
+            </p>
+          )}
+
+          {!proposalOutline && !proposalGenerating && (
+            <div className="bg-gray-900/50 border border-gray-800 rounded-lg px-4 py-4 text-sm text-gray-500">
+              <p className="font-medium text-gray-400 mb-1">No proposal outline yet</p>
+              <p>Click <span className="text-amber-400">Generate Proposal Outline</span> to get an AI-generated proposal structure — executive summary, win themes, section breakdown, and discriminators based on this opportunity's requirements.</p>
+              <p className="mt-2 text-xs text-gray-600">Tip: Generate the Compliance Matrix first for best results.</p>
+            </div>
+          )}
+
+          {proposalOutline && !proposalGenerating && (
+            <div className="space-y-5">
+              {/* Executive Summary */}
+              {proposalOutline.executiveSummary && (
+                <div className="bg-blue-950/30 border border-blue-800/40 rounded-lg p-4">
+                  <p className="text-xs text-blue-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                    <FileText className="w-3.5 h-3.5" /> Executive Summary Approach
+                  </p>
+                  <p className="text-sm text-gray-200 leading-relaxed">{proposalOutline.executiveSummary}</p>
+                </div>
+              )}
+
+              {/* Win Themes */}
+              {proposalOutline.winThemes?.length > 0 && (
+                <div>
+                  <p className="text-xs text-amber-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                    <Trophy className="w-3.5 h-3.5" /> Win Themes
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {proposalOutline.winThemes.map((theme: string, i: number) => (
+                      <span key={i} className="text-xs bg-amber-900/20 text-amber-300 border border-amber-700/30 px-2 py-1 rounded">
+                        {theme}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Sections */}
+              {proposalOutline.sections?.length > 0 && (
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+                    <ClipboardList className="w-3.5 h-3.5" /> Proposed Sections
+                  </p>
+                  <div className="overflow-x-auto rounded-lg border border-gray-800">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-800 bg-gray-900/60">
+                          <th className="text-left px-3 py-2 text-xs text-gray-500 font-medium">Section</th>
+                          <th className="text-left px-3 py-2 text-xs text-gray-500 font-medium">Description</th>
+                          <th className="text-left px-3 py-2 text-xs text-gray-500 font-medium w-28">Pages</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {proposalOutline.sections.map((sec: any, i: number) => (
+                          <tr key={i} className="border-b border-gray-800/60 hover:bg-gray-800/20">
+                            <td className="px-3 py-2.5">
+                              <p className="text-gray-200 font-medium text-xs">{sec.title}</p>
+                              {sec.keyPoints?.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {sec.keyPoints.map((kp: string, j: number) => (
+                                    <span key={j} className="text-[10px] bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded">{kp}</span>
+                                  ))}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-3 py-2.5 text-xs text-gray-400">{sec.description}</td>
+                            <td className="px-3 py-2.5 text-xs text-gray-500 font-mono">{sec.pageEstimate}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Discriminators */}
+                {proposalOutline.discriminators?.length > 0 && (
+                  <div className="bg-green-950/20 border border-green-800/30 rounded-lg p-3">
+                    <p className="text-xs text-green-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                      <Star className="w-3.5 h-3.5" /> Key Discriminators
+                    </p>
+                    <ul className="space-y-1.5">
+                      {proposalOutline.discriminators.map((d: string, i: number) => (
+                        <li key={i} className="text-xs text-gray-300 flex gap-2">
+                          <CheckCircle className="w-3.5 h-3.5 text-green-500 flex-shrink-0 mt-0.5" />
+                          {d}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Risk Mitigations */}
+                {proposalOutline.riskMitigations?.length > 0 && (
+                  <div className="bg-orange-950/20 border border-orange-800/30 rounded-lg p-3">
+                    <p className="text-xs text-orange-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                      <AlertTriangle className="w-3.5 h-3.5" /> Risk Mitigations
+                    </p>
+                    <ul className="space-y-1.5">
+                      {proposalOutline.riskMitigations.map((r: string, i: number) => (
+                        <li key={i} className="text-xs text-gray-300 flex gap-2">
+                          <span className="text-orange-500 flex-shrink-0">!</span>
+                          {r}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              {/* Past Performance Hint */}
+              {proposalOutline.pastPerformanceHint && (
+                <div className="bg-purple-950/20 border border-purple-800/30 rounded-lg p-3">
+                  <p className="text-xs text-purple-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                    <UserCheck className="w-3.5 h-3.5" /> Past Performance Guidance
+                  </p>
+                  <p className="text-xs text-gray-300">{proposalOutline.pastPerformanceHint}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="card">
+          <div className="flex items-start gap-4">
+            <div className="p-3 rounded-xl flex-shrink-0"
+              style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)' }}>
+              <Lightbulb className="w-6 h-6 text-amber-400" />
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <h3 className="text-base font-semibold text-slate-100">Proposal Writing Assistant</h3>
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/25">
+                  Add-On Required
+                </span>
+              </div>
+              <p className="text-sm text-slate-400 mb-3">
+                Turn your compliance matrix into a full proposal outline — executive summary, section drafts, discriminator suggestions, and win themes. Cuts proposal prep time by 60%.
+              </p>
+              <Link
+                to="/billing"
+                className="inline-flex items-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-lg transition-all"
+                style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', color: '#f59e0b' }}
+              >
+                <Zap className="w-4 h-4" /> Add Proposal Assistant — $249/mo →
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   )

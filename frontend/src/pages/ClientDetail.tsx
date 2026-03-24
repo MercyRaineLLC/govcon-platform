@@ -42,6 +42,70 @@ const DOC_TYPE_LABELS: Record<string, string> = {
   OTHER: 'Other',
 }
 
+const KNOWN_VEHICLES = [
+  'OASIS+','OASIS','SEWP V','SEWP','Alliant 3','Alliant 2','CIO-SP4','CIO-SP3',
+  '8(a) STARS III','Polaris','VETS 2','T4NG','ITES-3S','NETCENTS-2','SPARC','RS3',
+  'GSA MAS','GSA Schedule 70','GSA Schedule 84','EAGLE II','ENCORE III',
+  'SeaPort-e','SETI','HCATS','GWAC','IDIQ','BPA','BOA','MATOC',
+]
+
+function VehicleManager({ clientId, vehicles }: { clientId: string; vehicles: string[] }) {
+  const qc = useQueryClient()
+  const [adding, setAdding] = useState(false)
+  const [custom, setCustom] = useState('')
+
+  const saveMutation = useMutation({
+    mutationFn: (updated: string[]) =>
+      clientsApi.update(clientId, { contractVehicles: updated }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['client', clientId] }),
+  })
+
+  const add = (v: string) => {
+    const trimmed = v.trim()
+    if (!trimmed || vehicles.includes(trimmed)) return
+    saveMutation.mutate([...vehicles, trimmed])
+    setCustom('')
+    setAdding(false)
+  }
+
+  const remove = (v: string) => saveMutation.mutate(vehicles.filter(x => x !== v))
+
+  return (
+    <div className="mt-4">
+      <p className="text-gray-500 text-xs mb-1.5 flex items-center gap-1">
+        <Briefcase className="w-3 h-3" /> Contract Vehicles
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {vehicles.map(v => (
+          <span key={v} className="flex items-center gap-1 text-xs bg-violet-900/40 text-violet-300 border border-violet-700/60 px-2 py-0.5 rounded">
+            {v}
+            <button onClick={() => remove(v)} className="text-violet-500 hover:text-red-400 transition-colors ml-0.5">×</button>
+          </span>
+        ))}
+        {!adding && (
+          <button onClick={() => setAdding(true)} className="text-xs text-gray-500 hover:text-amber-400 border border-dashed border-gray-700 hover:border-amber-500/40 px-2 py-0.5 rounded transition-colors">
+            + Add vehicle
+          </button>
+        )}
+      </div>
+      {adding && (
+        <div className="mt-2 flex gap-2 items-center flex-wrap">
+          <select className="input text-xs py-1 w-52" onChange={e => { if (e.target.value) add(e.target.value); e.target.value = '' }} defaultValue="">
+            <option value="">Select known vehicle…</option>
+            {KNOWN_VEHICLES.filter(v => !vehicles.includes(v)).map(v => (
+              <option key={v} value={v}>{v}</option>
+            ))}
+          </select>
+          <span className="text-xs text-gray-600">or</span>
+          <input className="input text-xs py-1 w-40" placeholder="Custom name…" value={custom} onChange={e => setCustom(e.target.value)} onKeyDown={e => e.key === 'Enter' && add(custom)} />
+          <button onClick={() => add(custom)} className="text-xs text-amber-400 hover:text-amber-300">Add</button>
+          <button onClick={() => setAdding(false)} className="text-xs text-gray-600 hover:text-gray-400">Cancel</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function ClientDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -152,6 +216,9 @@ export default function ClientDetail() {
             ))}
           </div>
         )}
+
+        {/* Contract Vehicles */}
+        <VehicleManager clientId={client.id} vehicles={client.contractVehicles ?? []} />
       </div>
 
       {/* Client Health Score + Performance Stats */}

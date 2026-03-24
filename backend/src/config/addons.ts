@@ -1,0 +1,110 @@
+export interface AddonDef {
+  slug: string
+  name: string
+  tagline: string
+  description: string
+  priceMonthly: number
+  priceAnnual: number   // ~15% off
+  icon: string          // emoji
+  status: 'available' | 'coming_soon'
+  category: 'ai' | 'data' | 'automation' | 'reporting'
+}
+
+export const ADDON_CATALOG: AddonDef[] = [
+  {
+    slug: 'proposal_assistant',
+    name: 'Proposal Writing Assistant',
+    tagline: 'AI-generated proposal outlines in seconds',
+    description: 'Turn your compliance matrix into a full proposal outline — executive summary, section drafts, discriminator suggestions, and win themes. Cuts proposal prep time by 60%.',
+    priceMonthly: 249,
+    priceAnnual: 212,
+    icon: '✍️',
+    status: 'available',
+    category: 'ai',
+  },
+  {
+    slug: 'competitor_intel',
+    name: 'Competitor Intelligence',
+    tagline: 'Know who you are competing against before you bid',
+    description: 'See historical winners for each NAICS code, incumbent identification, average competitor count, and bidding pattern analysis sourced from USAspending award data.',
+    priceMonthly: 179,
+    priceAnnual: 152,
+    icon: '🎯',
+    status: 'available',
+    category: 'data',
+  },
+  {
+    slug: 'auto_sync',
+    name: 'Automated Daily Sync',
+    tagline: 'New contracts land in your dashboard every morning',
+    description: 'SAM.gov is automatically checked every morning at 6am. New opportunities matching your NAICS filters are ingested, scored, and waiting for you — no manual sync needed.',
+    priceMonthly: 49,
+    priceAnnual: 42,
+    icon: '⚡',
+    status: 'available',
+    category: 'automation',
+  },
+  {
+    slug: 'branded_reports',
+    name: 'Custom Branded Reports',
+    tagline: 'Deliver professional PDF reports to your clients',
+    description: 'Generate branded PDF deliverables — pipeline reports, opportunity analyses, compliance summaries — with your firm logo and colors. Email directly to clients from the platform.',
+    priceMonthly: 79,
+    priceAnnual: 67,
+    icon: '📄',
+    status: 'coming_soon',
+    category: 'reporting',
+  },
+  {
+    slug: 'teaming_finder',
+    name: 'Teaming Partner Finder',
+    tagline: 'Find the right teaming partners for every bid',
+    description: 'AI identifies ideal teaming partners based on the opportunity requirements, set-aside type, and past performance history. Never miss a bid because you lack a required capability.',
+    priceMonthly: 129,
+    priceAnnual: 110,
+    icon: '🤝',
+    status: 'coming_soon',
+    category: 'ai',
+  },
+  {
+    slug: 'state_municipal',
+    name: 'State & Municipal Access',
+    tagline: 'Expand beyond federal to state and local contracts',
+    description: 'Unlock state, county, and municipal contracting opportunities. Access procurement portals from all 50 states with the same AI scoring and compliance tracking you use for federal.',
+    priceMonthly: 99,
+    priceAnnual: 84,
+    icon: '🏛️',
+    status: 'coming_soon',
+    category: 'data',
+  },
+  {
+    slug: 'api_access',
+    name: 'API Access',
+    tagline: 'Integrate your CRM, ERP, or custom dashboards',
+    description: 'Full REST API access to all platform data. Build custom integrations with Salesforce, HubSpot, or any system. Includes webhook support for real-time opportunity alerts.',
+    priceMonthly: 199,
+    priceAnnual: 169,
+    icon: '🔌',
+    status: 'coming_soon',
+    category: 'automation',
+  },
+  {
+    slug: 'executive_briefing',
+    name: 'Executive Intel Briefing',
+    tagline: 'Weekly AI briefing on your top opportunities',
+    description: 'Every Monday, receive an AI-curated briefing on your top 10 opportunities, market shifts in your NAICS codes, and strategic recommendations for the week ahead.',
+    priceMonthly: 149,
+    priceAnnual: 127,
+    icon: '📊',
+    status: 'coming_soon',
+    category: 'ai',
+  },
+]
+
+// Elite plan includes all add-ons automatically
+export const ELITE_PLAN_SLUG = 'elite'
+
+export function isAddonIncluded(planSlug: string, addonSlug: string): boolean {
+  if (planSlug === ELITE_PLAN_SLUG) return true
+  return false
+}

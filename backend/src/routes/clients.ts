@@ -14,8 +14,9 @@ import { prisma } from '../config/database';
 import { authenticateJWT, requireRole } from '../middleware/auth';
 import { enforceTenantScope, getTenantId } from '../middleware/tenant';
 import { AuthenticatedRequest } from '../types';
-import { NotFoundError } from '../utils/errors';
+import { NotFoundError, ValidationError } from '../utils/errors';
 import { enqueueAllOpportunitiesForScoring } from '../workers/scoringWorker';
+import { checkClientLimit } from '../middleware/tierGate';
 import { lookupEntityByUEI, lookupEntityByCAGE, lookupEntityByName } from '../services/samEntityApi';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
@@ -66,6 +67,7 @@ const ClientSchema = z.object({
   uei: z.string().optional(),
   ein: z.string().optional(),
   naicsCodes: z.array(z.string()).default([]),
+  contractVehicles: z.array(z.string()).default([]),
   sdvosb: z.boolean().default(false),
   wosb: z.boolean().default(false),
   hubzone: z.boolean().default(false),
@@ -190,6 +192,14 @@ router.get('/', async (req: AuthenticatedRequest, res: Response, next: NextFunct
 router.post('/', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const consultingFirmId = getTenantId(req);
+
+    const limitCheck = await checkClientLimit(consultingFirmId);
+    if (!limitCheck.allowed) {
+      throw new ValidationError(
+        `Client limit reached (${limitCheck.current}/${limitCheck.max}). Upgrade your plan to add more clients.`
+      );
+    }
+
     const body = ClientSchema.parse(req.body);
 
     const client = await prisma.$transaction(async (tx) => {

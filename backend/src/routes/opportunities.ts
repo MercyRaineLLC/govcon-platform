@@ -97,6 +97,9 @@ router.get('/', async (req: AuthenticatedRequest, res: Response, next: NextFunct
     if (q.placeOfPerformance) where.placeOfPerformance = { contains: String(q.placeOfPerformance), mode: 'insensitive' }
     if (q.recompeteOnly === 'true') where.recompeteFlag = true
     if (q.enrichedOnly === 'true') where.isEnriched = true
+    if (q.contractVehicle) where.contractVehicle = String(q.contractVehicle)
+    if (q.vehicleType) where.vehicleType = String(q.vehicleType)
+    if (q.hasVehicle === 'true') where.contractVehicle = { not: null }
 
     const estimatedValueMin = toNumber(q.estimatedValueMin)
     const estimatedValueMax = toNumber(q.estimatedValueMax)

@@ -3,6 +3,7 @@ import { Router, Response, NextFunction } from 'express'
 import { prisma } from '../config/database'
 import { authenticateJWT } from '../middleware/auth'
 import { enforceTenantScope, getTenantId } from '../middleware/tenant'
+import { requireFeature, checkAiCallLimit } from '../middleware/tierGate'
 import { AuthenticatedRequest } from '../types'
 import { NotFoundError, ValidationError } from '../utils/errors'
 import { logger } from '../utils/logger'
@@ -36,6 +37,15 @@ function deepStripNulls(val: unknown): unknown {
 router.post('/:opportunityId/generate', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const consultingFirmId = getTenantId(req)
+
+    const aiCheck = await checkAiCallLimit(consultingFirmId)
+    if (!aiCheck.allowed) {
+      return res.status(403).json({
+        error: 'AI_LIMIT',
+        message: `AI call limit reached (${aiCheck.current}/${aiCheck.max} this month). Upgrade your plan for more AI calls.`,
+      })
+    }
+
     const { opportunityId } = req.params
 
     const opp = await prisma.opportunity.findFirst({
@@ -120,9 +130,18 @@ router.post('/:opportunityId/generate', async (req: AuthenticatedRequest, res: R
 // POST /api/compliance-matrix/:opportunityId/bid-guidance
 // Generate plain-language win strategy from solicitation text.
 // ---------------------------------------------------------------
-router.post('/:opportunityId/bid-guidance', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.post('/:opportunityId/bid-guidance', requireFeature('bid_guidance'), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const consultingFirmId = getTenantId(req)
+
+    const aiCheck = await checkAiCallLimit(consultingFirmId)
+    if (!aiCheck.allowed) {
+      return res.status(403).json({
+        error: 'AI_LIMIT',
+        message: `AI call limit reached (${aiCheck.current}/${aiCheck.max} this month). Upgrade your plan for more AI calls.`,
+      })
+    }
+
     const { opportunityId } = req.params
 
     const opp = await prisma.opportunity.findFirst({

@@ -352,6 +352,18 @@ export const billingApi = {
     api.put(`/billing/invoices/${id}/status`, { status }).then((r) => r.data),
 }
 
+// ---- Add-ons ----
+export const addonsApi = {
+  list: () => api.get('/addons').then(r => r.data),
+  purchase: (slug: string) => api.post(`/addons/${slug}/purchase`).then(r => r.data),
+  cancel: (slug: string) => api.delete(`/addons/${slug}/cancel`).then(r => r.data),
+}
+
+export const proposalAssistApi = {
+  generateOutline: (opportunityId: string) =>
+    api.post(`/proposal-assist/${opportunityId}/outline`).then(r => r.data),
+}
+
 // ---- Compliance Matrix ----
 export const complianceMatrixApi = {
   get: (opportunityId: string) =>

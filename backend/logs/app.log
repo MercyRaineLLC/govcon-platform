@@ -130,3 +130,22 @@
 {"level":"info","message":"Database connected","timestamp":"2026-02-26 08:55:11"}
 {"level":"info","message":"Scoring worker started","timestamp":"2026-02-26 08:55:11"}
 {"environment":"development","level":"info","message":"GovCon Platform server running","pid":31,"port":3001,"timestamp":"2026-02-26 08:55:11"}
+{"agency":"ALL","durationMs":1019,"level":"info","message":"BQ ingestion complete","naicsCode":"541512","rowsInserted":100,"timestamp":"2026-03-22 02:43:54"}
+{"agency":"ALL","durationMs":587,"level":"info","message":"BQ ingestion complete","naicsCode":"541330","rowsInserted":100,"timestamp":"2026-03-22 02:43:56"}
+{"agency":"ALL","durationMs":446,"level":"info","message":"BQ ingestion complete","naicsCode":"541611","rowsInserted":100,"timestamp":"2026-03-22 02:43:58"}
+{"agency":"ALL","durationMs":390,"level":"info","message":"BQ ingestion complete","naicsCode":"541519","rowsInserted":100,"timestamp":"2026-03-22 02:44:00"}
+{"agency":"ALL","durationMs":454,"level":"info","message":"BQ ingestion complete","naicsCode":"561210","rowsInserted":100,"timestamp":"2026-03-22 02:44:02"}
+{"agency":"ALL","durationMs":366,"level":"info","message":"BQ ingestion complete","naicsCode":"541618","rowsInserted":100,"timestamp":"2026-03-22 02:44:04"}
+{"agency":"ALL","durationMs":423,"level":"info","message":"BQ ingestion complete","naicsCode":"541715","rowsInserted":100,"timestamp":"2026-03-22 02:44:06"}
+{"agency":"ALL","durationMs":366,"level":"info","message":"BQ ingestion complete","naicsCode":"518210","rowsInserted":100,"timestamp":"2026-03-22 02:44:07"}
+{"agency":"ALL","durationMs":441,"level":"info","message":"BQ ingestion complete","naicsCode":"541990","rowsInserted":100,"timestamp":"2026-03-22 02:44:09"}
+{"agency":"ALL","durationMs":386,"level":"info","message":"BQ ingestion complete","naicsCode":"336411","rowsInserted":100,"timestamp":"2026-03-22 02:44:11"}
+{"agency":"ALL","durationMs":848,"level":"info","message":"BQ ingestion complete","naicsCode":"611430","rowsInserted":100,"timestamp":"2026-03-22 02:44:14"}
+{"agency":"ALL","durationMs":731,"level":"info","message":"BQ ingestion complete","naicsCode":"541350","rowsInserted":100,"timestamp":"2026-03-22 02:44:16"}
+{"agency":"ALL","durationMs":401,"level":"info","message":"BQ ingestion complete","naicsCode":"237310","rowsInserted":100,"timestamp":"2026-03-22 02:44:18"}
+{"agency":"ALL","durationMs":362,"level":"info","message":"BQ ingestion complete","naicsCode":"562910","rowsInserted":100,"timestamp":"2026-03-22 02:44:20"}
+{"agency":"ALL","durationMs":345,"level":"info","message":"BQ ingestion complete","naicsCode":"621111","rowsInserted":100,"timestamp":"2026-03-22 02:44:22"}
+{"agency":"ALL","durationMs":550,"level":"info","message":"BQ ingestion complete","naicsCode":"332710","rowsInserted":100,"timestamp":"2026-03-22 02:44:24"}
+{"agency":"ALL","durationMs":360,"level":"info","message":"BQ ingestion complete","naicsCode":"561320","rowsInserted":100,"timestamp":"2026-03-22 02:44:26"}
+{"agency":"ALL","durationMs":458,"level":"info","message":"BQ ingestion complete","naicsCode":"484110","rowsInserted":100,"timestamp":"2026-03-22 02:44:27"}
+{"agency":"ALL","durationMs":460,"level":"info","message":"BQ ingestion complete","naicsCode":"541380","rowsInserted":100,"timestamp":"2026-03-22 02:44:29"}

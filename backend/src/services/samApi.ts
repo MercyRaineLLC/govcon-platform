@@ -1,6 +1,7 @@
 import axios from "axios"
 import { prisma } from "../config/database"
 import { logger } from "../utils/logger"
+import { detectVehicleFromOpportunity } from "./vehicleDetector"
 
 const SAM_BASE_URL = "https://api.sam.gov/opportunities/v2/search"
 
@@ -84,8 +85,16 @@ export const samApiService = {
               include: { amendments: true },
             })
 
+            const title = record.title ?? "Untitled Opportunity"
+            const description = record.description ?? null
+            const vehicleMatch = detectVehicleFromOpportunity({
+              title,
+              description,
+              noticeType: record.type ?? null,
+            })
+
             const mappedData = {
-              title: record.title ?? "Untitled Opportunity",
+              title,
               agency:
                 record.fullParentPathName ??
                 record.organizationType ??
@@ -98,6 +107,9 @@ export const samApiService = {
                 ? new Date(record.responseDeadLine)
                 : now,
               archiveDate: record.archiveDate ? new Date(record.archiveDate) : null,
+              contractVehicle: vehicleMatch?.vehicle ?? null,
+              vehicleType: vehicleMatch?.type ?? null,
+              vehicleConfidence: vehicleMatch?.confidence ?? null,
               sourceUrl: (() => {
                 const ui = record.uiLink
                 // SAM.gov sometimes returns an API URL (api.sam.gov/...) instead of

@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>GovCon Advisory Intelligence Platform — SRS v2.0</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; max-width: 960px; margin: 0 auto; padding: 48px 40px 80px; color: #111827; font-size: 13.5px; line-height: 1.7; background: #fff; }
+  .cover { text-align: center; padding: 60px 0 48px; border-bottom: 3px solid #1e3a5f; margin-bottom: 48px; }
+  .cover .logo-band { background: #1e3a5f; color: #fff; display: inline-block; padding: 8px 24px; border-radius: 4px; font-size: 11px; letter-spacing: .15em; text-transform: uppercase; margin-bottom: 24px; }
+  .cover h1 { font-size: 28px; font-weight: 800; color: #1e3a5f; margin: 0 0 8px; }
+  .cover h2 { font-size: 16px; font-weight: 400; color: #64748b; margin: 0 0 32px; }
+  .cover-meta { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; max-width: 600px; margin: 0 auto; }
+  .cover-meta div { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; }
+  .cover-meta label { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: #94a3b8; margin-bottom: 3px; }
+  .cover-meta p { margin: 0; font-weight: 700; color: #1e3a5f; font-size: 13px; }
+  .toc { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 24px 28px; margin-bottom: 40px; }
+  .toc h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: #64748b; margin: 0 0 12px; }
+  .toc ol { margin: 0; padding-left: 20px; column-count: 2; column-gap: 32px; }
+  .toc li { margin-bottom: 5px; font-size: 13px; color: #1e3a5f; }
+  h2.sec { font-size: 15px; font-weight: 800; color: #1e3a5f; border-left: 4px solid #1e3a5f; padding-left: 12px; margin: 44px 0 16px; }
+  h3.sub { font-size: 13px; font-weight: 700; color: #374151; margin: 22px 0 8px; }
+  .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  .feat { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 14px 16px; }
+  .feat h4 { margin: 0 0 5px; font-size: 13px; color: #1e3a5f; }
+  .feat p { margin: 0; font-size: 12.5px; color: #475569; }
+  .pill { display: inline-block; border-radius: 12px; padding: 2px 10px; font-size: 11px; font-weight: 600; margin: 2px 3px 2px 0; }
+  .pill.blue { background: #dbeafe; color: #1e40af; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-bottom: 16px; }
+  th { background: #1e3a5f; color: #fff; padding: 8px 12px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+  td { padding: 8px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+  tr:nth-child(even) td { background: #f8fafc; }
+  .box { border-radius: 6px; padding: 12px 16px; margin-bottom: 12px; font-size: 13px; }
+  .box.green { background: #f0fdf4; border: 1px solid #86efac; }
+  .box.amber { background: #fffbeb; border: 1px solid #fde68a; }
+  .box.blue { background: #eff6ff; border: 1px solid #bfdbfe; }
+  ul { padding-left: 20px; margin: 6px 0 12px; }
+  li { margin-bottom: 4px; }
+  .footer { margin-top: 60px; border-top: 1px solid #e2e8f0; padding-top: 14px; display: flex; justify-content: space-between; font-size: 11px; color: #94a3b8; }
+  @media print { * { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .cover { page-break-after: always; } }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="logo-band">Software Requirements Specification</div>
+  <h1>GovCon Advisory Intelligence Platform</h1>
+  <h2>Condensed Product Requirements &amp; Capabilities — Launch Edition</h2>
+  <div class="cover-meta">
+    <div><label>Version</label><p>2.0</p></div>
+    <div><label>Date</label><p>March 20, 2026</p></div>
+    <div><label>Status</label><p>Feature Complete</p></div>
+  </div>
+</div>
+
+<div class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li>Product Overview &amp; Mission</li>
+    <li>User Roles</li>
+    <li>Core Feature Modules</li>
+    <li>AI Intelligence Layer</li>
+    <li>Opportunity Management</li>
+    <li>Client &amp; Pipeline Management</li>
+    <li>Analytics &amp; Forecasting</li>
+    <li>Compliance &amp; Audit</li>
+    <li>Settings &amp; Administration</li>
+    <li>Non-Functional Requirements &amp; Launch Readiness</li>
+  </ol>
+</div>
+
+<h2 class="sec">1. Product Overview &amp; Mission</h2>
+<p>The <strong>GovCon Advisory Intelligence Platform</strong> is a multi-tenant SaaS application purpose-built for government contracting consulting firms. It automates opportunity discovery, applies AI-driven analysis to solicitation documents, and generates actionable bid intelligence — replacing manual research workflows that currently consume dozens of analyst hours per pursuit.</p>
+<p>The platform ingests live federal opportunities from SAM.gov, scores them using a probabilistic 8-factor model, and surfaces only the highest-value matches per client. Consultants manage the full pursuit lifecycle — from opportunity identification through bid decision, proposal planning, submission tracking, and compliance monitoring — in a single workspace.</p>
+<div class="box blue"><strong>Launch Goal:</strong> Enable a consulting firm to onboard a client, ingest relevant federal opportunities, receive AI-scored bid recommendations, and generate a compliance matrix and bid strategy document — all within 15 minutes of first login, with no manual data entry.</div>
+
+<h2 class="sec">2. User Roles</h2>
+<table>
+  <tr><th>Role</th><th>Capabilities</th></tr>
+  <tr><td><strong>Admin</strong></td><td>Full platform access. Manages firm settings, API keys, AI provider selection, user accounts, penalty configuration, and seed data. Only role that can access Settings and Compliance administration pages.</td></tr>
+  <tr><td><strong>Consultant</strong></td><td>Full operational access. Views and acts on all opportunities, clients, decisions, submissions, analytics, and AI features. Cannot modify firm-level configuration.</td></tr>
+  <tr><td><strong>Client (Portal)</strong></td><td>Read-only access to their own opportunity pipeline, bid decisions, submission status, and documents via the Client Portal. Cannot see other clients or firm internals.</td></tr>
+</table>
+
+<h2 class="sec">3. Core Feature Modules</h2>
+<div class="feature-grid">
+  <div class="feat"><h4>Opportunity Intelligence</h4><p>Live SAM.gov ingestion, AI scoring, enrichment from USASpending, win probability display with disclaimer, deadline urgency classification.</p></div>
+  <div class="feat"><h4>AI Document Analysis</h4><p>Upload RFP/SOW/amendment documents. AI extracts scope keywords, complexity score, alignment score, and incumbent signals. Triggers re-scoring.</p></div>
+  <div class="feat"><h4>Compliance Matrix</h4><p>AI generates a structured requirement-by-requirement compliance checklist from solicitation text. Each row is trackable with status, notes, and proposal section assignment.</p></div>
+  <div class="feat"><h4>Bid Guidance</h4><p>AI produces a plain-language win strategy including discriminators, risks, teaming recommendations, pricing guidance, and past performance hooks.</p></div>
+  <div class="feat"><h4>Bid Decision Engine</h4><p>8-factor logistic probability model with Bayesian calibration produces BID_PRIME / BID_SUB / NO_BID recommendations with full factor breakdown per client-opportunity pair.</p></div>
+  <div class="feat"><h4>Client Portal</h4><p>Branded portal view for end-clients. Shows their active opportunities, bid decisions, submission history, and uploaded documents relevant to their engagements.</p></div>
+  <div class="feat"><h4>Analytics &amp; Forecasting</h4><p>Pipeline funnel, win distribution, penalty trends, submission velocity, Monte Carlo revenue forecast, client portfolio diversification (HHI index), and market intelligence.</p></div>
+  <div class="feat"><h4>Rewards Program</h4><p>Points-based incentive system. Clients earn rewards for on-time submissions, compliance milestones, and referrals. Redeemable through the admin panel.</p></div>
+</div>
+
+<h2 class="sec">4. AI Intelligence Layer</h2>
+<p>The platform operates an <strong>AI abstraction layer</strong> that routes all AI calls through a central provider router. Each firm independently selects their preferred provider and stores their own API key. The system supports four providers with automatic failover.</p>
+
+<h3 class="sub">4.1 Supported AI Providers</h3>
+<table>
+  <tr><th>Provider</th><th>Display Name</th><th>Best For</th><th>Cost Model</th></tr>
+  <tr><td>Anthropic</td><td>Claude (Anthropic)</td><td>Complex analysis, highest accuracy</td><td>~$3–15 / 1M tokens</td></tr>
+  <tr><td>OpenAI</td><td>OpenAI (GPT-4o)</td><td>Balanced cost and performance</td><td>~$0.15–0.60 / 1M tokens</td></tr>
+  <tr><td>OpenAI-compatible</td><td>Insight Engine</td><td>High-volume, budget use</td><td>~$0.27–1.10 / 1M tokens</td></tr>
+  <tr><td>LocalAI (self-hosted)</td><td>LocalAI</td><td>Zero per-token cost, on-premise</td><td>$0 (hardware only)</td></tr>
+</table>
+
+<h3 class="sub">4.2 AI Feature Capabilities</h3>
+<table>
+  <tr><th>Feature</th><th>Task Type</th><th>Cached</th><th>Failure Behavior</th></tr>
+  <tr><td>Document Analysis</td><td>DOCUMENT_ANALYSIS</td><td>No</td><td>Returns default score silently</td></tr>
+  <tr><td>Compliance Matrix Generation</td><td>COMPLIANCE_MATRIX</td><td>Yes — 7 days</td><td>Returns minimal fallback matrix</td></tr>
+  <tr><td>Bid Guidance Generation</td><td>BID_GUIDANCE</td><td>Yes — 7 days</td><td>Returns null, surfaces message in UI</td></tr>
+</table>
+
+<h3 class="sub">4.3 Usage Tracking</h3>
+<p>Every AI call is logged with provider, model, task type, input/output token counts, estimated cost (USD), cache hit flag, and latency. Admins view a 30-day usage summary broken down by task and by provider in Settings. Cache hits are logged at $0 cost.</p>
+
+<h3 class="sub">4.4 LocalAI Integration</h3>
+<p>LocalAI runs as a containerized service alongside the platform. It exposes an OpenAI-compatible REST API with no external key required. If LocalAI fails, the platform automatically falls back to Claude. The backend transparently rewrites localhost URLs to the internal Docker hostname so consultants can enter the external URL in Settings regardless of deployment environment.</p>
+
+<h2 class="sec">5. Opportunity Management</h2>
+
+<h3 class="sub">5.1 Ingestion &amp; Enrichment</h3>
+<ul>
+  <li>Trigger SAM.gov ingest with optional NAICS code, agency, and set-aside filters (up to 100 results per run). Concurrent duplicate jobs are blocked.</li>
+  <li>Post-ingest, opportunities are automatically queued for probability scoring.</li>
+  <li>Enrichment job fetches historical award data from USASpending: incumbent, award history, competitor count, agency small-business and SDVOSB rates.</li>
+</ul>
+
+<h3 class="sub">5.2 Probability Scoring — 8 Factors</h3>
+<p>
+  <span class="pill blue">NAICS Alignment</span>
+  <span class="pill blue">Set-Aside Match</span>
+  <span class="pill blue">Incumbent Probability</span>
+  <span class="pill blue">Competition Density</span>
+  <span class="pill blue">Agency Relationship</span>
+  <span class="pill blue">Document Intel Score</span>
+  <span class="pill blue">Deadline Urgency</span>
+  <span class="pill blue">Penalty Drag</span>
+</p>
+<p>Scores are Bayesian-calibrated using the firm's historical win/loss record. All displayed probabilities carry an "est." disclaimer badge.</p>
+
+<h3 class="sub">5.3 Opportunity Detail View</h3>
+<ul>
+  <li>Full solicitation metadata, POC, place of performance, set-aside eligibility</li>
+  <li>Document upload (PDF, DOCX, TXT, ZIP) with automatic AI analysis on upload</li>
+  <li>Score breakdown panel with per-factor contribution visualization</li>
+  <li>Compliance Matrix and Bid Guidance tabs generated on demand</li>
+  <li>Amendment tracking with plain-language AI interpretation per amendment</li>
+  <li>Client matching: run bid decision engine against any active client</li>
+  <li>Export Synopsis: professional HTML export with agency cleanup, deadline urgency badge, probability gauge, score breakdown bars, AI scope keyword tags, and competitive intelligence grid</li>
+</ul>
+
+<h2 class="sec">6. Client &amp; Pipeline Management</h2>
+
+<h3 class="sub">6.1 Client Profiles</h3>
+<ul>
+  <li>Business certifications: SDVOSB, WOSB, HUBZone, Small Business, 8(a)</li>
+  <li>NAICS codes (multi-value) for opportunity matching</li>
+  <li>Performance stats: submitted, won, on-time rate, total penalties</li>
+  <li>Document requirements checklist with compliance status tracking</li>
+  <li>Active/inactive status with per-client penalty schedule override</li>
+</ul>
+
+<h3 class="sub">6.2 Bid Decisions</h3>
+<p>Generated per client-opportunity pair. Includes recommendation (BID_PRIME / BID_SUB / NO_BID), win probability, plain-language explanation, and full factor breakdown. Consultants can override and add notes. Decisions feed the analytics pipeline funnel.</p>
+
+<h3 class="sub">6.3 Submissions &amp; Penalties</h3>
+<ul>
+  <li>Submission records track status, on-time flag, and contract value</li>
+  <li>Penalties auto-calculated on late or non-compliant submissions per firm penalty schedule</li>
+  <li>Penalty drag applied in real time to probability scoring via exponential decay: exp(-totalPenalties / 200,000)</li>
+</ul>
+
+<h3 class="sub">6.4 Client Portal</h3>
+<p>Clients access a read-only branded portal showing their opportunity pipeline, bid decisions, and submission history. Portal tokens are scoped exclusively to the authenticated client and cannot access any other firm or client data.</p>
+
+<h2 class="sec">7. Analytics &amp; Forecasting</h2>
+<div class="feature-grid">
+  <div class="feat"><h4>Pipeline Funnel</h4><p>Ingested to Scored to Decided to Submitted to Won. Real contract values at each stage with conversion rates.</p></div>
+  <div class="feat"><h4>Win Probability Distribution</h4><p>Histogram of scored opportunities by probability band. Identifies where the pipeline is concentrated.</p></div>
+  <div class="feat"><h4>Revenue Forecast</h4><p>Monte Carlo simulation (1,000 runs) over active pipeline. P10 / P50 / P90 confidence bands with HHI diversification index.</p></div>
+  <div class="feat"><h4>Market Intelligence</h4><p>NAICS sector trend detection via linear regression. Agency profiles with small-business award rates and competitive landscape.</p></div>
+  <div class="feat"><h4>Submission Velocity</h4><p>EMA-smoothed trend of submissions over time. Late submission probability via Beta distribution model.</p></div>
+  <div class="feat"><h4>Risk Radar</h4><p>Flags deadline risk, compliance blocks, high late-submission probability, and unpaid penalties requiring immediate attention.</p></div>
+  <div class="feat"><h4>Smart Match Engine</h4><p>Automatically surfaces top client-opportunity pairings ranked by combined probability score with NAICS pre-filter.</p></div>
+  <div class="feat"><h4>Penalty Trend</h4><p>Time-series of financial penalties applied across the portfolio. Identifies compliance risk patterns per client over time.</p></div>
+</div>
+
+<h2 class="sec">8. Compliance &amp; Audit</h2>
+<ul>
+  <li><strong>Compliance Logs:</strong> Every status change on opportunities, submissions, and documents generates an immutable audit log entry with entity type, from/to status, triggering user, and timestamp.</li>
+  <li><strong>Compliance Matrix:</strong> AI-generated requirement checklist per opportunity. Each row tracks requirement text, FAR reference, mandatory flag, status (NOT_STARTED / IN_PROGRESS / COMPLETE / WAIVED / NON_COMPLIANT), assigned proposal section, and notes.</li>
+  <li><strong>Document Requirements:</strong> Per-client checklists for certifications, past performance packages, and financial documents with due dates and compliance status.</li>
+  <li><strong>Compliance Report Export:</strong> Date-range filtered export of all audit events for a firm.</li>
+</ul>
+
+<h2 class="sec">9. Settings &amp; Administration</h2>
+
+<h3 class="sub">9.1 API Key Management</h3>
+<p>All API keys stored per-firm in the database. Masked in the UI with reveal toggle. Saving a key immediately refreshes the stored-key confirmation row. Supported keys: SAM.gov, Claude (Anthropic), OpenAI, Insight Engine. LocalAI requires only a base URL and model name — no key.</p>
+
+<h3 class="sub">9.2 Firm Configuration</h3>
+<ul>
+  <li>Penalty schedule: flat late fee (USD) and/or percentage of contract value</li>
+  <li>SAM.gov sync preferences: default NAICS filter and result limit</li>
+  <li>Active AI provider selection applied firm-wide</li>
+  <li>User roster management with role display</li>
+  <li>Template library: upload, approve/reject, and assign document templates to clients</li>
+  <li>Demo seed: one-click realistic data population for demos and training</li>
+</ul>
+
+<h3 class="sub">9.3 AI Usage Dashboard</h3>
+<p>Collapsible panel in Settings showing last 30 days: total calls, total tokens, estimated cost (USD), breakdown by task and by provider. Cache hits shown at $0 cost.</p>
+
+<h2 class="sec">10. Non-Functional Requirements &amp; Launch Readiness</h2>
+
+<h3 class="sub">10.1 Security &amp; Multi-Tenancy</h3>
+<ul>
+  <li>Every database query scoped by consultingFirmId extracted from JWT — no cross-tenant data leakage is architecturally possible</li>
+  <li>Client portal tokens scoped exclusively to their clientCompanyId</li>
+  <li>Role-based access control enforced at the route middleware level</li>
+  <li>API keys never returned in list endpoints — only masked previews exposed</li>
+</ul>
+
+<h3 class="sub">10.2 Reliability &amp; Resilience</h3>
+<ul>
+  <li>All AI provider failures return graceful fallbacks — no application crashes</li>
+  <li>LocalAI failures fall back to Claude automatically if a key is available</li>
+  <li>Background jobs run in isolated workers with error capture and status tracking</li>
+  <li>Uploaded files persist in a named Docker volume independent of container lifecycle</li>
+  <li>Redis caching (7-day TTL) for compliance matrix and bid guidance reduces redundant AI cost</li>
+</ul>
+
+<h3 class="sub">10.3 Performance Targets</h3>
+<table>
+  <tr><th>Operation</th><th>Target</th></tr>
+  <tr><td>Page load (authenticated)</td><td>&lt; 1.5 seconds</td></tr>
+  <tr><td>SAM.gov ingest (25 opportunities)</td><td>&lt; 30 seconds</td></tr>
+  <tr><td>AI document analysis (per document)</td><td>&lt; 45 seconds</td></tr>
+  <tr><td>Compliance matrix generation</td><td>&lt; 60 seconds (cached: &lt; 200ms)</td></tr>
+  <tr><td>Bid guidance generation</td><td>&lt; 60 seconds (cached: &lt; 200ms)</td></tr>
+  <tr><td>Win probability scoring (batch 100)</td><td>&lt; 5 seconds</td></tr>
+</table>
+
+<h3 class="sub">10.4 Launch Status</h3>
+<div class="box green">
+  <strong>Completed and Ready</strong>
+  <ul style="margin:8px 0 0">
+    <li>Multi-model AI abstraction layer — Claude, OpenAI, Insight Engine, LocalAI</li>
+    <li>Per-firm AI provider selection and API key management with live UI confirmation</li>
+    <li>LocalAI self-hosted inference containerized and network-connected</li>
+    <li>Automatic localhost to internal Docker hostname rewrite for LocalAI</li>
+    <li>Uploaded file persistence via named Docker volume (survives rebuilds)</li>
+    <li>AI usage tracking and cost dashboard in Settings</li>
+    <li>Professional opportunity synopsis export with probability gauge, score breakdown, competitive intelligence, and deadline urgency</li>
+    <li>8-factor probability scoring with Bayesian calibration and penalty drag</li>
+    <li>Monte Carlo revenue forecasting and HHI portfolio diversification</li>
+    <li>Full compliance matrix with per-row status tracking and FAR references</li>
+    <li>Client portal with scoped JWT authentication</li>
+    <li>Rewards program with evaluation and redemption</li>
+    <li>State and Municipal opportunity module with subscription gating</li>
+  </ul>
+</div>
+<div class="box amber">
+  <strong>Pre-Launch Recommendations</strong>
+  <ul style="margin:8px 0 0">
+    <li>Replace dev JWT secret with a cryptographically secure value before going live</li>
+    <li>Add HTTPS / TLS termination (nginx or load balancer) before internet exposure</li>
+    <li>Enable PostgreSQL daily automated backups</li>
+    <li>Set NODE_ENV=production and use a production frontend build (not Vite dev server)</li>
+    <li>Configure SAM.gov API key rotation reminder — keys expire every 90 days</li>
+  </ul>
+</div>
+
+<div class="footer">
+  <span>GovCon Advisory Intelligence Platform — SRS v2.0 — March 20, 2026</span>
+  <span>CONFIDENTIAL — Internal Use Only</span>
+</div>
+
+</body>
+</html>
