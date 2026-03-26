@@ -39,7 +39,7 @@ function UmbrellaLogo({ size = 64, className = '' }: { size?: number; className?
 /*  Trust pillars shown on brand panel                                 */
 /* ------------------------------------------------------------------ */
 const pillars = [
-  { icon: Shield,     label: 'Veteran-Owned', sub: 'SDVOSB Certified' },
+  { icon: Shield,     label: 'Veteran Owned', sub: 'Veteran Owned & Operated' },
   { icon: TrendingUp, label: 'AI-Powered',    sub: '8-Factor Win Scoring' },
   { icon: Award,      label: 'Proven Results',sub: 'Federal Pipeline Intel' },
 ];
@@ -115,7 +115,7 @@ export function LoginPage() {
           </div>
           <div className="mt-2">
             <span className="veteran-badge">
-              ★ Service-Disabled Veteran-Owned · SDVOSB
+              ★ Veteran Owned & Operated
             </span>
           </div>
         </div>
@@ -152,7 +152,7 @@ export function LoginPage() {
             className="text-sm italic font-medium"
             style={{ color: 'rgba(245,158,11,0.8)' }}
           >
-            "Transporting Freight, Lives."
+            "Empowering All Small Businesses to Win Government Contracts."
           </p>
 
           {/* Trust pillars */}
@@ -287,7 +287,7 @@ export function LoginPage() {
               style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', color: 'rgba(245,158,11,0.7)' }}
             >
               <span>★</span>
-              <span>SDVOSB · Veteran-Owned · Secured Platform</span>
+              <span>Veteran Owned & Operated · Secured Platform</span>
             </div>
           </div>
         </div>

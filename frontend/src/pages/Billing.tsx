@@ -120,9 +120,12 @@ export default function BillingPage() {
     staleTime: 30_000,
   })
 
-  const subscription = subData?.subscription
-  const usage        = subData?.usage
-  const plan         = subscription?.plan
+  const subscription    = subData?.subscription
+  const usage           = subData?.usage
+  const plan            = subscription?.plan
+  const veteranDiscount = subData?.veteranDiscount ?? 0
+  const effectivePrice  = subData?.effectivePrice ?? Number(plan?.monthlyPriceUsd ?? 0)
+  const isVeteranOwned  = subData?.isVeteranOwned ?? false
   const plans        = (plansData?.plans ?? []) as any[]
   const invoices     = (invoicesData?.invoices ?? []) as any[]
   const addons       = (addonsData?.data ?? []) as any[]
@@ -264,12 +267,23 @@ export default function BillingPage() {
             </div>
             <div>
               <p className="text-slate-600 text-[11px] uppercase tracking-wide">Monthly Rate</p>
-              <p className="text-amber-400 font-bold mt-0.5">
-                {plan
-                  ? fmt(Number(subscription?.billingCycle === 'ANNUAL' ? plan.annualPriceUsd : plan.monthlyPriceUsd))
-                  : '—'}
-                <span className="text-slate-500 font-normal text-xs">/mo</span>
-              </p>
+              {isVeteranOwned && veteranDiscount > 0 ? (
+                <div className="mt-0.5">
+                  <span className="text-slate-500 line-through text-sm mr-1.5">
+                    {plan ? fmt(Number(subscription?.billingCycle === 'ANNUAL' ? plan.annualPriceUsd : plan.monthlyPriceUsd)) : '—'}
+                  </span>
+                  <span className="text-green-400 font-bold">{fmt(effectivePrice)}</span>
+                  <span className="text-slate-500 font-normal text-xs">/mo</span>
+                  <span className="ml-2 text-[10px] bg-amber-900/30 text-amber-400 border border-amber-700/40 rounded-full px-2 py-0.5">★ Veteran 10% off</span>
+                </div>
+              ) : (
+                <p className="text-amber-400 font-bold mt-0.5">
+                  {plan
+                    ? fmt(Number(subscription?.billingCycle === 'ANNUAL' ? plan.annualPriceUsd : plan.monthlyPriceUsd))
+                    : '—'}
+                  <span className="text-slate-500 font-normal text-xs">/mo</span>
+                </p>
+              )}
             </div>
             <div>
               <p className="text-slate-600 text-[11px] uppercase tracking-wide">Period Start</p>

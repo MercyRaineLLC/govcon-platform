@@ -303,6 +303,24 @@ router.put('/localai-config', requireRole('ADMIN'), async (req: AuthenticatedReq
 })
 
 // -------------------------------------------------------------
+// PUT /api/firm/veteran-status  (ADMIN)
+// -------------------------------------------------------------
+router.put('/veteran-status', requireRole('ADMIN'), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const consultingFirmId = getTenantId(req)
+    const { isVeteranOwned } = req.body
+    if (typeof isVeteranOwned !== 'boolean') {
+      return res.status(400).json({ error: 'isVeteranOwned must be a boolean' })
+    }
+    const firm = await prisma.consultingFirm.update({
+      where: { id: consultingFirmId },
+      data: { isVeteranOwned },
+    })
+    res.json({ success: true, isVeteranOwned: firm.isVeteranOwned })
+  } catch (err) { next(err) }
+})
+
+// -------------------------------------------------------------
 // GET /api/firm/ai-usage  (ADMIN + CONSULTANT)
 // -------------------------------------------------------------
 router.get('/ai-usage', requireRole('ADMIN', 'CONSULTANT'), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {

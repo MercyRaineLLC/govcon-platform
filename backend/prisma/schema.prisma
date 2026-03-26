@@ -80,6 +80,7 @@ model ConsultingFirm {
   localaiBaseUrl      String?
   localaiModel        String?
   purchasedAddons     String[] @default([])
+  isVeteranOwned      Boolean  @default(false)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
@@ -97,9 +98,11 @@ model ConsultingFirm {
   submittedTemplates   SharedTemplate[]
   complianceMatrices   ComplianceMatrix[]
   portalUploads        ClientPortalUpload[]
-  apiUsageLogs         ApiUsageLog[]
-  subscription         Subscription?
-  invoices             Invoice[]
+  apiUsageLogs             ApiUsageLog[]
+  subscription             Subscription?
+  invoices                 Invoice[]
+  stateMunicipalOpps       StateMunicipalOpportunity[]
+  subcontractOpportunities SubcontractOpportunity[]
 
   @@map("consulting_firms")
 }
@@ -910,4 +913,77 @@ model InvoiceLineItem {
   invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
   @@map("invoice_line_items")
+}
+
+//////////////////////////////////////////////////////////////
+// STATE & MUNICIPAL OPPORTUNITIES
+//////////////////////////////////////////////////////////////
+
+enum ContractLevel {
+  STATE
+  MUNICIPAL
+  COUNTY
+  FEDERAL
+}
+
+model StateMunicipalOpportunity {
+  id                 String        @id @default(cuid())
+  consultingFirmId   String
+  title              String
+  agency             String
+  state              String
+  contractLevel      ContractLevel @default(STATE)
+  naicsCode          String?
+  estimatedValue     Decimal?      @db.Decimal(18, 2)
+  responseDeadline   DateTime?
+  description        String?
+  solicitationNumber String?
+  contactEmail       String?
+  sourceUrl          String?
+  probabilityScore   Float?
+  isScored           Boolean       @default(false)
+  status             String        @default("ACTIVE")
+  postedAt           DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  consultingFirm ConsultingFirm @relation(fields: [consultingFirmId], references: [id], onDelete: Cascade)
+
+  @@index([consultingFirmId])
+  @@index([state])
+  @@index([contractLevel])
+  @@map("state_municipal_opportunities")
+}
+
+//////////////////////////////////////////////////////////////
+// SUBCONTRACTING OPPORTUNITIES (SUBNet + other sources)
+//////////////////////////////////////////////////////////////
+
+model SubcontractOpportunity {
+  id                  String    @id @default(cuid())
+  consultingFirmId    String
+  title               String
+  primeContractor     String
+  primeContractorUei  String?
+  naicsCode           String?
+  agency              String?
+  estimatedValue      Decimal?  @db.Decimal(18, 2)
+  responseDeadline    DateTime?
+  description         String?
+  contactEmail        String?
+  contactName         String?
+  sourceUrl           String?
+  setAside            String?
+  status              String    @default("OPEN")
+  externalId          String?   @unique
+  scrapedAt           DateTime  @default(now())
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  consultingFirm ConsultingFirm @relation(fields: [consultingFirmId], references: [id], onDelete: Cascade)
+
+  @@index([consultingFirmId])
+  @@index([naicsCode])
+  @@index([status])
+  @@map("subcontract_opportunities")
 }

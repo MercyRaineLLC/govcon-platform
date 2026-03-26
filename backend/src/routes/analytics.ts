@@ -266,12 +266,16 @@ router.get(
     try {
       const consultingFirmId = getTenantId(req)
 
-      // Gather pipeline stage counts
-      const [ingested, scored, decided, submitted, wonStats] = await Promise.all([
+      // Gather pipeline stage counts — separate BID vs NO_BID decisions
+      const [ingested, scored, decidedBid, decidedNoBid, submitted, wonStats] = await Promise.all([
         prisma.opportunity.count({ where: { consultingFirmId } }),
         prisma.opportunity.count({ where: { consultingFirmId, isScored: true } }),
+        // Only BID_PRIME / BID_SUB lead to submissions — exclude NO_BID from funnel
         prisma.bidDecision.count({
-          where: { consultingFirmId, recommendation: { not: null } },
+          where: { consultingFirmId, recommendation: { in: ['BID_PRIME', 'BID_SUB'] } },
+        }),
+        prisma.bidDecision.count({
+          where: { consultingFirmId, recommendation: 'NO_BID' },
         }),
         prisma.submissionRecord.count({ where: { consultingFirmId } }),
         prisma.performanceStats.aggregate({
@@ -280,18 +284,32 @@ router.get(
         }),
       ])
 
-      const totalWon = wonStats._sum.totalWon ?? 0
+      const totalWon    = wonStats._sum.totalWon ?? 0
+      const totalDecided = decidedBid + decidedNoBid
+      const isDataSparse = ingested < 10
 
-      // Markov chain transition probabilities
-      const pScoredGivenIngested = scored / Math.max(ingested, 1)
-      const pDecidedGivenScored = decided / Math.max(scored, 1)
-      const pSubmittedGivenDecided = submitted / Math.max(decided, 1)
-      const pWonGivenSubmitted = totalWon / Math.max(submitted, 1)
+      // Markov chain: each transition probability is P(next_stage | current_stage).
+      // Capped at 1.0 to guard against count ordering inconsistencies in early data.
+      // Laplace smoothing (+1 / +2) applied when data is sparse (< 10 records total)
+      // so the chain never collapses to zero in a demo environment.
+      const smooth = (num: number, den: number): number => {
+        if (isDataSparse) return Math.min(1, (num + 1) / (den + 2))
+        return Math.min(1, num / Math.max(den, 1))
+      }
+
+      const pScoredGivenIngested   = smooth(scored,     ingested)
+      const pDecidedGivenScored    = smooth(totalDecided, scored)
+      // Bid rate = fraction of decided that are actionable (BID not NO_BID)
+      const pBidGivenDecided       = smooth(decidedBid, totalDecided)
+      // Submission rate against BID decisions only
+      const pSubmittedGivenBid     = smooth(submitted,  decidedBid)
+      const pWonGivenSubmitted      = smooth(totalWon,   submitted)
 
       const endToEnd =
         pScoredGivenIngested *
         pDecidedGivenScored *
-        pSubmittedGivenDecided *
+        pBidGivenDecided *
+        pSubmittedGivenBid *
         pWonGivenSubmitted
 
       const markovChain = [
@@ -301,20 +319,32 @@ router.get(
           probability: pScoredGivenIngested,
           fromCount: ingested,
           toCount: scored,
+          label: 'AI Scoring Rate',
         },
         {
           from: 'Scored',
           to: 'Decided',
           probability: pDecidedGivenScored,
           fromCount: scored,
-          toCount: decided,
+          toCount: totalDecided,
+          label: 'Decision Coverage',
         },
         {
           from: 'Decided',
+          to: 'Bid',
+          probability: pBidGivenDecided,
+          fromCount: totalDecided,
+          toCount: decidedBid,
+          label: 'Bid Rate (vs No-Bid)',
+          noBid: decidedNoBid,
+        },
+        {
+          from: 'Bid',
           to: 'Submitted',
-          probability: pSubmittedGivenDecided,
-          fromCount: decided,
+          probability: pSubmittedGivenBid,
+          fromCount: decidedBid,
           toCount: submitted,
+          label: 'Proposal Completion Rate',
         },
         {
           from: 'Submitted',
@@ -322,6 +352,7 @@ router.get(
           probability: pWonGivenSubmitted,
           fromCount: submitted,
           toCount: totalWon,
+          label: 'Win Rate',
         },
       ]
 
@@ -376,6 +407,17 @@ router.get(
           agencyWinRates,
           endToEndConversion: endToEnd,
           expectedWinsPerHundred: endToEnd * 100,
+          isDataSparse,
+          summary: {
+            ingested,
+            scored,
+            decidedBid,
+            decidedNoBid,
+            submitted,
+            won: totalWon,
+            bidRate: pBidGivenDecided,
+            winRate: pWonGivenSubmitted,
+          },
         },
       })
     } catch (err) {

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { firmApi, clientDocumentsApi } from '../services/api';
 import { PageHeader, Spinner } from '../components/ui';
-import { Settings, Users, Key, Eye, EyeOff, CheckCircle, XCircle, BookOpen, Brain, RefreshCw, BarChart2 } from 'lucide-react';
+import { Settings, Users, Key, Eye, EyeOff, CheckCircle, XCircle, BookOpen, Brain, RefreshCw, BarChart2, Shield } from 'lucide-react';
 
 const SYNC_LIMIT_KEY = 'govcon_sync_limit';
 const SYNC_NAICS_KEY = 'govcon_sync_naics';
@@ -24,6 +24,14 @@ export function SettingsPage() {
   const [samKeyMsg, setSamKeyMsg] = useState('');
   const [showUsage, setShowUsage] = useState(false);
   const [reviewNote, setReviewNote] = useState<Record<string, string>>({});
+  const [selectedProvider, setSelectedProvider] = useState('');
+  const [anthropicKey, setAnthropicKey] = useState('');
+  const [openaiKey, setOpenaiKey] = useState('');
+  const [insightKey, setInsightKey] = useState('');
+  const [showAnthropicKey, setShowAnthropicKey] = useState(false);
+  const [showOpenaiKey, setShowOpenaiKey] = useState(false);
+  const [showInsightKey, setShowInsightKey] = useState(false);
+  const [aiKeyMsg, setAiKeyMsg] = useState('');
   const [syncLimit, setSyncLimit] = useState(() => localStorage.getItem(SYNC_LIMIT_KEY) || '25');
   const [syncNaics, setSyncNaics] = useState(() => localStorage.getItem(SYNC_NAICS_KEY) || '');
   const [syncSaveMsg, setSyncSaveMsg] = useState('');
@@ -88,6 +96,57 @@ export function SettingsPage() {
       refetchTemplates();
       qc.invalidateQueries({ queryKey: ['templates-admin'] });
     },
+  });
+
+  const veteranMutation = useMutation({
+    mutationFn: (isVeteranOwned: boolean) => firmApi.updateVeteranStatus(isVeteranOwned),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['firm'] });
+      qc.invalidateQueries({ queryKey: ['billing-subscription'] });
+    },
+  });
+
+  const providerMutation = useMutation({
+    mutationFn: (provider: string) => firmApi.updateLlmProvider(provider),
+    onSuccess: (_data, provider) => {
+      setAiKeyMsg(`AI provider updated to ${PROVIDER_LABELS[provider]?.label ?? provider}.`);
+      qc.invalidateQueries({ queryKey: ['firm'] });
+      setTimeout(() => setAiKeyMsg(''), 4000);
+    },
+    onError: (err: any) => setAiKeyMsg(err?.response?.data?.error || 'Failed to update provider'),
+  });
+
+  const anthropicKeyMutation = useMutation({
+    mutationFn: (key: string) => firmApi.updateAnthropicApiKey(key),
+    onSuccess: () => {
+      setAiKeyMsg('Anthropic API key saved.');
+      setAnthropicKey('');
+      qc.invalidateQueries({ queryKey: ['firm'] });
+      setTimeout(() => setAiKeyMsg(''), 4000);
+    },
+    onError: (err: any) => setAiKeyMsg(err?.response?.data?.error || 'Save failed'),
+  });
+
+  const openaiKeyMutation = useMutation({
+    mutationFn: (key: string) => firmApi.updateOpenaiApiKey(key),
+    onSuccess: () => {
+      setAiKeyMsg('OpenAI API key saved.');
+      setOpenaiKey('');
+      qc.invalidateQueries({ queryKey: ['firm'] });
+      setTimeout(() => setAiKeyMsg(''), 4000);
+    },
+    onError: (err: any) => setAiKeyMsg(err?.response?.data?.error || 'Save failed'),
+  });
+
+  const insightKeyMutation = useMutation({
+    mutationFn: (key: string) => firmApi.updateInsightEngineApiKey(key),
+    onSuccess: () => {
+      setAiKeyMsg('Insight Engine API key saved.');
+      setInsightKey('');
+      qc.invalidateQueries({ queryKey: ['firm'] });
+      setTimeout(() => setAiKeyMsg(''), 4000);
+    },
+    onError: (err: any) => setAiKeyMsg(err?.response?.data?.error || 'Save failed'),
   });
 
   const firm = data?.data;
@@ -169,14 +228,46 @@ export function SettingsPage() {
           )}
         </div>
 
-        {/* AI Status — read-only, managed by platform */}
+        {/* Veteran Discount */}
         <div className="card lg:col-span-2">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <Brain className="w-4 h-4 text-purple-400" />
-              <h2 className="font-semibold text-gray-200">AI Intelligence</h2>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Shield className="w-5 h-5 text-amber-400" />
+              <div>
+                <h2 className="font-semibold text-gray-200">Veteran Owned & Operated — 10% Discount</h2>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  If your firm is veteran-owned and operated, enable this to apply a 10% discount to your monthly subscription cost.
+                </p>
+              </div>
             </div>
-            <div className={`flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-medium ${
+            <button
+              onClick={() => veteranMutation.mutate(!firm?.isVeteranOwned)}
+              disabled={veteranMutation.isPending}
+              className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none ${
+                firm?.isVeteranOwned ? 'bg-amber-500' : 'bg-slate-600'
+              }`}
+            >
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                  firm?.isVeteranOwned ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+          {firm?.isVeteranOwned && (
+            <div className="mt-3 flex items-center gap-2 text-xs text-amber-300 bg-amber-900/20 border border-amber-700/40 rounded-lg px-3 py-2">
+              <CheckCircle className="w-3.5 h-3.5 shrink-0" />
+              Veteran discount active — 10% off your monthly plan. Thank you for your service.
+            </div>
+          )}
+        </div>
+
+        {/* AI Intelligence Provider — fully configurable */}
+        <div className="card lg:col-span-2">
+          <div className="flex items-center gap-2 mb-4">
+            <Brain className="w-4 h-4 text-purple-400" />
+            <h2 className="font-semibold text-gray-200">AI Intelligence Provider</h2>
+            <div className={`ml-auto flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-xs font-medium ${
               providerInfo.color === 'purple' ? 'bg-purple-900/20 border-purple-700 text-purple-300' :
               providerInfo.color === 'green'  ? 'bg-green-900/20  border-green-700  text-green-300'  :
               providerInfo.color === 'amber'  ? 'bg-amber-900/20  border-amber-700  text-amber-300'  :
@@ -192,13 +283,121 @@ export function SettingsPage() {
               {providerInfo.label} · Active
             </div>
           </div>
-          <p className="text-xs text-gray-500 mb-4">
-            AI-powered document analysis, compliance matrix generation, and bid strategy guidance are
-            managed at the platform level. Contact your account representative to make changes.
-          </p>
+
+          {/* Provider selector */}
+          <div className="mb-4">
+            <label className="label">Active Provider</label>
+            <div className="flex gap-3 items-center">
+              <select
+                className="input flex-1"
+                value={selectedProvider || activeProvider}
+                onChange={(e) => setSelectedProvider(e.target.value)}
+              >
+                {Object.entries(PROVIDER_LABELS).map(([val, info]) => (
+                  <option key={val} value={val}>{info.label}</option>
+                ))}
+              </select>
+              <button
+                onClick={() => providerMutation.mutate(selectedProvider || activeProvider)}
+                disabled={providerMutation.isPending || (selectedProvider || activeProvider) === activeProvider}
+                className="btn-primary disabled:opacity-50 whitespace-nowrap"
+              >
+                {providerMutation.isPending ? 'Saving...' : 'Switch Provider'}
+              </button>
+            </div>
+            <p className="text-xs text-gray-600 mt-1">
+              Claude uses the built-in platform key. OpenAI, Insight Engine, and LocalAI use your own keys below.
+            </p>
+          </div>
+
+          {/* API Keys */}
+          <div className="space-y-3 border-t border-gray-800 pt-4">
+            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">API Keys</p>
+
+            {/* Anthropic */}
+            <div className="flex gap-3 items-end">
+              <div className="flex-1">
+                <label className="label">Anthropic (Claude) Key</label>
+                <div className="relative">
+                  <input
+                    type={showAnthropicKey ? 'text' : 'password'}
+                    className="input pr-10 font-mono text-sm"
+                    placeholder={firm?.anthropicApiKey ? '••••••••••••••••••••' : 'sk-ant-...'}
+                    value={anthropicKey}
+                    onChange={(e) => setAnthropicKey(e.target.value)}
+                  />
+                  <button type="button" onClick={() => setShowAnthropicKey(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
+                    {showAnthropicKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+              <button onClick={() => anthropicKeyMutation.mutate(anthropicKey)}
+                disabled={!anthropicKey.trim() || anthropicKeyMutation.isPending}
+                className="btn-primary disabled:opacity-50">
+                {anthropicKeyMutation.isPending ? 'Saving...' : firm?.anthropicApiKey ? 'Replace' : 'Save'}
+              </button>
+            </div>
+
+            {/* OpenAI */}
+            <div className="flex gap-3 items-end">
+              <div className="flex-1">
+                <label className="label">OpenAI Key</label>
+                <div className="relative">
+                  <input
+                    type={showOpenaiKey ? 'text' : 'password'}
+                    className="input pr-10 font-mono text-sm"
+                    placeholder={firm?.openaiApiKey ? '••••••••••••••••••••' : 'sk-proj-...'}
+                    value={openaiKey}
+                    onChange={(e) => setOpenaiKey(e.target.value)}
+                  />
+                  <button type="button" onClick={() => setShowOpenaiKey(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
+                    {showOpenaiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+              <button onClick={() => openaiKeyMutation.mutate(openaiKey)}
+                disabled={!openaiKey.trim() || openaiKeyMutation.isPending}
+                className="btn-primary disabled:opacity-50">
+                {openaiKeyMutation.isPending ? 'Saving...' : firm?.openaiApiKey ? 'Replace' : 'Save'}
+              </button>
+            </div>
+
+            {/* Insight Engine */}
+            <div className="flex gap-3 items-end">
+              <div className="flex-1">
+                <label className="label">Insight Engine Key</label>
+                <div className="relative">
+                  <input
+                    type={showInsightKey ? 'text' : 'password'}
+                    className="input pr-10 font-mono text-sm"
+                    placeholder={firm?.insightEngineApiKey ? '••••••••••••••••••••' : 'sk-...'}
+                    value={insightKey}
+                    onChange={(e) => setInsightKey(e.target.value)}
+                  />
+                  <button type="button" onClick={() => setShowInsightKey(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
+                    {showInsightKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+              <button onClick={() => insightKeyMutation.mutate(insightKey)}
+                disabled={!insightKey.trim() || insightKeyMutation.isPending}
+                className="btn-primary disabled:opacity-50">
+                {insightKeyMutation.isPending ? 'Saving...' : firm?.insightEngineApiKey ? 'Replace' : 'Save'}
+              </button>
+            </div>
+
+            {aiKeyMsg && (
+              <p className={`text-sm ${aiKeyMsg.includes('failed') || aiKeyMsg.includes('Failed') ? 'text-red-400' : 'text-green-400'}`}>
+                {aiKeyMsg}
+              </p>
+            )}
+          </div>
 
           {/* Usage Summary */}
-          <div className="border-t border-gray-800 pt-4">
+          <div className="border-t border-gray-800 pt-4 mt-4">
             <button
               type="button"
               onClick={() => setShowUsage((v) => !v)}

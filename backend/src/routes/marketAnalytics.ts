@@ -26,7 +26,7 @@ router.use(authenticateJWT)
  * GET /api/market-analytics/status
  * Returns BQ connectivity + row count. Used by frontend to show "data available" state.
  */
-router.get('/status', async (req: AuthenticatedRequest, res: Response) => {
+router.get('/status', async (_req: AuthenticatedRequest, res: Response) => {
   try {
     await ensureBigQueryDataset()
     const count = await getAwardHistoryCount()
@@ -196,8 +196,7 @@ router.post('/ingest', async (req: AuthenticatedRequest, res: Response) => {
         return res.json({ success: true, message: 'No NAICS codes to ingest.' })
       }
 
-      // Run in background — don't await
-      ingestBulkNaics(allCodes, { maxPages: req.body.maxPages ?? 5 }).catch((err) =>
+      ingestBulkNaics(allCodes, { maxPages: req.body.maxPages ?? 5, yearsBack: req.body.yearsBack ?? 5 }).catch((err) =>
         logger.error('Bulk BQ ingestion failed', { error: (err as Error).message })
       )
 
@@ -208,12 +207,25 @@ router.post('/ingest', async (req: AuthenticatedRequest, res: Response) => {
       })
     }
 
-    const { naicsCode, agency, maxPages = 5 } = req.body
+    // Custom list ingest — { naicsCodes: string[], maxPages?, yearsBack? }
+    if (Array.isArray(req.body.naicsCodes) && req.body.naicsCodes.length > 0) {
+      const codes: string[] = [...new Set(req.body.naicsCodes as string[])]
+      ingestBulkNaics(codes, { maxPages: req.body.maxPages ?? 20, yearsBack: req.body.yearsBack ?? 7 }).catch((err) =>
+        logger.error('Custom-list BQ ingestion failed', { error: (err as Error).message })
+      )
+      return res.json({
+        success: true,
+        message: `Mass ingestion started for ${codes.length} NAICS codes (${req.body.maxPages ?? 20} pages × ${req.body.yearsBack ?? 7}yr each). Runs in background.`,
+        naicsCodes: codes,
+      })
+    }
+
+    const { naicsCode, agency, maxPages = 20, yearsBack = 7 } = req.body
     if (!naicsCode) {
       return res.status(400).json({ success: false, error: 'naicsCode is required' })
     }
 
-    const result = await ingestAwardsForNaics({ naicsCode, agency, maxPages })
+    const result = await ingestAwardsForNaics({ naicsCode, agency, maxPages, yearsBack })
     res.json({ success: true, data: result })
   } catch (err) {
     logger.error('Ingest route failed', { error: (err as Error).message })

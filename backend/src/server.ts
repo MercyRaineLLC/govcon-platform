@@ -39,6 +39,8 @@ import billingRoutes from './routes/billing'
 import marketAnalyticsRoutes from './routes/marketAnalytics'
 import addonsRoutes from './routes/addons'
 import proposalAssistRoutes from './routes/proposalAssist'
+import stateMunicipalRoutes from './routes/stateMunicipal'
+import subcontractingRoutes from './routes/subcontracting'
 
 async function bootstrap(): Promise<void> {
   const app = express()
@@ -158,6 +160,8 @@ async function bootstrap(): Promise<void> {
   apiRouter.use('/market-analytics', marketAnalyticsRoutes)
   apiRouter.use('/addons', addonsRoutes)
   apiRouter.use('/proposal-assist', proposalAssistRoutes)
+  apiRouter.use('/state-municipal', stateMunicipalRoutes)
+  apiRouter.use('/subcontracting', subcontractingRoutes)
 
   app.use('/api', apiRouter)
 

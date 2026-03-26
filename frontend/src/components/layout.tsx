@@ -25,6 +25,8 @@ import {
   ChevronRight,
   X,
   CreditCard,
+  MapPin,
+  GitBranch,
 } from 'lucide-react'
 
 const navItems = [
@@ -32,6 +34,8 @@ const navItems = [
   { to: '/opportunities', icon: Search, label: 'Opportunities' },
   { to: '/clients', icon: Users, label: 'Clients' },
   { to: '/decisions', icon: Scale, label: 'Decisions' },
+  { to: '/subcontracting', icon: GitBranch, label: 'Subcontracting' },
+  { to: '/state-municipal', icon: MapPin, label: 'State & Municipal' },
   { to: '/templates', icon: FileText, label: 'Templates' },
   { to: '/doc-requirements', icon: ClipboardList, label: 'Doc Requirements' },
   { to: '/submissions', icon: FileText, label: 'Submissions' },
@@ -111,9 +115,9 @@ export function Layout() {
             </div>
           </div>
 
-          {/* SDVOSB badge */}
+          {/* Veteran badge */}
           <div className="mb-3">
-            <span className="veteran-badge">★ SDVOSB · Veteran-Owned</span>
+            <span className="veteran-badge">★ Veteran Owned & Operated</span>
           </div>
 
           {/* User info */}
@@ -286,7 +290,7 @@ export function Layout() {
         <div className="px-8 py-3 flex items-center justify-between"
           style={{ borderTop: '1px solid rgba(245,158,11,0.08)' }}>
           <p className="text-[10px] text-slate-700 tracking-widest">
-            © {new Date().getFullYear()} MERCY RAINE LLC · SDVOSB · All Rights Reserved
+            © {new Date().getFullYear()} MERCY RAINE LLC · Veteran Owned & Operated · All Rights Reserved
           </p>
           <p className="text-[10px] text-slate-700">GovCon Advisory Intelligence Platform</p>
         </div>

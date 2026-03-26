@@ -32,11 +32,15 @@ router.get('/plans', async (_req: AuthenticatedRequest, res: Response, next: Nex
 router.get('/subscription', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const consultingFirmId = getTenantId(req)
-    const [subscription, usage] = await Promise.all([
+    const [subscription, usage, firm] = await Promise.all([
       getOrCreateSubscription(consultingFirmId),
       getUsage(consultingFirmId),
+      prisma.consultingFirm.findUnique({ where: { id: consultingFirmId }, select: { isVeteranOwned: true } }),
     ])
-    res.json({ subscription, usage })
+    const basePrice = Number(subscription.plan.monthlyPriceUsd)
+    const veteranDiscount = firm?.isVeteranOwned ? Math.round(basePrice * 0.10 * 100) / 100 : 0
+    const effectivePrice = Math.round((basePrice - veteranDiscount) * 100) / 100
+    res.json({ subscription, usage, veteranDiscount, effectivePrice, isVeteranOwned: firm?.isVeteranOwned ?? false })
   } catch (err) { next(err) }
 })
 

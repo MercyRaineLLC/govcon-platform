@@ -172,6 +172,8 @@ export const firmApi = {
     api.put('/firm/localai-config', data).then((r) => r.data),
   aiUsage: (params?: { days?: number }) =>
     api.get('/firm/ai-usage', { params }).then((r) => r.data),
+  updateVeteranStatus: (isVeteranOwned: boolean) =>
+    api.put('/firm/veteran-status', { isVeteranOwned }).then((r) => r.data),
 };
 
 // ---- Analytics ----
@@ -390,4 +392,24 @@ export const marketAnalyticsApi = {
     api.get('/market-analytics/snapshot', { params: naics ? { naics } : {} }).then((r) => r.data),
   ingest: (body: { naicsCode?: string; agency?: string; bulk?: boolean; maxPages?: number }) =>
     api.post('/market-analytics/ingest', body).then((r) => r.data),
+}
+
+// ---- State & Municipal ----
+export const stateMunicipalApi = {
+  list: (params?: { state?: string; level?: string; limit?: number; offset?: number; search?: string }) =>
+    api.get('/state-municipal/opportunities', { params }).then((r) => r.data),
+  stats: () => api.get('/state-municipal/stats').then((r) => r.data),
+  sync: () => api.post('/state-municipal/sync').then((r) => r.data),
+  create: (data: Record<string, unknown>) => api.post('/state-municipal/opportunities', data).then((r) => r.data),
+  delete: (id: string) => api.delete(`/state-municipal/opportunities/${id}`).then((r) => r.data),
+}
+
+// ---- Subcontracting ----
+export const subcontractingApi = {
+  list: (params?: { search?: string; naicsCode?: string; limit?: number; offset?: number }) =>
+    api.get('/subcontracting/opportunities', { params }).then((r) => r.data),
+  stats: () => api.get('/subcontracting/stats').then((r) => r.data),
+  sync: () => api.post('/subcontracting/sync').then((r) => r.data),
+  create: (data: Record<string, unknown>) => api.post('/subcontracting/opportunities', data).then((r) => r.data),
+  delete: (id: string) => api.delete(`/subcontracting/opportunities/${id}`).then((r) => r.data),
 }

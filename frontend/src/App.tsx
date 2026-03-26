@@ -25,8 +25,10 @@ const ComplianceLogsPage   = lazy(() => import("./pages/ComplianceLogs"))
 const ClientPortalLogin    = lazy(() => import("./pages/ClientPortalLogin"))
 const ClientPortalDashboard = lazy(() => import("./pages/ClientPortalDashboard"))
 const RewardsPage          = lazy(() => import("./pages/Rewards").then(m => ({ default: m.RewardsPage })))
-const BillingPage          = lazy(() => import("./pages/Billing"))
-const NotFoundPage         = lazy(() => import("./pages/NotFound"))
+const BillingPage            = lazy(() => import("./pages/Billing"))
+const StateMunicipalPage     = lazy(() => import("./pages/StateMunicipalPage").then(m => ({ default: m.StateMunicipalPage })))
+const SubcontractingPage     = lazy(() => import("./pages/SubcontractingPage").then(m => ({ default: m.SubcontractingPage })))
+const NotFoundPage           = lazy(() => import("./pages/NotFound"))
 
 function PageLoader() {
   return (
@@ -64,6 +66,8 @@ export default function App() {
               <Route path="/submissions" element={<SubmissionsPage />} />
               <Route path="/penalties" element={<PenaltiesPage />} />
               <Route path="/analytics" element={<AnalyticsPage />} />
+              <Route path="/state-municipal" element={<StateMunicipalPage />} />
+              <Route path="/subcontracting" element={<SubcontractingPage />} />
               <Route path="/rewards" element={<RewardsPage />} />
               <Route path="/billing" element={<BillingPage />} />
 

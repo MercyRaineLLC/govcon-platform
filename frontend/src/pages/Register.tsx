@@ -83,7 +83,7 @@ export function RegisterPage() {
               <p className="text-[10px] text-slate-500 tracking-widest">GovCon Advisory Intelligence</p>
             </div>
           </div>
-          <span className="veteran-badge">★ SDVOSB · Veteran-Owned</span>
+          <span className="veteran-badge">★ Veteran Owned & Operated</span>
         </div>
 
         {/* Value props */}
@@ -109,7 +109,7 @@ export function RegisterPage() {
         </div>
 
         <p className="relative z-10 text-xs italic text-amber-400/60">
-          "Transporting Freight, Lives."
+          "Empowering All Small Businesses to Win Government Contracts."
         </p>
       </div>
 
@@ -199,7 +199,7 @@ export function RegisterPage() {
             <div className="flex items-center gap-1.5 text-[10px] px-3 py-1 rounded-full"
               style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', color: 'rgba(245,158,11,0.7)' }}>
               <span>★</span>
-              <span>SDVOSB · Veteran-Owned · Secured Platform</span>
+              <span>Veteran Owned & Operated · Secured Platform</span>
             </div>
           </div>
         </div>
