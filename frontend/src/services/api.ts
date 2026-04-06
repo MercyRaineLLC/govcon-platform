@@ -29,7 +29,7 @@ api.interceptors.response.use(
   (err) => {
     if (err.response?.status === 401) {
       localStorage.removeItem('govcon_auth');
-      window.location.href = '/login';
+      window.location.href = '/welcome';
     }
     return Promise.reject(err);
   }
@@ -42,6 +42,8 @@ export const authApi = {
   registerFirm: (data: any) =>
     api.post('/auth/register-firm', data).then((r) => r.data),
   profile: () => api.get('/auth/profile').then((r) => r.data),
+  betaStatus: () =>
+    api.get('/auth/beta-status').then((r) => r.data),
 };
 
 // ---- Opportunities ----
@@ -286,7 +288,7 @@ export const clientPortalUsersApi = {
 // ---- Client Portal (used from portal frontend with portal token) ----
 const API_BASE_RAW = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 export const clientPortalApi = {
-  _getToken: () => { try { return JSON.parse(localStorage.getItem('govcon_client_auth') ?? '').token } catch { return '' } },
+  _getToken: () => { try { const raw = localStorage.getItem('govcon_client_auth'); return raw ? (JSON.parse(raw).token ?? '') : '' } catch { return '' } },
   getOpportunities: () =>
     axios.get(`${API_BASE_RAW}/api/client-portal/opportunities`, { headers: { Authorization: `Bearer ${clientPortalApi._getToken()}` } }).then(r => r.data),
   uploadDoc: (file: File, title: string, notes?: string) => {
@@ -363,7 +365,11 @@ export const addonsApi = {
 
 export const proposalAssistApi = {
   generateOutline: (opportunityId: string) =>
-    api.post(`/proposal-assist/${opportunityId}/outline`).then(r => r.data),
+    api.post(`/proposal-assist/${opportunityId}/outline`, {}, { timeout: 120000 }).then(r => r.data),
+  generateQuestions: (opportunityId: string, outline: any) =>
+    api.post(`/proposal-assist/${opportunityId}/questions`, { outline }, { timeout: 60000 }).then(r => r.data),
+  generateDraftPdf: (opportunityId: string, answers: any[], userGuidance?: string, bidFormContext?: string) =>
+    api.post(`/proposal-assist/${opportunityId}/draft`, { answers, userGuidance, bidFormContext }, { timeout: 180000, responseType: 'blob' }).then(r => r.data),
 }
 
 // ---- Compliance Matrix ----
@@ -402,6 +408,23 @@ export const stateMunicipalApi = {
   sync: () => api.post('/state-municipal/sync').then((r) => r.data),
   create: (data: Record<string, unknown>) => api.post('/state-municipal/opportunities', data).then((r) => r.data),
   delete: (id: string) => api.delete(`/state-municipal/opportunities/${id}`).then((r) => r.data),
+  clearAll: () => api.delete('/state-municipal/all').then((r) => r.data),
+  previewImport: (file: File, defaultState?: string) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    if (defaultState) fd.append('defaultState', defaultState)
+    return api.post('/state-municipal/import?preview=true', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then((r) => r.data)
+  },
+  bulkImport: (file: File, defaultState?: string) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    if (defaultState) fd.append('defaultState', defaultState)
+    return api.post('/state-municipal/import', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then((r) => r.data)
+  },
 }
 
 // ---- Subcontracting ----
@@ -412,4 +435,18 @@ export const subcontractingApi = {
   sync: () => api.post('/subcontracting/sync').then((r) => r.data),
   create: (data: Record<string, unknown>) => api.post('/subcontracting/opportunities', data).then((r) => r.data),
   delete: (id: string) => api.delete(`/subcontracting/opportunities/${id}`).then((r) => r.data),
+}
+
+// ---- Manual Contract Upload ----
+export const contractsApi = {
+  upload: (file: File) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return api.post('/contracts/upload', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+    }).then((r) => r.data)
+  },
+  listManual: () =>
+    api.get('/contracts/manual').then((r) => r.data),
 }

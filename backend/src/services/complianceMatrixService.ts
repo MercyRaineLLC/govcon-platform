@@ -50,7 +50,7 @@ export async function generateComplianceMatrix(
   opportunityTitle: string,
   consultingFirmId?: string | null
 ): Promise<ParsedRequirement[]> {
-  const truncated = text.substring(0, 60000)
+  const truncated = text.substring(0, 25000)
 
   try {
     const llmResponse = await generateWithRouter(
@@ -64,6 +64,10 @@ export async function generateComplianceMatrix(
     )
 
     const parsed = parseResponse(llmResponse.text)
+    if (parsed.length === 0) {
+      logger.warn('LLM returned empty requirements — using generic fallback matrix', { opportunityTitle })
+      return fallbackMatrix()
+    }
     return parsed.map((r, i) => ({ ...r, sortOrder: i }))
   } catch (err) {
     const msg = (err as Error).message
@@ -112,7 +116,28 @@ export async function extractTextFromDocument(filePath: string): Promise<string>
       const data = await pdfParse(buffer)
       return data.text || ''
     }
-    return fs.readFileSync(filePath, 'utf-8')
+    if (ext === '.docx') {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const mammoth = require('mammoth')
+      const result = await mammoth.extractRawText({ path: filePath })
+      return result.value || ''
+    }
+    if (ext === '.doc') {
+      // Legacy .doc — attempt raw UTF-8 and strip non-printable chars
+      const raw = fs.readFileSync(filePath, 'latin1')
+      // Extract printable ASCII runs (length ≥ 4) — works for many older .doc files
+      const printable = raw.match(/[ -~\r\n\t]{4,}/g)?.join(' ') ?? ''
+      return printable
+    }
+    if (['.txt', '.md', '.rtf', '.csv'].includes(ext)) {
+      return fs.readFileSync(filePath, 'utf-8')
+    }
+    // Unknown type — try UTF-8, return empty if it looks binary
+    const raw = fs.readFileSync(filePath, 'utf-8')
+    // Reject if more than 10% of chars are non-printable (binary file)
+    const nonPrintable = (raw.match(/[^\x09\x0a\x0d\x20-\x7e]/g) || []).length
+    if (nonPrintable / raw.length > 0.1) return ''
+    return raw
   } catch {
     return ''
   }
@@ -203,7 +228,7 @@ export async function generateBidGuidance(
   enrichment?: EnrichmentContext,
   consultingFirmId?: string | null
 ): Promise<BidGuidance | null> {
-  const truncated = text.substring(0, 55000)
+  const truncated = text.substring(0, 20000)
   const enrichmentBlock = enrichment ? buildEnrichmentBlock(enrichment) : ''
 
   try {

@@ -5,9 +5,12 @@ import { X, ChevronRight, ChevronLeft, Key, Search, Users, Brain, BarChart3 } fr
 const STORAGE_KEY = 'govcon_onboarded'
 
 export function useOnboarding() {
-  const done = localStorage.getItem(STORAGE_KEY) === '1'
-  function dismiss() { localStorage.setItem(STORAGE_KEY, '1') }
-  return { showWizard: !done, dismiss }
+  const [dismissed, setDismissed] = useState(() => localStorage.getItem(STORAGE_KEY) === '1')
+  function dismiss() {
+    localStorage.setItem(STORAGE_KEY, '1')
+    setDismissed(true)
+  }
+  return { showWizard: !dismissed, dismiss }
 }
 
 interface Step {
@@ -20,7 +23,7 @@ interface Step {
 const STEPS: Step[] = [
   {
     icon: <Brain className="w-10 h-10 text-amber-400" />,
-    title: 'Welcome to GovCon Advisory Intelligence',
+    title: 'Welcome to Mr GovCon',
     body: 'This platform helps small businesses find, analyze, and win federal contracts. In the next few steps we\'ll walk you through the key features.',
   },
   {

@@ -249,6 +249,10 @@ router.post('/analyze/:documentId', async (req: AuthenticatedRequest, res: Respo
           c.smallBusiness ? 'Small Business' : null,
         ].filter((x): x is string => x !== null));
 
+        // Guard against path traversal — storageKey must be a plain filename with no directory separators
+        if (!doc.storageKey || /[/\\]/.test(doc.storageKey) || doc.storageKey.includes('..')) {
+          throw new Error('Invalid document storage key');
+        }
         const documentPath = path.join(process.cwd(), 'uploads', doc.storageKey);
         if (!fs.existsSync(documentPath)) {
           throw new Error('Document file missing from storage');

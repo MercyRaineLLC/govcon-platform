@@ -79,8 +79,11 @@ model ConsultingFirm {
   insightEngineApiKey String?
   localaiBaseUrl      String?
   localaiModel        String?
+  deepseekApiKey      String?
   purchasedAddons     String[] @default([])
   isVeteranOwned      Boolean  @default(false)
+  proposalTokens      Int      @default(0)
+  lastTokenRefreshAt  DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
@@ -275,6 +278,11 @@ model Opportunity {
   contractVehicle   String?  // e.g. "OASIS+", "SEWP V", "GSA MAS"
   vehicleType       String?  // "GWAC" | "IDIQ" | "BPA" | "MAS" | "BOA"
   vehicleConfidence Float?   // 0-1 detection confidence
+
+  // Advanced scoring signals (computed by scoring worker + nightly recalibration)
+  deadlineUrgencyScore Float?   // 0-1: quality of proposal prep window (sweet spot = 2-6 weeks)
+  densityRatio         Float?   // bidders vs NAICS norm (< 1.0 = below-average competition)
+  agencyHistoryScore   Float?   // 0-1: agency set-aside affinity for this client type
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -986,4 +994,37 @@ model SubcontractOpportunity {
   @@index([naicsCode])
   @@index([status])
   @@map("subcontract_opportunities")
+}
+
+//////////////////////////////////////////////////////////////
+// COMPETITIVE INTELLIGENCE CACHE
+//////////////////////////////////////////////////////////////
+
+model NaicsCompetitiveDensity {
+  id              String   @id @default(uuid())
+  naicsCode       String   @unique
+  avgBidders      Float    @default(5.0)
+  medianBidders   Float?
+  avgAwardValue   Float?
+  smallBizRate    Float    @default(0.5)
+  sdvosbRate      Float    @default(0.1)
+  totalContracts  Int      @default(0)
+  lastRefreshedAt DateTime @default(now())
+
+  @@map("naics_competitive_density")
+}
+
+model AgencyAwardProfile {
+  id              String   @id @default(uuid())
+  agencyName      String   @unique
+  avgAwardValue   Float?
+  smallBizRate    Float    @default(0.5)
+  sdvosbRate      Float    @default(0.1)
+  womenOwnedRate  Float    @default(0.1)
+  hubzoneRate     Float    @default(0.05)
+  totalAwards     Int      @default(0)
+  typicalNaics    String[] @default([])
+  lastRefreshedAt DateTime @default(now())
+
+  @@map("agency_award_profiles")
 }

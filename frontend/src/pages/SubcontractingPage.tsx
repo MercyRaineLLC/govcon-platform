@@ -32,8 +32,10 @@ export function SubcontractingPage() {
   const syncMutation = useMutation({
     mutationFn: () => subcontractingApi.sync(),
     onSuccess: () => {
-      setSyncMsg('Sync started — pulling from USAspending and SAM.gov set-asides. Refresh in ~60 seconds.')
-      setTimeout(() => { setSyncMsg(''); refetch() }, 60000)
+      setSyncMsg('Sync started — pulling subcontracting opportunities from SBA SUBNet.')
+      // Auto-refresh at 15s and 45s to catch results as they land
+      setTimeout(() => refetch(), 15000)
+      setTimeout(() => { refetch(); setSyncMsg('') }, 45000)
     },
   })
 
@@ -226,7 +228,7 @@ export function SubcontractingPage() {
                     rel="noopener noreferrer"
                     className="btn-primary flex items-center gap-2 text-sm"
                   >
-                    <ExternalLink className="w-4 h-4" /> View on USAspending
+                    <ExternalLink className="w-4 h-4" /> View Source
                   </a>
                 )}
                 {selected.contactEmail && (

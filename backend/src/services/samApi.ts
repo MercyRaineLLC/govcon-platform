@@ -95,6 +95,7 @@ export const samApiService = {
 
             const mappedData = {
               title,
+              description,
               agency:
                 record.fullParentPathName ??
                 record.organizationType ??

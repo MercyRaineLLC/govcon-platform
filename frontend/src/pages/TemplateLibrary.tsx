@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { clientDocumentsApi } from '../services/api'
+import { useAuth } from '../hooks/useAuth'
 import { PageHeader, Spinner, ErrorBanner, EmptyState } from '../components/ui'
-import { BookMarked, Download, FileText, BookOpen, Briefcase, Users, DollarSign, Shield, FileCheck, Mail } from 'lucide-react'
+import { BookMarked, Download, FileText, BookOpen, Briefcase, Users, DollarSign, Shield, FileCheck, Mail, CheckCircle, XCircle, Clock } from 'lucide-react'
 
 const DOC_TYPES = [
   { value: '', label: 'All Types' },
@@ -44,13 +45,36 @@ const TYPE_COLORS: Record<string, string> = {
 export default function TemplateLibrary() {
   const [selectedType, setSelectedType] = useState('')
   const [downloading, setDownloading] = useState<string | null>(null)
+  const [reviewNote, setReviewNote] = useState<Record<string, string>>({})
+  const [adminView, setAdminView] = useState<'pending' | 'approved'>('pending')
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'ADMIN'
+  const qc = useQueryClient()
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['templates', selectedType],
     queryFn: () => clientDocumentsApi.listTemplates({ documentType: selectedType || undefined, limit: 50 }),
   })
 
+  const { data: adminData, refetch: refetchAdmin } = useQuery({
+    queryKey: ['templates-admin'],
+    queryFn: () => clientDocumentsApi.listTemplatesAdmin(),
+    enabled: isAdmin,
+  })
+
+  const reviewMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: 'APPROVED' | 'REJECTED' }) =>
+      clientDocumentsApi.reviewTemplate(id, { status, reviewNotes: reviewNote[id] || undefined }),
+    onSuccess: () => {
+      refetchAdmin()
+      qc.invalidateQueries({ queryKey: ['templates'] })
+    },
+  })
+
   const templates: any[] = data?.data ?? []
+  const adminTemplates: any[] = adminData?.data ?? []
+  const pendingTemplates = adminTemplates.filter((t: any) => t.status === 'PENDING_REVIEW' || t.status === 'PENDING')
+  const approvedTemplates = adminTemplates.filter((t: any) => t.status === 'APPROVED')
 
   const handleDownload = async (template: any) => {
     setDownloading(template.id)
@@ -70,6 +94,104 @@ export default function TemplateLibrary() {
         title="Template Library"
         subtitle="Community-contributed, anonymized document templates for government contracting"
       />
+
+      {/* Admin Review Panel */}
+      {isAdmin && (
+        <div className="card border-amber-700/30 bg-amber-900/10">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="w-5 h-5 text-amber-400" />
+              <h3 className="font-semibold text-gray-200">Template Review Queue</h3>
+              {pendingTemplates.length > 0 && (
+                <span className="text-xs bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-semibold">
+                  {pendingTemplates.length} pending
+                </span>
+              )}
+            </div>
+            <div className="flex gap-1 bg-gray-800 rounded-lg p-1">
+              <button
+                onClick={() => setAdminView('pending')}
+                className={`text-xs px-3 py-1 rounded-md transition-colors ${adminView === 'pending' ? 'bg-amber-600 text-white' : 'text-gray-400 hover:text-gray-200'}`}
+              >
+                Pending ({pendingTemplates.length})
+              </button>
+              <button
+                onClick={() => setAdminView('approved')}
+                className={`text-xs px-3 py-1 rounded-md transition-colors ${adminView === 'approved' ? 'bg-green-700 text-white' : 'text-gray-400 hover:text-gray-200'}`}
+              >
+                Approved ({approvedTemplates.length})
+              </button>
+            </div>
+          </div>
+
+          {adminView === 'pending' && (
+            pendingTemplates.length === 0 ? (
+              <p className="text-sm text-gray-500 italic">No templates pending review.</p>
+            ) : (
+              <div className="space-y-3">
+                {pendingTemplates.map((t: any) => (
+                  <div key={t.id} className="bg-gray-900/60 border border-gray-700 rounded-lg p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Clock className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                          <p className="text-sm font-semibold text-gray-200 truncate">{t.title}</p>
+                          <span className="text-[10px] bg-amber-900/40 text-amber-300 border border-amber-700 px-1.5 py-0.5 rounded shrink-0">
+                            {DOC_TYPES.find(d => d.value === t.documentType)?.label ?? t.documentType}
+                          </span>
+                        </div>
+                        {t.description && <p className="text-xs text-gray-500 line-clamp-2">{t.description}</p>}
+                        <p className="text-[11px] text-gray-600 mt-1">Submitted {new Date(t.createdAt).toLocaleDateString()}</p>
+                      </div>
+                      <div className="flex flex-col gap-2 flex-shrink-0">
+                        <input
+                          type="text"
+                          placeholder="Optional review note..."
+                          className="input text-xs w-48"
+                          value={reviewNote[t.id] || ''}
+                          onChange={(e) => setReviewNote(n => ({ ...n, [t.id]: e.target.value }))}
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => reviewMutation.mutate({ id: t.id, status: 'APPROVED' })}
+                            disabled={reviewMutation.isPending}
+                            className="flex-1 flex items-center justify-center gap-1 text-xs bg-green-900/50 hover:bg-green-900 text-green-300 border border-green-800 rounded px-3 py-1.5 transition-colors disabled:opacity-50"
+                          >
+                            <CheckCircle className="w-3.5 h-3.5" /> Approve
+                          </button>
+                          <button
+                            onClick={() => reviewMutation.mutate({ id: t.id, status: 'REJECTED' })}
+                            disabled={reviewMutation.isPending}
+                            className="flex-1 flex items-center justify-center gap-1 text-xs bg-red-900/30 hover:bg-red-900/60 text-red-400 border border-red-900 rounded px-3 py-1.5 transition-colors disabled:opacity-50"
+                          >
+                            <XCircle className="w-3.5 h-3.5" /> Reject
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          )}
+
+          {adminView === 'approved' && (
+            approvedTemplates.length === 0 ? (
+              <p className="text-sm text-gray-500 italic">No approved templates yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {approvedTemplates.map((t: any) => (
+                  <div key={t.id} className="flex items-center gap-3 bg-gray-900/40 border border-gray-800 rounded-lg px-4 py-2.5">
+                    <CheckCircle className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+                    <p className="text-sm text-gray-300 flex-1 truncate">{t.title}</p>
+                    <span className="text-[10px] text-gray-600">{new Date(t.createdAt).toLocaleDateString()}</span>
+                  </div>
+                ))}
+              </div>
+            )
+          )}
+        </div>
+      )}
 
       <div className="card bg-blue-950/20 border-blue-900/40">
         <div className="flex items-start gap-3">

@@ -8,7 +8,7 @@ import { AuthenticatedRequest } from '../types'
 import { authenticateJWT } from '../middleware/auth'
 import { enforceTenantScope, getTenantId } from '../middleware/tenant'
 import { logger } from '../utils/logger'
-import { scrapeUsaSpendingSubcontracts, scrapeSamSubcontracting } from '../services/subnetScraper'
+import { fetchSubnetOpportunities, fetchSamSetAsideBroad, enrichValueFromUsaSpending } from '../services/subnetScraper'
 
 const router = Router()
 router.use(authenticateJWT, enforceTenantScope)
@@ -67,7 +67,7 @@ router.get('/stats', async (req: AuthenticatedRequest, res: Response, next: Next
 router.post('/sync', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const consultingFirmId = getTenantId(req)
-    res.json({ success: true, message: 'Subcontracting sync started. Pulling from SUBNet, USAspending, and SAM.gov set-asides.' })
+    res.json({ success: true, message: 'Subcontracting sync started. Pulling set-aside solicitations from SAM.gov.' })
 
     setImmediate(async () => {
       try {
@@ -85,13 +85,25 @@ router.post('/sync', async (req: AuthenticatedRequest, res: Response, next: Next
 
         const naicsCodes = [...new Set(clients.flatMap((c) => c.naicsCodes))]
 
-        // Pull from both sources in parallel
-        const [usaResults, samResults] = await Promise.all([
-          scrapeUsaSpendingSubcontracts(naicsCodes.length > 0 ? naicsCodes : undefined),
-          firm?.samApiKey ? scrapeSamSubcontracting(firm.samApiKey) : Promise.resolve([]),
+        // Pull from SBA SUBNet (www.sba.gov HTML scrape) + SAM.gov set-asides in parallel
+        // + USAspending value enrichment per NAICS
+        let [subnetResults, samResults, valueMap] = await Promise.all([
+          fetchSubnetOpportunities(naicsCodes.length > 0 ? naicsCodes : undefined),
+          firm?.samApiKey ? fetchSamSetAsideBroad(firm.samApiKey, naicsCodes.length > 0 ? naicsCodes : undefined) : Promise.resolve([]),
+          naicsCodes.length > 0 ? enrichValueFromUsaSpending(naicsCodes) : Promise.resolve(new Map<string, number>()),
         ])
 
-        const allOpps = [...usaResults, ...samResults]
+        // Fallback: if NAICS filter yielded nothing, fetch unfiltered so the page always has content
+        if (subnetResults.length === 0 && naicsCodes.length > 0) {
+          logger.info('Subcontracting: no NAICS-filtered SUBNet results, falling back to unfiltered', { naicsCodes })
+          subnetResults = await fetchSubnetOpportunities()
+        }
+
+        // Apply USAspending-derived value estimates to opportunities that have no value
+        const allOpps = [...subnetResults, ...samResults].map((opp) => ({
+          ...opp,
+          estimatedValue: opp.estimatedValue ?? (opp.naicsCode ? (valueMap.get(opp.naicsCode) ?? null) : null),
+        }))
         let created = 0
         let skipped = 0
 

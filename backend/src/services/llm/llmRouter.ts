@@ -5,6 +5,7 @@ import { logger } from '../../utils/logger'
 import { LLMRequest, LLMResponse } from './provider.interface'
 import { ClaudeProvider } from './claude.provider'
 import { OpenAIProvider } from './openai.provider'
+import { DeepSeekProvider } from './deepseek.provider'
 import { InsightEngineProvider } from './insight.provider'
 import { LocalAIProvider } from './localai.provider'
 
@@ -27,6 +28,7 @@ export async function generateWithRouter(
   let llmProvider = 'claude'
   let anthropicApiKey: string | null = process.env.ANTHROPIC_API_KEY || null
   let openaiApiKey: string | null = process.env.OPENAI_API_KEY || null
+  let deepseekApiKey: string | null = process.env.DEEPSEEK_API_KEY || null
   let insightEngineApiKey: string | null = process.env.INSIGHT_ENGINE_API_KEY || null
   let localaiBaseUrl: string | null = process.env.LOCALAI_BASE_URL || null
   let localaiModel: string | null = process.env.LOCALAI_MODEL || null
@@ -35,20 +37,19 @@ export async function generateWithRouter(
     try {
       const firm = await prisma.consultingFirm.findUnique({
         where: { id: consultingFirmId },
-        select: { llmProvider: true, anthropicApiKey: true, openaiApiKey: true, insightEngineApiKey: true, localaiBaseUrl: true, localaiModel: true },
+        select: { llmProvider: true, anthropicApiKey: true, openaiApiKey: true, deepseekApiKey: true, insightEngineApiKey: true, localaiBaseUrl: true, localaiModel: true },
       })
       if (firm) {
         llmProvider = firm.llmProvider ?? 'claude'
         if (firm.anthropicApiKey) anthropicApiKey = firm.anthropicApiKey
         if (firm.openaiApiKey) openaiApiKey = firm.openaiApiKey
+        if (firm.deepseekApiKey) deepseekApiKey = firm.deepseekApiKey
         if (firm.insightEngineApiKey) insightEngineApiKey = firm.insightEngineApiKey
         if (firm.localaiModel) localaiModel = firm.localaiModel
-        // Rewrite localhost → internal Docker hostname so the backend container
-        // can reach LocalAI when the user saved the external URL (localhost:8080)
         if (firm.localaiBaseUrl) {
           localaiBaseUrl = firm.localaiBaseUrl.replace(
             /https?:\/\/localhost(:\d+)?/,
-            (_, port) => `http://local-ai${port || ':8080'}`
+            (_, port) => `http://ollama${port || ':11434'}`
           )
         }
       }
@@ -60,6 +61,7 @@ export async function generateWithRouter(
   // Validate the key for the chosen provider (LocalAI runs locally — no key required)
   const activeKey =
     llmProvider === 'openai' ? openaiApiKey :
+    llmProvider === 'deepseek' ? deepseekApiKey :
     llmProvider === 'insight_engine' ? insightEngineApiKey :
     llmProvider === 'localai' ? 'localai' :
     anthropicApiKey
@@ -103,9 +105,10 @@ export async function generateWithRouter(
 
   // Instantiate provider — LocalAI gets a Claude fallback if it fails
   const provider =
-    llmProvider === 'openai' ? new OpenAIProvider(activeKey) :
+    llmProvider === 'openai'         ? new OpenAIProvider(activeKey) :
+    llmProvider === 'deepseek'       ? new DeepSeekProvider(activeKey) :
     llmProvider === 'insight_engine' ? new InsightEngineProvider(activeKey) :
-    llmProvider === 'localai' ? new LocalAIProvider(localaiBaseUrl, localaiModel) :
+    llmProvider === 'localai'        ? new LocalAIProvider(localaiBaseUrl, localaiModel) :
     new ClaudeProvider(activeKey)
 
   const startMs = Date.now()
@@ -114,6 +117,12 @@ export async function generateWithRouter(
     result = await provider.generate(req)
   } catch (providerErr) {
     const errMsg = (providerErr as Error).message
+
+    // Surface rate-limit errors immediately — no point retrying
+    if (errMsg.includes('429') || errMsg.toLowerCase().includes('rate_limit')) {
+      throw new Error('RATE_LIMITED')
+    }
+
     if (llmProvider === 'localai') {
       // LocalAI failed — try Claude, then give up
       if (anthropicApiKey) {
@@ -123,14 +132,18 @@ export async function generateWithRouter(
         throw providerErr
       }
     } else {
-      // Any commercial provider failed (quota, outage, bad key) — fall back to LocalAI
-      const localaiUrl = localaiBaseUrl || process.env.LOCALAI_BASE_URL || 'http://local-ai:8080/v1'
+      // Only try LocalAI fallback if it's actually configured
+      const localaiUrl = localaiBaseUrl || process.env.LOCALAI_BASE_URL || null
+      if (!localaiUrl) {
+        // No LocalAI configured — surface the original error directly
+        logger.warn(`${llmProvider} call failed, no LocalAI fallback configured`, { error: errMsg })
+        throw providerErr
+      }
       logger.warn(`${llmProvider} call failed — falling back to LocalAI`, { error: errMsg, url: localaiUrl })
       try {
         result = await new LocalAIProvider(localaiUrl, localaiModel).generate(req)
         result = { ...result, provider: `localai-fallback-from-${llmProvider}` }
       } catch (localaiErr) {
-        // LocalAI also failed — surface the original error (more actionable)
         logger.error('LocalAI fallback also failed', { error: (localaiErr as Error).message })
         throw providerErr
       }

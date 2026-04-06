@@ -12,21 +12,30 @@ export class ClaudeProvider implements LLMProvider {
   constructor(private readonly apiKey: string) {}
 
   async generate(req: LLMRequest): Promise<LLMResponse> {
-    const response = await fetch(ANTHROPIC_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': this.apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: CLAUDE_MODEL,
-        max_tokens: req.maxTokens ?? 4000,
-        temperature: req.temperature ?? 0,
-        system: req.systemPrompt,
-        messages: [{ role: 'user', content: req.userPrompt }],
-      }),
-    })
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 180_000) // 180s hard timeout
+
+    let response: Response
+    try {
+      response = await fetch(ANTHROPIC_API_URL, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': this.apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: CLAUDE_MODEL,
+          max_tokens: req.maxTokens ?? 4000,
+          temperature: req.temperature ?? 0,
+          system: req.systemPrompt,
+          messages: [{ role: 'user', content: req.userPrompt }],
+        }),
+      })
+    } finally {
+      clearTimeout(timeout)
+    }
 
     if (!response.ok) {
       const errText = await response.text()

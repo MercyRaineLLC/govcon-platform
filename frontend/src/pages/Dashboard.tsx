@@ -4,6 +4,7 @@ import { firmApi, analyticsApi } from '../services/api'
 import { OnboardingWizard, useOnboarding } from '../components/OnboardingWizard'
 import {
   PageHeader,
+  SectionHeader,
   StatCard,
   DeadlineBadge,
   ProbabilityBar,
@@ -13,8 +14,6 @@ import {
 } from '../components/ui'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
-import { useRecentlyViewed } from '../hooks/useRecentlyViewed'
-import { useFavorites } from '../hooks/useFavorites'
 import {
   TrendingUp,
   AlertTriangle,
@@ -25,9 +24,9 @@ import {
   CheckCircle,
   BarChart3,
   LogOut,
-  Clock,
-  Star,
-  X,
+  Zap,
+  Shield,
+  Activity,
 } from 'lucide-react'
 
 // Charts
@@ -43,12 +42,17 @@ import { RiskRadarCard } from '../components/cards/RiskRadarCard'
 import { OpportunityMatchCard } from '../components/cards/OpportunityMatchCard'
 import { DecisionRecommendationCard } from '../components/cards/DecisionRecommendationCard'
 
+function greeting() {
+  const h = new Date().getHours()
+  if (h < 12) return 'Good morning'
+  if (h < 17) return 'Good afternoon'
+  return 'Good evening'
+}
+
 export default function Dashboard() {
   const [seeding, setSeeding] = useState(false)
   const [seedResult, setSeedResult] = useState<string | null>(null)
   const { logout, user } = useAuth()
-  const { items: recentItems, clearHistory } = useRecentlyViewed()
-  const { favorites, removeFavorite } = useFavorites()
   const { showWizard, dismiss: dismissWizard } = useOnboarding()
 
   const handleSeedDemo = async () => {
@@ -96,8 +100,9 @@ export default function Dashboard() {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center mt-20">
+      <div className="flex flex-col items-center justify-center mt-32 gap-4">
         <Spinner size="lg" />
+        <p className="text-sm text-slate-600">Loading your intelligence dashboard...</p>
       </div>
     )
   }
@@ -113,273 +118,174 @@ export default function Dashboard() {
   const predictions = predictionsData?.data
   const health = healthData?.data
 
+  const winPct = Math.round((d?.avgWinProbability ?? 0) * 100)
+  const completionPct = Math.round((metrics?.aggregateCompletionRate ?? 0) * 100)
+
   return (
-    <div>
+    <div className="animate-fade-in">
       {showWizard && <OnboardingWizard onDismiss={dismissWizard} />}
+
+      {/* ---- Page Header ---- */}
       <PageHeader
-        title="Advisory Dashboard"
-        subtitle="Real-time intelligence overview"
+        title={`${greeting()}, ${user?.firstName ?? 'Advisor'}`}
+        subtitle="Real-time intelligence · All data refreshes every 60s"
+        live
       >
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleSeedDemo}
-            disabled={seeding}
-            className="btn-secondary flex items-center gap-2 text-sm"
-            title="Load 8 realistic demo opportunities for testing"
-          >
-            {seeding ? <Spinner size="sm" /> : <Database className="w-4 h-4" />}
-            {seeding ? 'Seeding...' : 'Load Demo Data'}
-          </button>
-          <Link to="/analytics" className="btn-secondary text-xs flex items-center gap-1.5">
-            <BarChart3 className="w-3.5 h-3.5" />
-            Deep Analytics
-          </Link>
-          <button
-            onClick={logout}
-            className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-red-400 border border-gray-700 hover:border-red-700 px-3 py-1.5 rounded-lg transition-colors"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            Sign Out
-          </button>
-        </div>
+        <button
+          onClick={handleSeedDemo}
+          disabled={seeding}
+          className="btn-secondary text-xs"
+          title="Load 8 realistic demo opportunities"
+        >
+          {seeding ? <Spinner size="sm" /> : <Database className="w-3.5 h-3.5" />}
+          {seeding ? 'Seeding...' : 'Load Demo'}
+        </button>
+        <Link to="/analytics" className="btn-primary text-xs">
+          <BarChart3 className="w-3.5 h-3.5" />
+          Analytics
+        </Link>
       </PageHeader>
 
+      {/* ---- Seed result ---- */}
       {seedResult && (
-        <div className={`flex items-start gap-2 text-sm rounded-lg px-4 py-3 mb-4 ${
-          seedResult.startsWith('Seed failed')
-            ? 'bg-red-900/30 border border-red-700 text-red-300'
-            : 'bg-green-900/20 border border-green-700 text-green-300'
-        }`}>
+        <div
+          className={`flex items-start gap-2.5 text-sm rounded-xl px-4 py-3 mb-6 ${
+            seedResult.startsWith('Seed failed')
+              ? 'border text-red-300'
+              : 'border text-emerald-300'
+          }`}
+          style={seedResult.startsWith('Seed failed')
+            ? { background: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.2)' }
+            : { background: 'rgba(16,185,129,0.08)', borderColor: 'rgba(16,185,129,0.2)' }
+          }
+        >
           <CheckCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
           {seedResult}
         </div>
       )}
 
-      {/* Quick Access: Favorites + Recently Viewed */}
-      {(favorites.length > 0 || recentItems.length > 0) && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-          {/* Favorites */}
-          <div className="card">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Star className="w-4 h-4 text-yellow-400" />
-                <h2 className="font-semibold text-gray-200 text-sm">Starred Contracts</h2>
-                <span className="text-xs bg-yellow-900/40 text-yellow-400 px-1.5 py-0.5 rounded-full">
-                  {favorites.length}
-                </span>
-              </div>
-              <Link to="/opportunities" className="text-xs text-gray-600 hover:text-blue-400">
-                All contracts →
-              </Link>
-            </div>
-            {favorites.length === 0 ? (
-              <p className="text-sm text-gray-600 py-2">
-                Star a contract on any opportunity page to pin it here.
-              </p>
-            ) : (
-              <div className="space-y-1.5">
-                {favorites.map((fav) => {
-                  const daysLeft = Math.round((new Date(fav.deadline || '').getTime() - Date.now()) / 86400000)
-                  return (
-                    <div key={fav.id} className="group flex items-center gap-2">
-                      <Link
-                        to={`/opportunities/${fav.id}`}
-                        className="flex-1 min-w-0 flex items-center justify-between gap-2 px-2 py-1.5 rounded hover:bg-gray-800 transition-colors"
-                      >
-                        <div className="min-w-0">
-                          <p className="text-xs font-medium text-yellow-300 truncate">{fav.title}</p>
-                          <p className="text-[10px] text-gray-500 truncate">{fav.agency}</p>
-                        </div>
-                        {fav.deadline && daysLeft >= 0 && (
-                          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded flex-shrink-0 ${
-                            daysLeft <= 7 ? 'bg-red-900/40 text-red-300' :
-                            daysLeft <= 20 ? 'bg-yellow-900/40 text-yellow-300' :
-                            'bg-gray-800 text-gray-500'
-                          }`}>
-                            {daysLeft}d
-                          </span>
-                        )}
-                      </Link>
-                      <button
-                        onClick={() => removeFavorite(fav.id)}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-gray-600 hover:text-red-400 transition-all flex-shrink-0"
-                        title="Remove from favorites"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Recently Viewed */}
-          <div className="card">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-gray-400" />
-                <h2 className="font-semibold text-gray-200 text-sm">Recently Viewed</h2>
-              </div>
-              {recentItems.length > 0 && (
-                <button
-                  onClick={clearHistory}
-                  className="text-xs text-gray-600 hover:text-gray-400 transition-colors"
-                >
-                  Clear
-                </button>
+      {/* ---- Deadline Alert Banner ---- */}
+      {(d?.deadlineAlerts?.red > 0 || d?.deadlineAlerts?.yellow > 0) && (
+        <div
+          className="flex items-center gap-3 rounded-xl px-4 py-3 mb-6"
+          style={{
+            background: 'rgba(239,68,68,0.07)',
+            border: '1px solid rgba(239,68,68,0.18)',
+          }}
+        >
+          <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-red-300">Deadline Alerts</p>
+            <p className="text-xs mt-0.5" style={{ color: '#64748b' }}>
+              {d.deadlineAlerts.red > 0 && (
+                <span className="text-red-300 font-medium">{d.deadlineAlerts.red} critical (&le;7d)</span>
               )}
-            </div>
-            {recentItems.length === 0 ? (
-              <p className="text-sm text-gray-600 py-2">
-                Open any contract to start building your history.
-              </p>
-            ) : (
-              <div className="space-y-1.5">
-                {recentItems.map((item) => {
-                  const daysLeft = Math.round((new Date(item.deadline || '').getTime() - Date.now()) / 86400000)
-                  return (
-                    <Link
-                      key={item.id}
-                      to={`/opportunities/${item.id}`}
-                      className="flex items-center justify-between gap-2 px-2 py-1.5 rounded hover:bg-gray-800 transition-colors group"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-xs font-medium text-gray-300 group-hover:text-white truncate">{item.title}</p>
-                        <p className="text-[10px] text-gray-500 truncate">{item.agency}</p>
-                      </div>
-                      {item.deadline && daysLeft >= 0 && (
-                        <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded flex-shrink-0 ${
-                          daysLeft <= 7 ? 'bg-red-900/40 text-red-300' :
-                          daysLeft <= 20 ? 'bg-yellow-900/40 text-yellow-300' :
-                          'bg-gray-800 text-gray-500'
-                        }`}>
-                          {daysLeft}d
-                        </span>
-                      )}
-                    </Link>
-                  )
-                })}
-              </div>
-            )}
+              {d.deadlineAlerts.red > 0 && d.deadlineAlerts.yellow > 0 && (
+                <span className="mx-2 text-slate-700">·</span>
+              )}
+              {d.deadlineAlerts.yellow > 0 && (
+                <span className="text-amber-300 font-medium">{d.deadlineAlerts.yellow} elevated (&le;20d)</span>
+              )}
+            </p>
           </div>
+          <Link to="/opportunities?sortBy=deadline" className="btn-secondary text-xs flex-shrink-0 py-1">
+            View All →
+          </Link>
         </div>
       )}
 
-      {/* Row 1: KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+      {/* ---- KPI Row ---- */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
         <StatCard
           label="Active Clients"
           value={metrics?.totalClients ?? 0}
           sub="Consulting relationships"
           color="blue"
+          icon={<Users className="w-4 h-4 text-blue-400" />}
         />
         <StatCard
           label="Pipeline Value"
           value={formatCurrency(d?.pipelineValue?.totalExpected ?? 0)}
           sub={`${d?.totalOpportunities ?? 0} opportunities`}
           color="green"
+          icon={<TrendingUp className="w-4 h-4 text-emerald-400" />}
         />
         <StatCard
           label="Avg Win Probability"
-          value={`${Math.round((d?.avgWinProbability ?? 0) * 100)}%`}
+          value={`${winPct}%`}
           sub="Across all decisions"
-          color={(d?.avgWinProbability ?? 0) >= 0.4 ? 'green' : 'yellow'}
+          color={winPct >= 40 ? 'green' : 'yellow'}
+          icon={<Target className="w-4 h-4 text-amber-400" />}
         />
         <StatCard
           label="Completion Rate"
-          value={`${Math.round((metrics?.aggregateCompletionRate ?? 0) * 100)}%`}
+          value={`${completionPct}%`}
           sub="On-time submissions"
-          color={(metrics?.aggregateCompletionRate ?? 0) >= 0.8 ? 'green' : 'yellow'}
+          color={completionPct >= 80 ? 'green' : 'yellow'}
+          icon={<Activity className="w-4 h-4 text-emerald-400" />}
         />
         <StatCard
           label="Penalties (30d)"
           value={formatCurrency(d?.recentPenalties?.total ?? 0)}
           sub={`${d?.recentPenalties?.count ?? 0} events`}
-          color={d?.recentPenalties?.total > 0 ? 'red' : 'green'}
+          color={(d?.recentPenalties?.total ?? 0) > 0 ? 'red' : 'green'}
+          icon={<Shield className="w-4 h-4 text-red-400" />}
         />
       </div>
 
-      {/* Deadline Alert Banner */}
-      {(d?.deadlineAlerts?.red > 0 || d?.deadlineAlerts?.yellow > 0) && (
-        <div className="bg-red-900/20 border border-red-800 rounded-lg p-4 mb-8 flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0" />
-          <div>
-            <p className="text-sm font-semibold text-red-300">Deadline Alerts</p>
-            <p className="text-sm text-gray-400 mt-0.5">
-              {d.deadlineAlerts.red > 0 && (
-                <span className="text-red-300">
-                  {d.deadlineAlerts.red} critical (7d)
-                </span>
-              )}
-              {d.deadlineAlerts.red > 0 && d.deadlineAlerts.yellow > 0 && ' · '}
-              {d.deadlineAlerts.yellow > 0 && (
-                <span className="text-yellow-300">
-                  {d.deadlineAlerts.yellow} elevated (20d)
-                </span>
-              )}
-            </p>
-          </div>
-          <Link
-            to="/opportunities?sortBy=deadline"
-            className="ml-auto btn-secondary text-xs py-1"
-          >
-            View All
-          </Link>
-        </div>
-      )}
-
-      {/* Row 2: Pipeline + Win Distribution */}
+      {/* ---- Row 2: Pipeline + Win Distribution ---- */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <PipelineFunnel stages={pipeline?.stages || []} />
         <WinProbabilityDistribution data={d?.probDistribution} />
       </div>
 
-      {/* Row 3: Trend Charts */}
+      {/* ---- Row 3: Trend Charts ---- */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <PenaltyTrendLine data={trends?.penalties} />
         <SubmissionVelocity data={trends?.submissions} />
       </div>
 
-      {/* Row 4: Intelligence Cards */}
+      {/* ---- Row 4: Intelligence Cards ---- */}
+      <div className="mb-2">
+        <SectionHeader title="AI Intelligence" />
+      </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         <OpportunityMatchCard suggestions={predictions?.opportunitySuggestions} />
         <RiskRadarCard risks={predictions?.riskItems} />
         <DecisionRecommendationCard decisions={d?.recentDecisions} />
       </div>
 
-      {/* Row 5: Revenue Forecast */}
+      {/* ---- Row 5: Revenue Forecast ---- */}
       <div className="mb-8">
         <RevenueForecast data={health?.revenueForecast} />
       </div>
 
-      {/* Row 6: Top Opportunities + Client Portfolio */}
+      {/* ---- Row 6: Top Opportunities + Portfolio ---- */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Top Opportunities */}
         <div className="card">
-          <div className="flex items-center gap-2 mb-4">
-            <TrendingUp className="w-4 h-4 text-blue-400" />
-            <h2 className="font-semibold text-gray-200">
-              Top Opportunities by Expected Value
-            </h2>
-          </div>
+          <SectionHeader
+            title="Top Opportunities by Expected Value"
+            action={
+              <Link to="/opportunities" className="text-xs text-amber-500 hover:text-amber-400 font-medium">
+                View all →
+              </Link>
+            }
+          />
 
-          <div className="space-y-4">
+          <div className="space-y-0">
             {d?.topOpportunities?.length === 0 && (
-              <p className="text-sm text-gray-500 text-center py-4">
+              <p className="text-sm text-slate-600 text-center py-8">
                 No scored opportunities yet
               </p>
             )}
 
             {d?.topOpportunities?.map((opp: any) => (
-              <div
-                key={opp.id}
-                className="border-b border-gray-800 pb-4 last:border-0 last:pb-0"
-              >
-                <div className="flex items-start justify-between mb-1">
+              <div key={opp.id} className="table-row py-3">
+                <div className="flex items-start justify-between gap-2 mb-1.5">
                   <Link
                     to={`/opportunities/${opp.id}`}
-                    className="text-sm font-medium text-blue-400 hover:text-blue-300 line-clamp-1 flex-1 mr-2"
+                    className="text-sm font-medium text-sky-400 hover:text-sky-300 line-clamp-1 flex-1 transition-colors"
                   >
                     {opp.title}
                   </Link>
@@ -395,27 +301,24 @@ export default function Dashboard() {
                   />
                 </div>
 
-                <p className="text-xs text-gray-500 mb-2">{opp.agency}</p>
+                <p className="text-xs mb-2.5" style={{ color: '#475569' }}>{opp.agency}</p>
 
-                <div className="flex items-center">
-                  <ProbabilityBar probability={opp.probabilityScore || 0} />
-                </div>
+                <ProbabilityBar probability={opp.probabilityScore || 0} />
 
-                {/* Bid decision badges */}
                 {opp.bidDecisions?.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-2">
+                  <div className="flex flex-wrap gap-1.5 mt-2.5">
                     {opp.bidDecisions.map((bd: any, i: number) => (
                       <span
                         key={i}
-                        className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                        className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
                           bd.recommendation === 'BID_PRIME'
-                            ? 'bg-green-900/40 text-green-300'
+                            ? 'badge-green'
                             : bd.recommendation === 'BID_SUB'
-                            ? 'bg-blue-900/40 text-blue-300'
-                            : 'bg-red-900/40 text-red-300'
+                            ? 'badge-blue'
+                            : 'badge-red'
                         }`}
                       >
-                        {bd.recommendation} - {bd.clientCompany?.name}
+                        {bd.recommendation} — {bd.clientCompany?.name}
                       </span>
                     ))}
                   </div>

@@ -1,0 +1,103 @@
+version: "3.9"
+
+services:
+
+  # ----------------------------
+  # PostgreSQL Database
+  # ----------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: govcon_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-govcon_prod}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-govcon_platform}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-govcon_prod} -d ${POSTGRES_DB:-govcon_platform}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ----------------------------
+  # Redis Cache + Queue
+  # ----------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: govcon_redis
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ----------------------------
+  # Backend API (Production)
+  # ----------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: govcon_backend
+    env_file:
+      - .env.prod
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://${POSTGRES_USER:-govcon_prod}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-govcon_platform}
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - uploads_data:/app/uploads
+    command: sh -c "npx prisma migrate deploy 2>/dev/null; npx prisma db push --accept-data-loss 2>/dev/null; npx prisma generate && node dist/server.js"
+    restart: unless-stopped
+
+  # ----------------------------
+  # Frontend (Production — nginx)
+  # ----------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_URL: ""
+    container_name: govcon_frontend
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # ----------------------------
+  # Caddy — SSL + Reverse Proxy
+  # ----------------------------
+  caddy:
+    image: caddy:2-alpine
+    container_name: govcon_caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    depends_on:
+      - frontend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  uploads_data:
+  caddy_data:
+  caddy_config:

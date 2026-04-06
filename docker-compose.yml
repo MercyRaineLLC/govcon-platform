@@ -57,10 +57,20 @@ services:
       DATABASE_URL: postgresql://govcon_user:govcon_pass@postgres:5432/govcon_platform
       REDIS_URL: redis://redis:6379
       JWT_SECRET: dev-secret-change-in-production
-      LOCALAI_BASE_URL: http://local-ai:8080/v1
+      LOCALAI_BASE_URL: http://ollama:11434/v1
+      LOCALAI_MODEL: llama3.1:8b
       GOOGLE_APPLICATION_CREDENTIALS: /app/adc.json
       GCP_PROJECT_ID: gov-con-491005
       BQ_DATASET: govcon_analytics
+      # State portal credentials — fill in .env then uncomment:
+      PORTAL_CA_USER: ${PORTAL_CA_USER:-}
+      PORTAL_CA_PASS: ${PORTAL_CA_PASS:-}
+      PORTAL_FL_USER: ${PORTAL_FL_USER:-}
+      PORTAL_FL_PASS: ${PORTAL_FL_PASS:-}
+      PORTAL_MD_USER: ${PORTAL_MD_USER:-}
+      PORTAL_MD_PASS: ${PORTAL_MD_PASS:-}
+      PORTAL_PA_USER: ${PORTAL_PA_USER:-}
+      PORTAL_PA_PASS: ${PORTAL_PA_PASS:-}
 
     ports:
       - "3001:3001"
@@ -73,8 +83,9 @@ services:
 
     volumes:
       - uploads_data:/app/uploads
-      - C:\Users\gladm\Downloads\adc.json:/app/adc.json:ro
-    command: npm start
+      # Mount GCP credentials if needed:
+      # - /path/to/adc.json:/app/adc.json:ro
+    command: sh -c "npx prisma generate && node dist/server.js"
 
   # ----------------------------
   # Frontend (Vite Dev)
@@ -96,25 +107,57 @@ services:
     command: npm run dev -- --host
 
   # ----------------------------
-  # LocalAI — Self-Hosted LLM
+  # Ollama — Self-Hosted LLM Engine
+  # Best models for business/proposal work:
+  #   mistral:7b-instruct  — 4.1 GB  (default, great balance of speed + quality)
+  #   llama3.1:8b          — 4.7 GB  (128k context, stronger reasoning)
+  #   phi4:14b             — 9.1 GB  (Microsoft's model, exceptional at analysis)
+  #   qwen2.5:14b          — 9.0 GB  (excellent at structured writing)
+  #
+  # Pull a model:  docker exec govcon_ollama ollama pull mistral:7b-instruct
+  # Switch model:  Update LOCALAI_MODEL above, or change in Settings → AI Provider
   # ----------------------------
-  local-ai:
-    image: localai/localai:latest
-    container_name: local-ai
+  ollama:
+    image: ollama/ollama:latest
+    container_name: govcon_ollama
     ports:
-      - "8080:8080"
+      - "11434:11434"
     volumes:
-      - localai_models:/models
+      - ollama_models:/root/.ollama
     restart: unless-stopped
+    # Uncomment for NVIDIA GPU support (requires nvidia-container-toolkit):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O- http://localhost:8080/readyz || exit 1"]
+      test: ["CMD-SHELL", "ollama list > /dev/null 2>&1 || exit 1"]
       interval: 30s
-      timeout: 10s
+      timeout: 15s
       retries: 5
-      start_period: 60s
+      start_period: 20s
+
+  # ----------------------------
+  # Ollama Model Initializer
+  # Pulls mistral:7b-instruct on first startup (~4.1 GB download).
+  # This runs once and exits — safe to re-run, pull is idempotent.
+  # ----------------------------
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: govcon_ollama_init
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    entrypoint: ["ollama", "pull", "mistral:7b-instruct"]
+    restart: "no"
 
 volumes:
   postgres_data:
   redis_data:
-  localai_models:
+  ollama_models:
   uploads_data:

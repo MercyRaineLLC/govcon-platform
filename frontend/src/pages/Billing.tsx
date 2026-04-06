@@ -129,6 +129,8 @@ export default function BillingPage() {
   const plans        = (plansData?.plans ?? []) as any[]
   const invoices     = (invoicesData?.invoices ?? []) as any[]
   const addons       = (addonsData?.data ?? []) as any[]
+  const tokenPacks   = (addonsData?.tokenPacks ?? []) as any[]
+  const proposalTokenBalance = (addonsData?.proposalTokenBalance ?? 0) as number
 
   const flash = (type: 'ok' | 'err', text: string) => {
     setMsg({ type, text })
@@ -185,6 +187,15 @@ export default function BillingPage() {
     mutationFn: (slug: string) => addonsApi.cancel(slug),
     onSuccess: () => { invalidateAddons(); flash('ok', 'Add-on cancelled') },
     onError: () => flash('err', 'Failed to cancel add-on'),
+  })
+  const tokenPackMut = useMutation({
+    mutationFn: (slug: string) => addonsApi.purchase(slug),
+    onSuccess: (data: any, slug) => {
+      invalidateAddons()
+      const pack = tokenPacks.find((p: any) => p.slug === slug)
+      flash('ok', data?.message ?? `${pack?.tokenAmount ?? ''} proposal tokens added to your account`)
+    },
+    onError: () => flash('err', 'Failed to purchase token pack'),
   })
 
   // ── plan card styles ─────────────────────────────────────
@@ -574,6 +585,87 @@ export default function BillingPage() {
           </>
         )}
       </div>
+
+      {/* Proposal Token Packs */}
+      {tokenPacks.length > 0 && (
+        <div id="proposal-tokens">
+          <div className="mb-4">
+            <h3 className="text-base font-bold text-slate-200 flex items-center gap-2">
+              <span className="text-lg">🪙</span>
+              Proposal Token Packs
+            </h3>
+            <p className="text-sm text-slate-500 mt-0.5">
+              One-time credit purchases — tokens never expire
+            </p>
+          </div>
+
+          {/* Balance indicator */}
+          <div
+            className="flex items-center gap-3 px-4 py-3 rounded-xl mb-5 w-fit"
+            style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)' }}
+          >
+            <span className="text-xl">🪙</span>
+            <div>
+              <p className="text-xs text-slate-500 uppercase tracking-wide">Current Balance</p>
+              <p className="text-lg font-bold text-amber-400">
+                {proposalTokenBalance} proposal token{proposalTokenBalance !== 1 ? 's' : ''}
+              </p>
+            </div>
+            <div className="ml-4 text-xs text-slate-500 space-y-0.5">
+              <p>Outline = <span className="text-slate-300 font-medium">1 token</span></p>
+              <p>Full Draft PDF = <span className="text-slate-300 font-medium">5 tokens</span></p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {tokenPacks.map((pack: any) => (
+              <div
+                key={pack.slug}
+                className="rounded-xl p-5 flex flex-col gap-3 transition-all"
+                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(245,158,11,0.15)' }}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl">{pack.icon}</span>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-100">{pack.name}</p>
+                      <p className="text-[11px] text-slate-500">{pack.tagline}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-400 leading-relaxed flex-1">{pack.description}</p>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-xl font-bold text-amber-400">${pack.priceMonthly}</span>
+                    <span className="text-slate-500 text-xs ml-1">one-time</span>
+                  </div>
+                  <span className="text-[11px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                    {pack.tokenAmount} tokens
+                  </span>
+                </div>
+
+                {isAdmin ? (
+                  <button
+                    onClick={() => tokenPackMut.mutate(pack.slug)}
+                    disabled={tokenPackMut.isPending}
+                    className="w-full py-1.5 rounded-lg text-xs font-semibold transition-all disabled:opacity-50"
+                    style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', color: '#f59e0b' }}
+                  >
+                    {tokenPackMut.isPending ? 'Processing…' : `Buy ${pack.tokenAmount} Tokens — $${pack.priceMonthly}`}
+                  </button>
+                ) : (
+                  <div className="w-full py-1.5 rounded-lg text-xs text-center text-slate-600"
+                    style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    Contact admin to purchase
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Invoice history */}
       <div>

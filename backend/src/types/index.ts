@@ -29,16 +29,18 @@ export interface DeadlineClassification {
 }
 
 // -------------------------------------------------------------
-// Probability Engine — 7-factor model (set-aside moved to compliance gate)
+// Probability Engine — 9-factor model
 // -------------------------------------------------------------
 export interface ProbabilityFeatures {
   naicsOverlapScore: number;        // 0-1: NAICS domain match
-  agencyAlignmentScore: number;     // 0-1: Historical agency award rate
+  agencyAlignmentScore: number;     // 0-1: Agency SDVOSB/small-biz award rate
   awardSizeFitScore: number;        // 0-1: Contract size within client capacity
-  competitionDensityScore: number;  // 0-1: Fewer competitors = higher score
+  competitionDensityScore: number;  // 0-1: Bidder count vs NAICS norm
   historicalDistribution: number;   // 0-1: USAspending base win rate
   incumbentWeaknessScore: number;   // 0-1: Inverse of incumbent dominance
   documentAlignmentScore: number;   // 0-1: SOW scope match from document intel
+  agencyHistoryScore: number;       // 0-1: Agency historical set-aside affinity
+  deadlineUrgencyScore: number;     // 0-1: Quality of proposal prep window
 }
 
 // -------------------------------------------------------------

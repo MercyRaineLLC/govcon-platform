@@ -9,7 +9,7 @@ export function ProtectedRoute({ roles }: ProtectedRouteProps) {
   const { isAuthenticated, user } = useAuth()
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />
+    return <Navigate to="/welcome" replace />
   }
 
   if (roles && user && !roles.includes(user.role)) {

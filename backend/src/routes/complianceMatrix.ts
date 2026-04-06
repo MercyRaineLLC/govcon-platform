@@ -52,9 +52,10 @@ router.post('/:opportunityId/generate', async (req: AuthenticatedRequest, res: R
       where: { id: opportunityId, consultingFirmId },
       include: {
         documents: {
-          where: { analysisStatus: 'COMPLETE' },
+          // Include all uploaded docs — not just AI-analyzed ones — so the matrix
+          // can be generated even if document analysis was never run.
           orderBy: { uploadedAt: 'desc' },
-          take: 3,
+          take: 5,
         },
       },
     })
@@ -63,21 +64,45 @@ router.post('/:opportunityId/generate', async (req: AuthenticatedRequest, res: R
     // Build source text: uploaded docs first, then fall back to description
     let sourceText = ''
     for (const doc of opp.documents) {
-      const filePath = path.join(process.cwd(), 'uploads', doc.storageKey)
-      const txt = await extractTextFromDocument(filePath)
-      if (txt.length > 200) {
-        sourceText += `\n\n=== ${doc.fileName} ===\n${txt}`
+      try {
+        if (!doc.storageKey || /[/\\]/.test(doc.storageKey) || doc.storageKey.includes('..')) continue
+        const filePath = path.join(process.cwd(), 'uploads', doc.storageKey)
+        const txt = await extractTextFromDocument(filePath)
+        if (txt.length > 200) {
+          sourceText += `\n\n=== ${doc.fileName} ===\n${txt}`
+        }
+      } catch {
+        // File unreadable — skip and continue with other docs
+        logger.warn('Could not read document for matrix generation', { docId: doc.id, storageKey: doc.storageKey })
       }
     }
     if (sourceText.length < 200 && opp.description) {
       sourceText = opp.description
     }
+    // If still empty, build minimal context from structured fields so the AI
+    // can still generate generic compliance requirements for the opportunity.
+    if (!sourceText.trim()) {
+      sourceText = [
+        `Title: ${opp.title}`,
+        opp.agency ? `Agency: ${opp.agency}` : '',
+        opp.naicsCode ? `NAICS Code: ${opp.naicsCode}` : '',
+        (opp as any).noticeType ? `Notice Type: ${(opp as any).noticeType}` : '',
+        opp.setAsideType ? `Set-Aside: ${opp.setAsideType}` : '',
+        opp.estimatedValue != null ? `Estimated Value: $${Number(opp.estimatedValue).toLocaleString()}` : '',
+      ].filter(Boolean).join('\n')
+    }
     if (!sourceText.trim()) {
       throw new ValidationError(
-        'No solicitation text available. Upload the RFP/SOW document first, or ensure the opportunity has a description.'
+        'No solicitation text available. Upload the RFP/SOW document or ensure the opportunity has a description.'
       )
     }
 
+    logger.info('Generating compliance matrix', {
+      opportunityId,
+      sourceLength: sourceText.length,
+      docCount: opp.documents.length,
+      usingDescription: opp.documents.length === 0 || sourceText === opp.description,
+    })
     const requirements = await generateComplianceMatrix(sourceText, opp.title, consultingFirmId)
     const safeSourceText = stripNulls(sourceText).substring(0, 5000)
 
@@ -148,9 +173,8 @@ router.post('/:opportunityId/bid-guidance', requireFeature('bid_guidance'), asyn
       where: { id: opportunityId, consultingFirmId },
       include: {
         documents: {
-          where: { analysisStatus: 'COMPLETE' },
           orderBy: { uploadedAt: 'desc' },
-          take: 3,
+          take: 5,
         },
       },
     })
@@ -159,11 +183,26 @@ router.post('/:opportunityId/bid-guidance', requireFeature('bid_guidance'), asyn
     // Build source text: uploaded docs first, then description
     let sourceText = ''
     for (const doc of opp.documents) {
-      const filePath = path.join(process.cwd(), 'uploads', doc.storageKey)
-      const txt = await extractTextFromDocument(filePath)
-      if (txt.length > 200) sourceText += `\n\n=== ${doc.fileName} ===\n${txt}`
+      try {
+        if (!doc.storageKey || /[/\\]/.test(doc.storageKey) || doc.storageKey.includes('..')) continue
+        const filePath = path.join(process.cwd(), 'uploads', doc.storageKey)
+        const txt = await extractTextFromDocument(filePath)
+        if (txt.length > 200) sourceText += `\n\n=== ${doc.fileName} ===\n${txt}`
+      } catch {
+        logger.warn('Could not read document for bid guidance', { docId: doc.id, storageKey: doc.storageKey })
+      }
     }
     if (sourceText.length < 200 && opp.description) sourceText = opp.description
+    if (!sourceText.trim()) {
+      sourceText = [
+        `Title: ${opp.title}`,
+        opp.agency ? `Agency: ${opp.agency}` : '',
+        opp.naicsCode ? `NAICS Code: ${opp.naicsCode}` : '',
+        (opp as any).noticeType ? `Notice Type: ${(opp as any).noticeType}` : '',
+        opp.setAsideType ? `Set-Aside: ${opp.setAsideType}` : '',
+        opp.estimatedValue != null ? `Estimated Value: $${Number(opp.estimatedValue).toLocaleString()}` : '',
+      ].filter(Boolean).join('\n')
+    }
     if (!sourceText.trim()) {
       throw new ValidationError('No solicitation text available. Upload the RFP/SOW or ensure the opportunity has a description.')
     }

@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../hooks/useAuth';
 import { authApi } from '../services/api';
-import { CheckCircle } from 'lucide-react';
+import { CheckCircle, Zap, ShieldCheck } from 'lucide-react';
 
 function UmbrellaLogo({ size = 48, className = '' }: { size?: number; className?: string }) {
   return (
@@ -43,6 +44,15 @@ export function RegisterPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const { data: betaData } = useQuery({
+    queryKey: ['beta-status'],
+    queryFn: () => authApi.betaStatus(),
+    staleTime: 10_000,
+    refetchInterval: 30_000,
+  });
+  const slotsRemaining = betaData?.data?.slotsRemaining ?? null;
+  const isBetaOpen = betaData?.data?.isBetaOpen ?? true;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -52,7 +62,12 @@ export function RegisterPage() {
       login(res.data.token, res.data.user, res.data.firm);
       navigate('/');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Registration failed');
+      const code = err.response?.data?.code;
+      if (code === 'BETA_FULL') {
+        setError('All beta slots have been claimed. Join our waitlist for the next opening.');
+      } else {
+        setError(err.response?.data?.error || 'Registration failed');
+      }
     } finally {
       setLoading(false);
     }
@@ -79,7 +94,7 @@ export function RegisterPage() {
           <div className="flex items-center gap-3 mb-3">
             <UmbrellaLogo size={44} />
             <div>
-              <p className="text-xs font-bold tracking-[0.2em] uppercase text-amber-400/80">Mercy Raine LLC</p>
+              <p className="text-xs font-bold tracking-[0.15em] uppercase text-amber-400/80">Mr GovCon</p>
               <p className="text-[10px] text-slate-500 tracking-widest">GovCon Advisory Intelligence</p>
             </div>
           </div>
@@ -119,14 +134,39 @@ export function RegisterPage() {
         {/* Mobile logo */}
         <div className="flex lg:hidden flex-col items-center mb-6">
           <UmbrellaLogo size={40} />
-          <p className="text-xs font-bold tracking-widest uppercase text-amber-400 mt-2">Mercy Raine LLC</p>
+          <p className="text-xs font-bold tracking-widest uppercase text-amber-400 mt-2">Mr GovCon</p>
         </div>
 
         <div className="w-full max-w-md">
-          <div className="mb-7">
-            <h2 className="text-2xl font-bold text-slate-100 mb-1">Register your firm</h2>
-            <p className="text-sm text-slate-500">Create your advisory intelligence account</p>
+          <div className="mb-5">
+            <h2 className="text-2xl font-bold text-slate-100 mb-1">Claim Your Beta Access</h2>
+            <p className="text-sm text-slate-500">14-day free trial. No credit card required.</p>
           </div>
+
+          {/* Beta slot counter */}
+          {slotsRemaining !== null && (
+            <div
+              className="mb-5 flex items-center gap-2.5 px-4 py-3 rounded-xl"
+              style={{
+                background: isBetaOpen ? 'rgba(245,158,11,0.07)' : 'rgba(127,29,29,0.2)',
+                border: `1px solid ${isBetaOpen ? 'rgba(245,158,11,0.22)' : 'rgba(185,28,28,0.35)'}`,
+              }}
+            >
+              {isBetaOpen ? (
+                <Zap className="w-4 h-4 text-amber-400 flex-shrink-0" />
+              ) : (
+                <ShieldCheck className="w-4 h-4 text-red-400 flex-shrink-0" />
+              )}
+              <span
+                className="text-sm font-semibold"
+                style={{ color: isBetaOpen ? '#fbbf24' : '#fca5a5' }}
+              >
+                {isBetaOpen
+                  ? `${slotsRemaining} of ${betaData.data.slotsTotal} beta slots remaining`
+                  : 'Beta is full — join the waitlist'}
+              </span>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -173,7 +213,7 @@ export function RegisterPage() {
               </div>
             )}
 
-            <button type="submit" disabled={loading} className="btn-primary w-full py-3 text-sm">
+            <button type="submit" disabled={loading || !isBetaOpen} className="btn-primary w-full py-3 text-sm">
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
                   <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">

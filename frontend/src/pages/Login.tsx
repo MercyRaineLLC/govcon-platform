@@ -109,7 +109,7 @@ export function LoginPage() {
           <div className="flex items-center gap-4 mb-2">
             <UmbrellaLogo size={52} />
             <div>
-              <p className="text-xs font-bold tracking-[0.2em] uppercase text-amber-400/70">Mercy Raine LLC</p>
+              <p className="text-xs font-bold tracking-[0.15em] uppercase text-amber-400/70">Mr GovCon</p>
               <p className="text-[11px] text-slate-500 tracking-widest">GovCon Advisory Intelligence</p>
             </div>
           </div>
@@ -194,7 +194,7 @@ export function LoginPage() {
         {/* Mobile-only logo */}
         <div className="flex lg:hidden flex-col items-center mb-8">
           <UmbrellaLogo size={48} />
-          <p className="text-sm font-bold tracking-widest uppercase text-amber-400 mt-3">Mercy Raine LLC</p>
+          <p className="text-sm font-bold tracking-widest uppercase text-amber-400 mt-3">Mr GovCon</p>
           <p className="text-xs text-slate-500 mt-0.5">GovCon Advisory Intelligence</p>
         </div>
 

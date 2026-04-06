@@ -6,6 +6,30 @@ import { prisma } from '../config/database'
 // ──────────────────────────────────────────────────────────────
 const DEFAULT_PLANS = [
   {
+    slug: 'beta_lifetime',
+    name: 'Beta Lifetime Access',
+    monthlyPriceUsd: 1249,
+    annualPriceUsd: 1249,
+    maxUsers: 8,
+    maxClients: 30,
+    aiCallsPerMonth: 500,
+    features: [
+      'LIFETIME ACCESS — one-time $1,249 payment, never expires',
+      'Professional tier base features included',
+      'AI bid strategy & win guidance',
+      'Full analytics suite — market intel, revenue forecast, portfolio health',
+      'Client portal with login access',
+      'Rewards & compliance incentive program',
+      'Contract vehicle detection & matching',
+      'Template library access',
+      'Up to 8 users · Up to 30 clients',
+      'Founding Member badge & priority support',
+      'Locked-in access to all future base features',
+      'Marketplace add-ons available for purchase separately',
+    ],
+    sortOrder: 0,
+  },
+  {
     slug: 'starter',
     name: 'Starter',
     monthlyPriceUsd: 299,
@@ -131,7 +155,7 @@ export async function getOrCreateSubscription(consultingFirmId: string) {
   if (existing) return existing
 
   const plans = await getOrSeedPlans()
-  const pro = plans.find((p) => p.slug === 'starter') ?? plans[0]
+  const pro = plans.find((p) => p.slug === 'beta_lifetime') ?? plans.find((p) => p.slug === 'starter') ?? plans[0]
   const now = new Date()
   const trialEnd = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
 
@@ -147,6 +171,63 @@ export async function getOrCreateSubscription(consultingFirmId: string) {
     },
     include: { plan: true },
   })
+}
+
+const PROPOSAL_TOKENS_BY_TIER: Record<string, number> = {
+  starter:        0,
+  beta_lifetime:  20,
+  professional:   20,
+  enterprise:     50,
+  elite:          100,
+}
+
+/** Called after plan change or proposal_assistant add-on purchase to grant the monthly allocation. */
+export async function refreshProposalTokens(consultingFirmId: string, planSlug: string): Promise<void> {
+  const firm = await prisma.consultingFirm.findUnique({
+    where: { id: consultingFirmId },
+    select: { purchasedAddons: true },
+  })
+  const hasProposalAddon = firm?.purchasedAddons.includes('proposal_assistant') ?? false
+  const eligible = planSlug === 'elite' || hasProposalAddon
+  const tokens = eligible ? (PROPOSAL_TOKENS_BY_TIER[planSlug] ?? 0) : 0
+  await prisma.consultingFirm.update({
+    where: { id: consultingFirmId },
+    data: { proposalTokens: tokens, lastTokenRefreshAt: new Date() },
+  })
+}
+
+/** Activate a lifetime subscription — called after one-time payment confirmation */
+export async function activateLifetime(consultingFirmId: string) {
+  const plans = await getOrSeedPlans()
+  const betaPlan = plans.find((p) => p.slug === 'beta_lifetime')
+  if (!betaPlan) throw new Error('Beta lifetime plan not found')
+
+  const now = new Date()
+  const lifetime = new Date(now.getFullYear() + 99, now.getMonth(), now.getDate())
+
+  const sub = await prisma.subscription.upsert({
+    where: { consultingFirmId },
+    update: {
+      planId: betaPlan.id,
+      status: 'ACTIVE',
+      billingCycle: 'ANNUAL',
+      currentPeriodStart: now,
+      currentPeriodEnd: lifetime,
+      trialEndsAt: null,
+      cancelAtPeriodEnd: false,
+    },
+    create: {
+      consultingFirmId,
+      planId: betaPlan.id,
+      status: 'ACTIVE',
+      billingCycle: 'ANNUAL',
+      currentPeriodStart: now,
+      currentPeriodEnd: lifetime,
+    },
+    include: { plan: true },
+  })
+  await refreshProposalTokens(consultingFirmId, 'beta_lifetime')
+  return sub
 }
 
 export async function getUsage(consultingFirmId: string) {

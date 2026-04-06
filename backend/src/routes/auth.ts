@@ -4,12 +4,22 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
+import rateLimit from 'express-rate-limit';
 import { prisma } from '../config/database';
 import { generateToken, authenticateJWT, requireRole } from '../middleware/auth';
 import { enforceTenantScope, getTenantId } from '../middleware/tenant';
 import { AuthenticatedRequest } from '../types';
 import { UnauthorizedError, NotFoundError, ConflictError } from '../utils/errors';
 import { logger } from '../utils/logger';
+
+// Stricter rate limit for login — 10 attempts per 15 minutes per IP
+const loginRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many login attempts. Please wait 15 minutes.', code: 'RATE_LIMITED' },
+});
 
 const router = Router();
 const passwordSchema = z
@@ -43,6 +53,26 @@ const RegisterUserSchema = z.object({
 });
 
 /**
+ * GET /api/auth/beta-status
+ * Public — returns beta slot availability.
+ */
+router.get('/beta-status', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const maxSlots = parseInt(process.env.MAX_BETA_SLOTS || '15', 10);
+    const used = await prisma.consultingFirm.count();
+    res.json({
+      success: true,
+      data: {
+        slotsTotal: maxSlots,
+        slotsUsed: used,
+        slotsRemaining: Math.max(0, maxSlots - used),
+        isBetaOpen: used < maxSlots,
+      },
+    });
+  } catch (err) { next(err); }
+});
+
+/**
  * POST /api/auth/register-firm
  * Creates tenant + first admin user.
  */
@@ -50,6 +80,17 @@ router.post('/register-firm', async (req: Request, res: Response, next: NextFunc
   try {
     const body = RegisterFirmSchema.parse(req.body);
     const adminEmail = body.email || body.contactEmail
+
+    // Beta slot gate
+    const maxSlots = parseInt(process.env.MAX_BETA_SLOTS || '15', 10);
+    const firmCount = await prisma.consultingFirm.count();
+    if (firmCount >= maxSlots) {
+      return res.status(403).json({
+        success: false,
+        error: 'Beta registration is currently full. All slots have been claimed.',
+        code: 'BETA_FULL',
+      });
+    }
 
     const existingFirm = await prisma.consultingFirm.findUnique({
       where: { contactEmail: body.contactEmail },
@@ -121,7 +162,7 @@ router.post('/register-firm', async (req: Request, res: Response, next: NextFunc
 /**
  * POST /api/auth/login
  */
-router.post('/login', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/login', loginRateLimit, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { email, password } = LoginSchema.parse(req.body);
 

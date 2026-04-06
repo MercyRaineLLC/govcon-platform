@@ -119,6 +119,24 @@ export function AnalyticsPage() {
       {/* Portfolio Health Summary */}
       <TierGate feature="analytics" requiredTier="professional">
         <>
+          {/* Revenue forecast explainer */}
+          <div className="mb-6 px-4 py-3 rounded-lg flex items-start gap-3"
+            style={{ background: 'rgba(59,130,246,0.07)', border: '1px solid rgba(59,130,246,0.2)' }}>
+            <Info className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
+            <div className="text-xs text-blue-200 space-y-1">
+              <p className="font-semibold text-blue-300">How Expected Revenue & Forecasting Work</p>
+              <p>
+                <span className="text-green-400 font-medium">Expected Revenue</span> is your probability-weighted pipeline value — each open opportunity's contract value multiplied by its calculated win probability, summed across all active bids. It represents the statistically likely revenue if you pursued every active opportunity to award.
+              </p>
+              <p>
+                The <span className="text-blue-300 font-medium">Revenue Forecast chart</span> projects this forward across 6 months using three scenarios: <span className="text-green-400">Optimistic</span> (your best-case pipeline closes at higher values), <span className="text-blue-400">Expected</span> (probability-weighted midpoint — your planning baseline), and <span className="text-red-400">Conservative</span> (only your highest-confidence bids close at the lower end of their value range).
+              </p>
+              <p className="text-yellow-400/80 text-[11px] italic">
+                These are planning projections, not guarantees. Accuracy is highest 1–3 months out and improves as your firm builds a longer award track record on this platform.
+              </p>
+            </div>
+          </div>
+
           {health && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
               <div className="card">
@@ -126,7 +144,7 @@ export function AnalyticsPage() {
                 <p className="text-2xl font-bold text-green-400">
                   {formatCurrency(health.totalExpectedRevenue)}
                 </p>
-                <p className="text-xs text-gray-500 mt-1">6-month forward projection</p>
+                <p className="text-xs text-gray-500 mt-1">Probability-weighted pipeline · 6-mo projection</p>
               </div>
               <div className="card">
                 <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">NAICS Concentration</p>

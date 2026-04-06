@@ -61,13 +61,14 @@ router.get('/', async (req: AuthenticatedRequest, res: Response, next: NextFunct
         updatedAt: firm.updatedAt,
         activeClientCount,
         _count: firm._count,
-        samApiKey: firm.samApiKey ?? null,
-        anthropicApiKey: firm.anthropicApiKey ?? null,
+        samApiKeyConfigured: !!firm.samApiKey,
+        anthropicApiKeyConfigured: !!firm.anthropicApiKey,
         llmProvider: firm.llmProvider ?? 'claude',
-        openaiApiKey: firm.openaiApiKey ?? null,
-        insightEngineApiKey: firm.insightEngineApiKey ?? null,
+        openaiApiKeyConfigured: !!firm.openaiApiKey,
+        insightEngineApiKeyConfigured: !!firm.insightEngineApiKey,
         localaiBaseUrl: firm.localaiBaseUrl ?? null,
         localaiModel: firm.localaiModel ?? null,
+        proposalTokens: firm.proposalTokens ?? 0,
       },
     })
   } catch (err) {
@@ -237,7 +238,7 @@ router.put('/llm-provider', requireRole('ADMIN'), async (req: AuthenticatedReque
   try {
     const consultingFirmId = getTenantId(req)
     const { llmProvider } = req.body
-    const VALID = ['claude', 'openai', 'insight_engine', 'localai']
+    const VALID = ['claude', 'openai', 'deepseek', 'insight_engine', 'localai']
     if (!VALID.includes(llmProvider)) {
       return res.status(400).json({ success: false, error: `llmProvider must be one of: ${VALID.join(', ')}` })
     }

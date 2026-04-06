@@ -4,6 +4,7 @@ import { useTier, TierSlug } from '../hooks/useTier'
 
 const TIER_NAMES: Record<TierSlug, string> = {
   starter: 'Starter',
+  beta_lifetime: 'Beta Lifetime',
   professional: 'Professional',
   enterprise: 'Enterprise',
   elite: 'Elite',
@@ -11,6 +12,7 @@ const TIER_NAMES: Record<TierSlug, string> = {
 
 const TIER_PRICES: Record<TierSlug, string> = {
   starter: '$299/mo',
+  beta_lifetime: '$1,249 one-time',
   professional: '$699/mo',
   enterprise: '$1,800/mo',
   elite: '$4,500/mo',

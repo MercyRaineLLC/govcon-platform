@@ -1,9 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { billingApi, addonsApi } from '../services/api'
+import { useAuth } from './useAuth'
 
-export type TierSlug = 'starter' | 'professional' | 'enterprise' | 'elite'
+export type TierSlug = 'starter' | 'beta_lifetime' | 'professional' | 'enterprise' | 'elite'
 
 export function useTier() {
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'ADMIN'
+
   const { data, isLoading } = useQuery({
     queryKey: ['billing-subscription'],
     queryFn: () => billingApi.getSubscription(),
@@ -22,16 +26,20 @@ export function useTier() {
   const plan = data?.subscription?.plan
 
   function hasFeature(feature: string): boolean {
+    const PRO_FEATURES = ['compliance_matrix', 'opportunity_scoring', 'dashboard', 'bid_guidance', 'analytics', 'client_portal', 'rewards', 'contract_vehicles', 'template_library']
+    const ENT_FEATURES = [...PRO_FEATURES, 'deep_market_intel', 'white_label', 'api_access']
     const FEATURES: Record<string, string[]> = {
-      starter:      ['compliance_matrix', 'opportunity_scoring', 'dashboard'],
-      professional: ['compliance_matrix', 'opportunity_scoring', 'dashboard', 'bid_guidance', 'analytics', 'client_portal', 'rewards', 'contract_vehicles', 'template_library'],
-      enterprise:   ['compliance_matrix', 'opportunity_scoring', 'dashboard', 'bid_guidance', 'analytics', 'client_portal', 'rewards', 'contract_vehicles', 'template_library', 'deep_market_intel', 'white_label', 'api_access'],
-      elite:        ['compliance_matrix', 'opportunity_scoring', 'dashboard', 'bid_guidance', 'analytics', 'client_portal', 'rewards', 'contract_vehicles', 'template_library', 'deep_market_intel', 'white_label', 'api_access'],
+      starter:        ['compliance_matrix', 'opportunity_scoring', 'dashboard'],
+      beta_lifetime:  PRO_FEATURES,
+      professional:   PRO_FEATURES,
+      enterprise:     ENT_FEATURES,
+      elite:          ENT_FEATURES,
     }
     return FEATURES[slug]?.includes(feature) ?? false
   }
 
   function hasAddon(addonSlug: string): boolean {
+    if (isAdmin) return true  // Admins have access to all add-ons
     if (slug === 'elite') return true  // Elite includes all add-ons
     const addons: any[] = addonsData?.data ?? []
     return addons.some(a => a.slug === addonSlug && a.purchased)

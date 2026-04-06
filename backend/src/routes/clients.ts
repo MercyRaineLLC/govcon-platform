@@ -229,7 +229,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response, next: NextFunc
  * Looks up entity data from SAM.gov — does NOT create a record.
  * EIN lookup is NOT supported by the SAM.gov public API.
  */
-router.get('/lookup', async (req: AuthenticatedRequest, res: Response) => {
+router.get('/lookup', authenticateJWT, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { uei, cage, name } = req.query as Record<string, string>;
     if (!uei && !cage && !name) {

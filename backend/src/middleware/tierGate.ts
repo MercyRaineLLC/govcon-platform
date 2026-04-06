@@ -4,16 +4,21 @@ import { AuthenticatedRequest } from '../types'
 import { getTenantId } from './tenant'
 
 // Feature slugs gated per tier
+const PROFESSIONAL_FEATURES = ['compliance_matrix', 'opportunity_scoring', 'dashboard', 'bid_guidance', 'analytics', 'client_portal', 'rewards', 'contract_vehicles', 'template_library']
+const ENTERPRISE_FEATURES  = [...PROFESSIONAL_FEATURES, 'deep_market_intel', 'white_label', 'api_access']
+
 const TIER_FEATURES: Record<string, Set<string>> = {
-  starter:      new Set(['compliance_matrix', 'opportunity_scoring', 'dashboard']),
-  professional: new Set(['compliance_matrix', 'opportunity_scoring', 'dashboard', 'bid_guidance', 'analytics', 'client_portal', 'rewards', 'contract_vehicles', 'template_library']),
-  enterprise:   new Set(['compliance_matrix', 'opportunity_scoring', 'dashboard', 'bid_guidance', 'analytics', 'client_portal', 'rewards', 'contract_vehicles', 'template_library', 'deep_market_intel', 'white_label', 'api_access']),
-  elite:        new Set(['compliance_matrix', 'opportunity_scoring', 'dashboard', 'bid_guidance', 'analytics', 'client_portal', 'rewards', 'contract_vehicles', 'template_library', 'deep_market_intel', 'white_label', 'api_access']),
+  starter:        new Set(['compliance_matrix', 'opportunity_scoring', 'dashboard']),
+  beta_lifetime:  new Set(PROFESSIONAL_FEATURES),
+  professional:   new Set(PROFESSIONAL_FEATURES),
+  enterprise:     new Set(ENTERPRISE_FEATURES),
+  elite:          new Set(ENTERPRISE_FEATURES),
 }
 
 // Max tracked opportunities per tier (enforced on ingest)
 export const TIER_OPP_LIMITS: Record<string, number> = {
   starter: 150,
+  beta_lifetime: 750,
   professional: 750,
   enterprise: -1,
   elite: -1,
@@ -68,6 +73,65 @@ export async function checkClientLimit(consultingFirmId: string): Promise<{ allo
   ])
   if (plan.maxClients === -1) return { allowed: true, current, max: -1 }
   return { allowed: current < plan.maxClients, current, max: plan.maxClients }
+}
+
+// ---------------------------------------------------------------
+// Proposal Token System
+// ---------------------------------------------------------------
+
+// Monthly token allocation by tier (and by having proposal_assistant add-on)
+const PROPOSAL_TOKENS_BY_TIER: Record<string, number> = {
+  starter:        0,
+  beta_lifetime:  20,
+  professional:   20,
+  enterprise:     50,
+  elite:          100,
+}
+
+// Refresh tokens if it's a new calendar month (lazy refresh — no cron needed)
+async function maybeRefreshTokens(consultingFirmId: string): Promise<void> {
+  const firm = await prisma.consultingFirm.findUnique({
+    where: { id: consultingFirmId },
+    select: { lastTokenRefreshAt: true, purchasedAddons: true },
+  })
+  if (!firm) return
+
+  const now = new Date()
+  const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+  if (firm.lastTokenRefreshAt && firm.lastTokenRefreshAt >= thisMonth) return
+
+  const plan = await getFirmPlan(consultingFirmId)
+  const hasProposalAddon = firm.purchasedAddons.includes('proposal_assistant')
+  // Elite always has proposal; other tiers (including beta_lifetime) need the add-on
+  const eligible = plan.slug === 'elite' || hasProposalAddon
+  const monthlyTokens = eligible ? (PROPOSAL_TOKENS_BY_TIER[plan.slug] ?? 0) : 0
+
+  await prisma.consultingFirm.update({
+    where: { id: consultingFirmId },
+    data: { proposalTokens: monthlyTokens, lastTokenRefreshAt: now },
+  })
+}
+
+export async function checkProposalTokens(
+  consultingFirmId: string,
+  cost = 1
+): Promise<{ allowed: boolean; balance: number }> {
+  await maybeRefreshTokens(consultingFirmId)
+  const firm = await prisma.consultingFirm.findUnique({
+    where: { id: consultingFirmId },
+    select: { proposalTokens: true },
+  })
+  const balance = firm?.proposalTokens ?? 0
+  return { allowed: balance >= cost, balance }
+}
+
+export async function deductProposalTokens(consultingFirmId: string, cost: number): Promise<number> {
+  const updated = await prisma.consultingFirm.update({
+    where: { id: consultingFirmId },
+    data: { proposalTokens: { decrement: cost } },
+    select: { proposalTokens: true },
+  })
+  return updated.proposalTokens
 }
 
 // Check if firm is within AI call limit this month

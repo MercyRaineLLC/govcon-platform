@@ -1,8 +1,11 @@
 // =============================================================
-// Shared UI Components
+// Shared UI Components — Premium Design System
 // =============================================================
 import { ReactNode } from 'react';
-import { AlertTriangle, Clock, CheckCircle, Loader2 } from 'lucide-react';
+import {
+  AlertTriangle, Clock, CheckCircle, Loader2,
+  TrendingUp, TrendingDown, Minus,
+} from 'lucide-react';
 
 // ---- Deadline Badge ----
 interface DeadlineBadgeProps {
@@ -18,9 +21,9 @@ export function DeadlineBadge({ priority, label }: DeadlineBadgeProps) {
   }[priority];
 
   const icons = {
-    RED: <AlertTriangle className="w-3 h-3 mr-1" />,
-    YELLOW: <Clock className="w-3 h-3 mr-1" />,
-    GREEN: <CheckCircle className="w-3 h-3 mr-1" />,
+    RED: <AlertTriangle className="w-3 h-3" />,
+    YELLOW: <Clock className="w-3 h-3" />,
+    GREEN: <CheckCircle className="w-3 h-3" />,
   }[priority];
 
   return (
@@ -38,20 +41,31 @@ interface ProbabilityBarProps {
 
 export function ProbabilityBar({ probability }: ProbabilityBarProps) {
   const pct = Math.round(probability * 100);
-  const barColor =
-    pct >= 60 ? '#10b981' : pct >= 35 ? '#f59e0b' : '#ef4444';
+
+  const gradient =
+    pct >= 60
+      ? 'linear-gradient(90deg, #059669, #10b981)'
+      : pct >= 35
+      ? 'linear-gradient(90deg, #d97706, #f59e0b)'
+      : 'linear-gradient(90deg, #dc2626, #ef4444)';
+
   const textColor =
     pct >= 60 ? '#6ee7b7' : pct >= 35 ? '#fde68a' : '#f87171';
 
   return (
-    <div className="flex items-center gap-2">
-      <div className="flex-1 rounded-full h-1.5" style={{ background: '#1a2e4a' }}>
+    <div className="flex items-center gap-2.5">
+      <div className="prob-bar-track flex-1">
         <div
-          className="h-1.5 rounded-full transition-all"
-          style={{ width: `${pct}%`, background: barColor }}
+          className="h-full rounded-full transition-all duration-700"
+          style={{ width: `${pct}%`, background: gradient }}
         />
       </div>
-      <span className="text-xs font-mono w-8 text-right font-bold" style={{ color: textColor }}>{pct}%</span>
+      <span
+        className="text-[11px] font-mono font-bold w-9 text-right tabular-nums"
+        style={{ color: textColor }}
+      >
+        {pct}%
+      </span>
     </div>
   );
 }
@@ -59,20 +73,32 @@ export function ProbabilityBar({ probability }: ProbabilityBarProps) {
 // ---- Loading Spinner ----
 export function Spinner({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
   const sizes = { sm: 'w-4 h-4', md: 'w-6 h-6', lg: 'w-10 h-10' };
-  return <Loader2 className={`animate-spin ${sizes[size]}`} style={{ color: '#f59e0b' }} />;
+  return (
+    <Loader2
+      className={`animate-spin ${sizes[size]}`}
+      style={{ color: '#f59e0b' }}
+    />
+  );
 }
 
 // ---- Empty State ----
 export function EmptyState({ message }: { message: string }) {
   return (
-    <div className="text-center py-16" style={{ color: '#334155' }}>
+    <div className="text-center py-20 animate-fade-in">
       <div
-        className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4"
-        style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.15)' }}
+        className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5 animate-float"
+        style={{
+          background: 'linear-gradient(135deg, rgba(245,158,11,0.08), rgba(245,158,11,0.03))',
+          border: '1px solid rgba(245,158,11,0.15)',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+        }}
       >
-        <span className="text-2xl">☂</span>
+        <span className="text-3xl">☂</span>
       </div>
-      <p className="text-sm text-slate-500">{message}</p>
+      <p className="text-sm font-medium" style={{ color: '#475569' }}>{message}</p>
+      <p className="text-xs mt-1" style={{ color: '#334155' }}>
+        Data will appear here once available.
+      </p>
     </div>
   );
 }
@@ -80,11 +106,47 @@ export function EmptyState({ message }: { message: string }) {
 // ---- Error Banner ----
 export function ErrorBanner({ message }: { message: string }) {
   return (
-    <div className="rounded-lg px-4 py-3 text-sm flex items-center gap-2"
-      style={{ background: 'rgba(127,29,29,0.35)', border: '1px solid rgba(185,28,28,0.45)', color: '#fca5a5' }}>
-      <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-      {message}
+    <div
+      className="rounded-xl px-4 py-3 text-sm flex items-center gap-3"
+      style={{
+        background: 'rgba(239,68,68,0.08)',
+        border: '1px solid rgba(239,68,68,0.2)',
+        color: '#fca5a5',
+      }}
+    >
+      <AlertTriangle className="w-4 h-4 flex-shrink-0 text-red-400" />
+      <span>{message}</span>
     </div>
+  );
+}
+
+// ---- Trend Badge ----
+export function TrendBadge({
+  value,
+  suffix = '%',
+  label,
+}: {
+  value: number;
+  suffix?: string;
+  label?: string;
+}) {
+  const up = value > 0;
+  const neutral = value === 0;
+
+  if (neutral) {
+    return (
+      <span className="badge-neutral flex items-center gap-1">
+        <Minus className="w-3 h-3" />
+        {label ?? `0${suffix}`}
+      </span>
+    );
+  }
+
+  return (
+    <span className={up ? 'badge-green flex items-center gap-1' : 'badge-red flex items-center gap-1'}>
+      {up ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+      {label ?? `${up ? '+' : ''}${value.toFixed(1)}${suffix}`}
+    </span>
   );
 }
 
@@ -94,56 +156,167 @@ interface StatCardProps {
   value: string | number;
   sub?: string;
   color?: 'default' | 'red' | 'yellow' | 'green' | 'blue' | 'gold';
+  trend?: number;
+  icon?: ReactNode;
+  glow?: boolean;
 }
 
-export function StatCard({ label, value, sub, color = 'default' }: StatCardProps) {
-  const colors: Record<string, string> = {
+export function StatCard({
+  label,
+  value,
+  sub,
+  color = 'default',
+  trend,
+  icon,
+  glow = false,
+}: StatCardProps) {
+  const valueColors: Record<string, string> = {
     default: '#e2e8f0',
     red:     '#f87171',
     yellow:  '#fde68a',
     green:   '#6ee7b7',
     blue:    '#93c5fd',
-    gold:    '#f59e0b',
+    gold:    '#fbbf24',
+  };
+
+  const accentClass: Record<string, string> = {
+    default: 'stat-accent-subtle',
+    red:     'stat-accent-red',
+    yellow:  'stat-accent-gold',
+    green:   'stat-accent-green',
+    blue:    'stat-accent-blue',
+    gold:    'stat-accent-gold',
   };
 
   return (
-    <div className="card" style={{ position: 'relative', overflow: 'hidden' }}>
-      {/* Subtle gold top accent line */}
-      <div style={{
-        position: 'absolute', top: 0, left: 0, right: 0, height: '2px',
-        background: color === 'gold' || color === 'green'
-          ? 'linear-gradient(90deg, #f59e0b, transparent)'
-          : color === 'red'
-          ? 'linear-gradient(90deg, #ef4444, transparent)'
-          : 'linear-gradient(90deg, rgba(245,158,11,0.3), transparent)',
-      }} />
-      <p className="text-[11px] font-semibold uppercase tracking-widest mb-2"
-        style={{ color: '#475569', letterSpacing: '0.1em' }}>
-        {label}
-      </p>
-      <p className="text-3xl font-black" style={{ color: colors[color] || colors.default }}>
+    <div
+      className={`card${glow ? ' animate-gold-pulse' : ''}`}
+      style={{
+        transition: 'box-shadow 0.2s, transform 0.15s',
+      }}
+    >
+      {/* Top accent line */}
+      <div
+        className={accentClass[color]}
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px' }}
+      />
+
+      {/* Header row */}
+      <div className="flex items-start justify-between mb-3">
+        <p
+          className="text-[10px] font-bold uppercase tracking-[0.12em]"
+          style={{ color: '#475569' }}
+        >
+          {label}
+        </p>
+        {icon && (
+          <div
+            className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+            style={{
+              background: 'rgba(26,46,74,0.6)',
+              border: '1px solid rgba(26,46,74,0.8)',
+            }}
+          >
+            {icon}
+          </div>
+        )}
+      </div>
+
+      {/* Value */}
+      <p
+        className="text-3xl font-black leading-none animate-count-in"
+        style={{ color: valueColors[color] ?? valueColors.default, letterSpacing: '-0.02em' }}
+      >
         {value}
       </p>
-      {sub && <p className="text-xs mt-1" style={{ color: '#475569' }}>{sub}</p>}
+
+      {/* Sub + trend */}
+      <div className="flex items-center justify-between mt-2.5 gap-2">
+        {sub && (
+          <p className="text-xs truncate" style={{ color: '#475569' }}>
+            {sub}
+          </p>
+        )}
+        {trend !== undefined && (
+          <TrendBadge value={trend} />
+        )}
+      </div>
     </div>
   );
 }
 
 // ---- Page Header ----
-export function PageHeader({ title, subtitle, children }: { title: string; subtitle?: string; children?: ReactNode }) {
+export function PageHeader({
+  title,
+  subtitle,
+  children,
+  live,
+}: {
+  title: string;
+  subtitle?: string;
+  children?: ReactNode;
+  live?: boolean;
+}) {
   return (
-    <div className="flex items-start justify-between mb-6">
+    <div className="flex items-start justify-between mb-8">
       <div>
-        <h1 className="text-2xl font-black text-slate-100" style={{ letterSpacing: '-0.01em' }}>{title}</h1>
+        <div className="flex items-center gap-2.5 mb-1">
+          <h1
+            className="text-2xl font-black text-slate-100"
+            style={{ letterSpacing: '-0.02em' }}
+          >
+            {title}
+          </h1>
+          {live && (
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <div className="live-dot" />
+              <span className="text-[9px] text-emerald-600 font-bold tracking-widest uppercase">
+                Live
+              </span>
+            </div>
+          )}
+        </div>
         {subtitle && (
-          <p className="text-sm mt-1" style={{ color: '#475569' }}>{subtitle}</p>
+          <p className="text-sm" style={{ color: '#475569' }}>
+            {subtitle}
+          </p>
         )}
-        {/* Gold rule under title */}
-        <div className="mt-2 w-10 h-0.5 rounded" style={{
-          background: 'linear-gradient(90deg, #f59e0b, transparent)',
-        }} />
+        {/* Gold underline */}
+        <div
+          className="mt-2.5 h-0.5 rounded-full"
+          style={{
+            width: '40px',
+            background: 'linear-gradient(90deg, #f59e0b, transparent)',
+          }}
+        />
       </div>
-      {children && <div className="flex gap-2 items-center">{children}</div>}
+      {children && (
+        <div className="flex gap-2 items-center flex-wrap justify-end">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---- Section Header (within a page) ----
+export function SectionHeader({
+  title,
+  action,
+}: {
+  title: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center gap-2">
+        <div
+          className="w-1 h-4 rounded-full"
+          style={{ background: 'linear-gradient(180deg, #fbbf24, #d97706)' }}
+        />
+        <h2 className="text-sm font-bold text-slate-300 tracking-wide">{title}</h2>
+      </div>
+      {action && <div>{action}</div>}
     </div>
   );
 }
@@ -153,7 +326,19 @@ export function formatCurrency(value: number | string | null | undefined): strin
   if (value == null || value === '') return 'N/A';
   const n = typeof value === 'string' ? parseFloat(value) : value;
   if (isNaN(n)) return 'N/A';
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
+  if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(1)}B`;
+  if (n >= 1_000_000)     return `$${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000)         return `$${(n / 1_000).toFixed(0)}K`;
   return `$${n.toFixed(0)}`;
+}
+
+// ---- Info Row (label + value pair) ----
+export function InfoRow({ label, value }: { label: string; value?: string | number | null }) {
+  if (value == null || value === '') return null;
+  return (
+    <div className="flex items-start justify-between gap-3 py-2" style={{ borderBottom: '1px solid rgba(26,46,74,0.4)' }}>
+      <span className="text-xs font-medium flex-shrink-0" style={{ color: '#475569' }}>{label}</span>
+      <span className="text-xs text-slate-300 text-right">{value}</span>
+    </div>
+  );
 }

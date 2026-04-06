@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { opportunitiesApi, jobsApi, clientsApi } from '../services/api';
 import {
   PageHeader, DeadlineBadge, ProbabilityBar, formatCurrency,
@@ -8,7 +8,7 @@ import {
 } from '../components/ui';
 import {
   Search, Download, Filter, ChevronUp, ChevronDown,
-  CheckCircle, AlertCircle, Loader, Sparkles, X, SlidersHorizontal, Star
+  CheckCircle, AlertCircle, Loader, Sparkles, X, SlidersHorizontal, Star, Upload
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useFavorites } from '../hooks/useFavorites';
@@ -118,6 +118,11 @@ function StatusBanner({ state, label, estimatedSecs, onRefresh }: {
             )}
           </div>
           {state.detail && <p className="text-xs opacity-75 mt-0.5">{state.detail}</p>}
+          {state.status === 'success' && label === 'Ingest' && (
+            <p className="text-xs opacity-50 mt-1">
+              The list shows only active contracts (deadline not yet passed). Expired solicitations are stored but hidden by default — use Show Expired to view them.
+            </p>
+          )}
         </div>
       </div>
       {/* Progress bar */}
@@ -147,6 +152,7 @@ function StatusBanner({ state, label, estimatedSecs, onRefresh }: {
 
 export function OpportunitiesPage() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const { isFavorite, toggleFavorite } = useFavorites();
   const [filters, setFilters] = useState({
     naicsCode: '', agency: '', setAsideType: '', daysUntilDeadline: '',
@@ -278,8 +284,18 @@ export function OpportunitiesPage() {
       setIngestState((s) => ({ ...s, jobId, message: 'Syncing contracts from SAM.gov...', detail: s.detail }));
       pollJob(jobId, setIngestState, ingestPollRef, (job) => {
         clearJobFromStorage('ingest');
-        setIngestState({ jobId, status: 'success', message: 'Sync complete', detail: `${job.opportunitiesNew || 0} new contracts added · ${job.scoringJobsQueued || 0} being scored · ${job.errors || 0} errors` });
-        setTimeout(() => setIngestState(defaultJobState()), 15000);
+        const newCount = job.opportunitiesNew || 0;
+        const foundCount = job.opportunitiesFound || 0;
+        const expiredNote = foundCount > newCount
+          ? ` · ${(foundCount - newCount).toLocaleString()} already in DB or expired (past deadline)`
+          : '';
+        setIngestState({
+          jobId,
+          status: 'success',
+          message: 'Sync complete',
+          detail: `${newCount.toLocaleString()} new contracts added · ${job.scoringJobsQueued || 0} being scored · ${job.errors || 0} errors${expiredNote}`,
+        });
+        setTimeout(() => setIngestState(defaultJobState()), 20000);
       }, 225); // 225 × 4s = 15 min max; SAM.gov can paginate many pages with 1.2s throttle each
     } catch (err: any) {
       clearJobFromStorage('ingest');
@@ -390,6 +406,12 @@ export function OpportunitiesPage() {
           >
             {enrichState.status === 'running' ? <Loader className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
             {enrichState.status === 'running' ? 'Loading...' : 'Get Award History'}
+          </button>
+          <button
+            onClick={() => navigate('/contract-upload')}
+            className="btn-secondary flex items-center gap-2"
+          >
+            <Upload className="w-4 h-4" /> Upload Contract
           </button>
           <button
             onClick={handleIngest}
@@ -566,19 +588,17 @@ export function OpportunitiesPage() {
                       <ProbabilityBar probability={opp.probabilityScore || 0} />
                     </div>
                     <div className="text-right flex-shrink-0 w-28">
-                      <p className="text-xs text-gray-500 mb-0.5">Exp. Value</p>
-                      {opp.expectedValue
-                        ? <p className="text-sm font-mono text-emerald-400">{formatCurrency(opp.expectedValue)}</p>
-                        : <p className="text-xs text-gray-500">—</p>
-                      }
-                    </div>
-                    <div className="text-right flex-shrink-0 w-28">
-                      {opp.estimatedValue ? (
+                      {opp.expectedValue > 0 ? (
+                        <>
+                          <p className="text-xs text-gray-500 mb-0.5">Exp. Value</p>
+                          <p className="text-sm font-mono text-emerald-400">{formatCurrency(opp.expectedValue)}</p>
+                        </>
+                      ) : opp.estimatedValue > 0 ? (
                         <>
                           <p className="text-xs text-gray-500 mb-0.5">Est. Value</p>
                           <p className="text-sm font-mono text-gray-200">{formatCurrency(opp.estimatedValue)}</p>
                         </>
-                      ) : opp.historicalAvgAward ? (
+                      ) : opp.historicalAvgAward > 0 ? (
                         <>
                           <p className="text-xs text-gray-500 mb-0.5">Hist. Avg Award</p>
                           <p className="text-sm font-mono text-blue-300">{formatCurrency(opp.historicalAvgAward)}</p>

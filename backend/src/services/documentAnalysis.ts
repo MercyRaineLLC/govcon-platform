@@ -143,7 +143,14 @@ export class DocumentAnalysisService {
 
   private parseResponse(raw: string): Record<string, unknown> {
     try {
-      const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      // Strip markdown code fences
+      let cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      // If local model added preamble, extract the first {...} block
+      const jsonStart = cleaned.indexOf('{');
+      const jsonEnd = cleaned.lastIndexOf('}');
+      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+        cleaned = cleaned.substring(jsonStart, jsonEnd + 1);
+      }
       return JSON.parse(cleaned);
     } catch {
       logger.warn('Failed to parse AI JSON response (document analysis)');

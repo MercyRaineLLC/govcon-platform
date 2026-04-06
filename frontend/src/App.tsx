@@ -28,6 +28,9 @@ const RewardsPage          = lazy(() => import("./pages/Rewards").then(m => ({ d
 const BillingPage            = lazy(() => import("./pages/Billing"))
 const StateMunicipalPage     = lazy(() => import("./pages/StateMunicipalPage").then(m => ({ default: m.StateMunicipalPage })))
 const SubcontractingPage     = lazy(() => import("./pages/SubcontractingPage").then(m => ({ default: m.SubcontractingPage })))
+const RoiCalculatorPage      = lazy(() => import("./pages/RoiCalculator"))
+const ContractUploadPage     = lazy(() => import("./pages/ContractUpload"))
+const LandingPage            = lazy(() => import("./pages/Landing").then(m => ({ default: m.LandingPage })))
 const NotFoundPage           = lazy(() => import("./pages/NotFound"))
 
 function PageLoader() {
@@ -43,7 +46,8 @@ export default function App() {
     <ErrorBoundary>
       <Suspense fallback={<PageLoader />}>
         <Routes>
-          {/* Consultant auth */}
+          {/* Public pages */}
+          <Route path="/welcome" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
 
@@ -70,6 +74,8 @@ export default function App() {
               <Route path="/subcontracting" element={<SubcontractingPage />} />
               <Route path="/rewards" element={<RewardsPage />} />
               <Route path="/billing" element={<BillingPage />} />
+              <Route path="/roi-calculator" element={<RoiCalculatorPage />} />
+              <Route path="/contract-upload" element={<ContractUploadPage />} />
 
               <Route element={<ProtectedRoute roles={["ADMIN"]} />}>
                 <Route path="/compliance" element={<ComplianceLogsPage />} />

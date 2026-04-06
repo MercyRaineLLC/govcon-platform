@@ -1,23 +1,25 @@
 // =============================================================
-// Win Probability Engine — Full 8-Factor Decision Model
-// Tier 1-3 signals: Structural + Historical + Document Intelligence
+// Win Probability Engine — 9-Factor Decision Model
+// Tier 1-3 signals + Competitive Density + Agency History + Deadline Urgency
 // =============================================================
 import { ProbabilityFeatures, ProbabilityResult } from '../types';
 import { logger } from '../utils/logger';
 
 // -------------------------------------------------------------
 // Feature Weights (must sum to 1.0)
-// 7-factor model — set-aside alignment moved to Layer 1 compliance gate
-// Weights redistributed proportionally from removed setAsideAlignmentScore
+// Added: agencyHistoryScore (agency set-aside affinity) + deadlineUrgencyScore
+// competitionDensityScore upgraded: now uses NAICS-normalized density ratio
 // -------------------------------------------------------------
 const WEIGHTS: Record<keyof ProbabilityFeatures, number> = {
-  naicsOverlapScore:       0.28,  // Domain match — strong predictor
-  incumbentWeaknessScore:  0.22,  // Incumbent dominance inversion
-  documentAlignmentScore:  0.19,  // SOW scope match from uploaded documents
-  agencyAlignmentScore:    0.15,  // Historical agency relationship
-  awardSizeFitScore:       0.10,  // Capacity fit
-  competitionDensityScore: 0.04,  // Market crowding
-  historicalDistribution:  0.02,  // USAspending base rate
+  naicsOverlapScore:       0.24,  // Domain match — strongest predictor
+  incumbentWeaknessScore:  0.19,  // Incumbent dominance inversion (text + USAspending)
+  documentAlignmentScore:  0.16,  // SOW scope match from uploaded documents
+  agencyAlignmentScore:    0.12,  // Agency SDVOSB/SB award rate for client type
+  awardSizeFitScore:       0.09,  // Capacity fit
+  competitionDensityScore: 0.08,  // Bidder count vs NAICS norm
+  agencyHistoryScore:      0.07,  // Agency historical set-aside affinity (new)
+  historicalDistribution:  0.03,  // USAspending base rate
+  deadlineUrgencyScore:    0.02,  // Quality of proposal prep window (new)
 };
 
 // Verify weights sum to 1.0
@@ -138,6 +140,21 @@ export function computeProbability(
 // Full Opportunity-Client Scoring Entry Point
 // -------------------------------------------------------------
 
+/**
+ * Deadline urgency: 0-1 representing quality of the proposal prep window.
+ * Sweet spot is 2-6 weeks out. Too tight or too far = lower score.
+ */
+export function computeDeadlineUrgency(responseDeadline: Date): number {
+  const daysUntil = Math.ceil((responseDeadline.getTime() - Date.now()) / 86400000);
+  if (daysUntil < 0)   return 0.0;  // expired
+  if (daysUntil < 5)   return 0.1;  // too tight — rushed proposal
+  if (daysUntil < 14)  return 0.5;  // urgent but possible
+  if (daysUntil < 42)  return 1.0;  // sweet spot: 2-6 weeks
+  if (daysUntil < 90)  return 0.7;  // good lead time
+  if (daysUntil < 180) return 0.5;  // neutral
+  return 0.3;                        // very far — requirements may change
+}
+
 export function scoreOpportunityForClient(params: {
   opportunityNaics: string;
   opportunityEstimatedValue: number | null;
@@ -153,6 +170,10 @@ export function scoreOpportunityForClient(params: {
   agencySdvosbRate?: number | null;
   // Tier 3: Document intelligence
   documentAlignmentScore?: number | null;
+  // Tier 4: Advanced signals (from new engines)
+  agencyHistoryScore?: number | null;
+  deadlineUrgencyScore?: number | null;
+  densityScore?: number | null;
 }): ProbabilityResult {
 
   // Agency alignment: if SDVOSB and we know agency SDVOSB rate, use it
@@ -161,8 +182,15 @@ export function scoreOpportunityForClient(params: {
     agencyScore = clamp(0.3 + params.agencySdvosbRate * 2);
   }
 
-  // Use offersReceived (actual bidders) over competitionCount (unique historical winners) when available
+  // Use offersReceived (actual bidders) over competitionCount when available
   const competitorCount = params.offersReceived ?? params.competitionCount ?? null;
+
+  // Density score: use the NAICS-normalized value if available, else simple formula
+  const densityScore = params.densityScore != null
+    ? params.densityScore
+    : competitorCount
+      ? clamp(1 - (competitorCount / 20))
+      : 0.5;
 
   const features: ProbabilityFeatures = {
     naicsOverlapScore:       computeNaicsOverlap(params.clientNaics, params.opportunityNaics),
@@ -173,10 +201,10 @@ export function scoreOpportunityForClient(params: {
     documentAlignmentScore:  params.documentAlignmentScore ?? 0.5,
     agencyAlignmentScore:    agencyScore,
     awardSizeFitScore:       computeAwardSizeFit(params.opportunityEstimatedValue),
-    competitionDensityScore: competitorCount
-                               ? clamp(1 - (competitorCount / 20))
-                               : 0.5,
+    competitionDensityScore: densityScore,
     historicalDistribution:  params.historicalDistribution ?? 0.3,
+    agencyHistoryScore:      params.agencyHistoryScore ?? 0.5,
+    deadlineUrgencyScore:    params.deadlineUrgencyScore ?? 0.5,
   };
 
   return computeProbability(features, params.opportunityEstimatedValue);

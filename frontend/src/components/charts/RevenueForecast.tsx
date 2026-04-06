@@ -8,6 +8,8 @@ import {
   Legend,
 } from 'recharts'
 import { formatCurrency } from '../ui'
+import { Info } from 'lucide-react'
+import { useState } from 'react'
 
 interface ForecastMonth {
   period: string
@@ -20,15 +22,50 @@ interface ForecastMonth {
 
 export function RevenueForecast({ data }: { data?: ForecastMonth[] }) {
   const totalExpected = data?.reduce((s, m) => s + m.expected, 0) || 0
+  const [showInfo, setShowInfo] = useState(false)
 
   return (
     <div className="card">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold text-gray-200">Revenue Forecast</h3>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <h3 className="font-semibold text-gray-200">Revenue Forecast</h3>
+          <button
+            onClick={() => setShowInfo(v => !v)}
+            className="text-gray-600 hover:text-gray-400 transition-colors"
+            title="How this forecast works"
+          >
+            <Info className="w-4 h-4" />
+          </button>
+        </div>
         <span className="text-xs font-mono text-green-400">
           Expected: {formatCurrency(totalExpected)}
         </span>
       </div>
+
+      {showInfo && (
+        <div className="mb-4 px-4 py-3 rounded-lg bg-blue-950/30 border border-blue-800/40 text-xs text-blue-200 space-y-1.5">
+          <p className="font-semibold text-blue-300">How revenue is forecasted</p>
+          <p>
+            The forecast is built from your active bid pipeline. Each opportunity in your pipeline is assessed for its win likelihood based on your firm's NAICS alignment, past performance, set-aside eligibility, agency relationships, and competitive landscape — then combined with the contract's estimated value.
+          </p>
+          <p>
+            The three forecast lines represent a range of outcomes across your entire pipeline:
+          </p>
+          <ul className="space-y-1 pl-3 border-l border-blue-700">
+            <li><span className="text-green-400 font-medium">Optimistic (P90)</span> — if your stronger bids come through at or above historical award averages.</li>
+            <li><span className="text-blue-400 font-medium">Expected</span> — the probability-weighted midpoint across all active opportunities. This is the most realistic planning figure.</li>
+            <li><span className="text-red-400 font-medium">Conservative (P10)</span> — if only your highest-confidence bids close and at the lower end of value ranges.</li>
+          </ul>
+          <p className="text-blue-400 font-medium mt-2">Accuracy guidance</p>
+          <p>
+            Forecasts are most reliable 1–3 months out and become less precise beyond 6 months as market conditions, agency budgets, and competitive dynamics shift. Use the Expected line as your planning baseline and treat the range as your risk corridor. Accuracy improves as you add more awarded contracts to your track record — the model continuously calibrates to your firm's actual win rate.
+          </p>
+          <p className="text-yellow-400/80 text-[11px] italic">
+            ⚠ These are probabilistic projections, not guaranteed revenue. They should inform planning decisions, not replace them.
+          </p>
+        </div>
+      )}
+
       {!data || data.length === 0 ? (
         <p className="text-sm text-gray-500 text-center py-8">No pipeline data for forecasting</p>
       ) : (

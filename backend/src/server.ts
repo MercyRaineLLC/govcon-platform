@@ -17,6 +17,7 @@ import { logger } from './utils/logger'
 import { errorHandler, notFoundHandler } from './middleware/errorHandler'
 import { startScoringWorker } from './workers/scoringWorker'
 import { startEnrichmentWorker } from './workers/enrichmentWorker'
+import { startRecalibrationWorker } from './workers/recalibrationWorker'
 
 // Route imports
 import authRoutes from './routes/auth'
@@ -41,6 +42,7 @@ import addonsRoutes from './routes/addons'
 import proposalAssistRoutes from './routes/proposalAssist'
 import stateMunicipalRoutes from './routes/stateMunicipal'
 import subcontractingRoutes from './routes/subcontracting'
+import contractsRoutes from './routes/contracts'
 
 async function bootstrap(): Promise<void> {
   const app = express()
@@ -162,6 +164,7 @@ async function bootstrap(): Promise<void> {
   apiRouter.use('/proposal-assist', proposalAssistRoutes)
   apiRouter.use('/state-municipal', stateMunicipalRoutes)
   apiRouter.use('/subcontracting', subcontractingRoutes)
+  apiRouter.use('/contracts', contractsRoutes)
 
   app.use('/api', apiRouter)
 
@@ -179,6 +182,7 @@ async function bootstrap(): Promise<void> {
 
   const scoringWorker = startScoringWorker()
   const enrichmentWorker = startEnrichmentWorker()
+  const recalibrationWorker = startRecalibrationWorker()
 
   // -------------------------------------------------------------
   // Start HTTP Server
@@ -202,6 +206,7 @@ async function bootstrap(): Promise<void> {
 
       await scoringWorker.close()
       await enrichmentWorker.close()
+      await recalibrationWorker.close()
       logger.info('Workers stopped')
 
       await disconnectDatabase()

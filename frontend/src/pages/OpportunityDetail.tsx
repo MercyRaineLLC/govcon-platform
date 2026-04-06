@@ -115,6 +115,22 @@ export default function OpportunityDetail() {
   const [proposalOutline, setProposalOutline] = useState<any>(null)
   const [proposalGenerating, setProposalGenerating] = useState(false)
   const [proposalError, setProposalError] = useState('')
+  const [draftGenerating, setDraftGenerating] = useState(false)
+  const [draftDownloadUrl, setDraftDownloadUrl] = useState<string | null>(null)
+  const [draftFileName, setDraftFileName] = useState('')
+  const [tokenBalance, setTokenBalance] = useState<number | null>(null)
+
+  // Q&A interview state
+  const [proposalStep, setProposalStep] = useState<'idle' | 'outlined' | 'answering'>('idle')
+  const [proposalQuestions, setProposalQuestions] = useState<any[]>([])
+  const [proposalAnswers, setProposalAnswers] = useState<Record<string, { answer: string; aiDecide: boolean }>>({})
+  const [questionsLoading, setQuestionsLoading] = useState(false)
+
+  // Bid forms upload state
+  const [bidForms, setBidForms] = useState<Array<{ name: string; text: string }>>([])
+  const [bidFormUploading, setBidFormUploading] = useState(false)
+  const [bidFormError, setBidFormError] = useState('')
+  const bidFormInputRef = useRef<HTMLInputElement>(null)
 
   const { hasAddon } = useTier()
 
@@ -210,24 +226,127 @@ export default function OpportunityDetail() {
     } catch { /* non-fatal */ }
   }
 
+  const handleProposalError = (err: any, fallback: string) => {
+    const code = err?.response?.data?.error
+    const status = err?.response?.status
+    if (code === 'NO_TOKENS') {
+      setProposalError(err?.response?.data?.message || 'No proposal tokens remaining. Purchase more in Billing.')
+    } else if (code === 'AI_LIMIT') {
+      setProposalError(err?.response?.data?.message || 'AI call limit reached.')
+    } else if (code === 'NO_AI_KEY') {
+      setProposalError('AI key not configured — go to Settings → AI Intelligence Provider.')
+    } else if (code === 'RATE_LIMITED' || status === 429) {
+      setProposalError('Claude rate limit reached — please wait 60 seconds and try again.')
+    } else {
+      setProposalError(err?.response?.data?.message || fallback)
+    }
+  }
+
   const handleGenerateProposalOutline = async () => {
     if (!id) return
     setProposalGenerating(true)
     setProposalError('')
+    setProposalStep('idle')
+    setProposalQuestions([])
+    setProposalAnswers({})
     try {
       const res = await proposalAssistApi.generateOutline(id)
       setProposalOutline(res.data)
+      if (res.tokensRemaining !== undefined) setTokenBalance(res.tokensRemaining)
+      setProposalStep('outlined')
+      // Auto-fetch questions after outline
+      handleGenerateQuestions(res.data)
     } catch (err: any) {
-      const code = err?.response?.data?.error
-      if (code === 'AI_LIMIT') {
-        setProposalError(err?.response?.data?.message || 'AI call limit reached')
-      } else if (code === 'NO_AI_KEY') {
-        setProposalError('AI key not configured — contact your administrator.')
-      } else {
-        setProposalError(err?.response?.data?.message || 'Generation failed')
-      }
+      handleProposalError(err, 'Generation failed — check your AI key in Settings.')
     } finally {
       setProposalGenerating(false)
+    }
+  }
+
+  const handleGenerateQuestions = async (outline: any) => {
+    if (!id) return
+    setQuestionsLoading(true)
+    try {
+      const res = await proposalAssistApi.generateQuestions(id, outline)
+      setProposalQuestions(res.data ?? [])
+      setProposalStep('answering')
+    } catch {
+      // Non-fatal — user can still generate draft without Q&A
+      setProposalStep('outlined')
+    } finally {
+      setQuestionsLoading(false)
+    }
+  }
+
+  const handleSkipAllQuestions = () => {
+    const aiAll: Record<string, { answer: string; aiDecide: boolean }> = {}
+    proposalQuestions.forEach(q => { aiAll[q.id] = { answer: '', aiDecide: true } })
+    setProposalAnswers(aiAll)
+  }
+
+  const handleBidFormUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !id) return
+    setBidFormUploading(true)
+    setBidFormError('')
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await import('../services/api').then(m => m.api.post(
+        `/proposal-assist/${id}/extract-form`,
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 60000 }
+      ))
+      if (res.data?.success) {
+        setBidForms(prev => [...prev, { name: res.data.fileName, text: res.data.text }])
+      } else {
+        setBidFormError('Failed to extract form content.')
+      }
+    } catch (err: any) {
+      setBidFormError(err?.response?.data?.error || 'Upload failed — check file format.')
+    } finally {
+      setBidFormUploading(false)
+      if (bidFormInputRef.current) bidFormInputRef.current.value = ''
+    }
+  }
+
+  const handleGenerateDraftPdf = async () => {
+    if (!id) return
+    setDraftGenerating(true)
+    setProposalError('')
+    setDraftDownloadUrl(null)
+    setDraftFileName('')
+    try {
+      const answersArray = proposalQuestions.map(q => ({
+        questionId: q.id,
+        category: q.category,
+        question: q.question,
+        answer: proposalAnswers[q.id]?.answer ?? '',
+        aiDecide: proposalAnswers[q.id]?.aiDecide ?? false,
+      }))
+      const bidFormContext = bidForms.length > 0
+        ? bidForms.map(f => `[${f.name}]\n${f.text}`).join('\n\n---\n\n').slice(0, 4000)
+        : undefined
+      const blob = await proposalAssistApi.generateDraftPdf(id, answersArray, undefined, bidFormContext)
+      const url = URL.createObjectURL(blob)
+      const fileName = `Proposal_Draft_${id.slice(0, 8)}.pdf`
+      // Store URL so user can click the download link manually (browser popup blockers
+      // often block programmatic a.click() from async callbacks)
+      setDraftDownloadUrl(url)
+      setDraftFileName(fileName)
+      // Also attempt auto-download as a convenience
+      const a = document.createElement('a')
+      a.href = url
+      a.download = fileName
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      // Deduct 5 tokens from local display
+      setTokenBalance(prev => prev !== null ? Math.max(0, prev - 5) : null)
+    } catch (err: any) {
+      handleProposalError(err, 'Draft generation failed — check your AI key in Settings.')
+    } finally {
+      setDraftGenerating(false)
     }
   }
 
@@ -243,6 +362,11 @@ export default function OpportunityDetail() {
     setGuidanceError('')
     setProposalOutline(null)
     setProposalError('')
+    setProposalStep('idle')
+    setProposalQuestions([])
+    setProposalAnswers({})
+    setBidForms([])
+    setBidFormError('')
     setClientScore(null)
     setScoreError('')
     setAnalyzeStatus('idle')
@@ -258,7 +382,7 @@ export default function OpportunityDetail() {
     queryKey: ['clients-list'],
     queryFn: () => clientsApi.list({ limit: 200 }),
   })
-  const clients: any[] = clientsData?.data ?? []
+  const clients: any[] = (clientsData?.data ?? []).slice().sort((a: any, b: any) => (b.probabilityScore ?? 0) - (a.probabilityScore ?? 0))
 
   const runClientScore = async (clientId: string) => {
     if (!clientId || !id) return
@@ -637,7 +761,7 @@ ${data.amendments.map(a => `
 
 <!-- ═══ FOOTER ═══ -->
 <div class="footer">
-  <span>GovCon Advisory Intelligence Platform · Exported ${now}</span>
+  <span>Mr GovCon — Mercy Raine LLC · Exported ${now}</span>
   <span>CONFIDENTIAL — Internal Use Only</span>
 </div>
 
@@ -1372,7 +1496,7 @@ ${data.amendments.map(a => `
 
         {guidanceGenerating && (
           <p className="text-gray-500 text-sm flex items-center gap-2">
-            <Loader className="w-4 h-4 animate-spin" /> Analyzing solicitation text with AI — this may take 15–30 seconds...
+            <Loader className="w-4 h-4 animate-spin" /> Analyzing solicitation text with AI...
           </p>
         )}
 
@@ -1745,157 +1869,343 @@ ${data.amendments.map(a => `
       })()}
 
       {/* ── PROPOSAL WRITING ASSISTANT ───────────────────────── */}
-      {hasAddon('proposal_assistant') ? (
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-200 flex items-center gap-2">
-              <Lightbulb className="w-5 h-5 text-amber-400" />
-              Proposal Writing Assistant
-              <span className="text-xs font-normal text-amber-500 bg-amber-900/20 border border-amber-700/30 px-2 py-0.5 rounded-full ml-1">Add-On</span>
-            </h2>
-            <button
-              onClick={handleGenerateProposalOutline}
-              disabled={proposalGenerating}
-              className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg transition-colors"
-              style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', color: '#f59e0b' }}
-            >
-              {proposalGenerating
-                ? <><Loader className="w-3.5 h-3.5 animate-spin" /> Generating...</>
-                : <><Zap className="w-3.5 h-3.5" /> {proposalOutline ? 'Regenerate Outline' : 'Generate Proposal Outline'}</>}
-            </button>
-          </div>
-
-          {proposalError && <p className="text-red-400 text-xs mb-3">{proposalError}</p>}
-
-          {proposalGenerating && (
-            <p className="text-gray-500 text-sm flex items-center gap-2">
-              <Loader className="w-4 h-4 animate-spin" /> Analyzing requirements and generating proposal outline — this may take 15–30 seconds...
-            </p>
-          )}
-
-          {!proposalOutline && !proposalGenerating && (
-            <div className="bg-gray-900/50 border border-gray-800 rounded-lg px-4 py-4 text-sm text-gray-500">
-              <p className="font-medium text-gray-400 mb-1">No proposal outline yet</p>
-              <p>Click <span className="text-amber-400">Generate Proposal Outline</span> to get an AI-generated proposal structure — executive summary, win themes, section breakdown, and discriminators based on this opportunity's requirements.</p>
-              <p className="mt-2 text-xs text-gray-600">Tip: Generate the Compliance Matrix first for best results.</p>
+      {hasAddon('proposal_assistant') ? (() => {
+        const CATEGORY_COLORS: Record<string, string> = {
+          PRICING: 'bg-green-900/40 text-green-300 border-green-700/50',
+          TECHNICAL: 'bg-blue-900/40 text-blue-300 border-blue-700/50',
+          PERSONNEL: 'bg-purple-900/40 text-purple-300 border-purple-700/50',
+          PAST_PERFORMANCE: 'bg-amber-900/40 text-amber-300 border-amber-700/50',
+          TEAMING: 'bg-cyan-900/40 text-cyan-300 border-cyan-700/50',
+          CERTIFICATIONS: 'bg-pink-900/40 text-pink-300 border-pink-700/50',
+          OTHER: 'bg-gray-800 text-gray-400 border-gray-700',
+        }
+        return (
+          <div className="card">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-lg font-semibold text-gray-200 flex items-center gap-2">
+                <Lightbulb className="w-5 h-5 text-amber-400" />
+                Proposal Writing Assistant
+                <span className="text-xs font-normal text-amber-500 bg-amber-900/20 border border-amber-700/30 px-2 py-0.5 rounded-full ml-1">Add-On</span>
+              </h2>
+              {/* Token balance */}
+              <div className="flex items-center gap-3">
+                {tokenBalance !== null && (
+                  <span className="text-xs text-gray-400 flex items-center gap-1">
+                    🪙 <span className={tokenBalance === 0 ? 'text-red-400 font-medium' : 'text-gray-300'}>{tokenBalance} token{tokenBalance !== 1 ? 's' : ''}</span>
+                    <Link to="/billing" className="text-blue-400 hover:text-blue-300 ml-1">Buy more →</Link>
+                  </span>
+                )}
+                <button
+                  onClick={handleGenerateProposalOutline}
+                  disabled={proposalGenerating || draftGenerating}
+                  className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg transition-colors"
+                  style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', color: '#f59e0b' }}
+                  title="Costs 1 proposal token"
+                >
+                  {proposalGenerating
+                    ? <><Loader className="w-3.5 h-3.5 animate-spin" /> Generating...</>
+                    : <><Zap className="w-3.5 h-3.5" /> {proposalOutline ? 'Regenerate Outline' : 'Generate Outline'} (1 token)</>}
+                </button>
+              </div>
             </div>
-          )}
 
-          {proposalOutline && !proposalGenerating && (
-            <div className="space-y-5">
-              {/* Executive Summary */}
-              {proposalOutline.executiveSummary && (
-                <div className="bg-blue-950/30 border border-blue-800/40 rounded-lg p-4">
-                  <p className="text-xs text-blue-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-                    <FileText className="w-3.5 h-3.5" /> Executive Summary Approach
-                  </p>
-                  <p className="text-sm text-gray-200 leading-relaxed">{proposalOutline.executiveSummary}</p>
-                </div>
-              )}
-
-              {/* Win Themes */}
-              {proposalOutline.winThemes?.length > 0 && (
-                <div>
-                  <p className="text-xs text-amber-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-                    <Trophy className="w-3.5 h-3.5" /> Win Themes
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {proposalOutline.winThemes.map((theme: string, i: number) => (
-                      <span key={i} className="text-xs bg-amber-900/20 text-amber-300 border border-amber-700/30 px-2 py-1 rounded">
-                        {theme}
-                      </span>
-                    ))}
+            {/* Step indicator */}
+            <div className="flex items-center gap-2 mb-4 mt-2">
+              {(['Step 1: Outline', 'Step 2: Answer Questions', 'Step 3: Generate Draft'] as const).map((label, i) => {
+                const active = i === 0 ? proposalStep !== 'idle' : i === 1 ? proposalStep === 'answering' : false
+                const done = i === 0 ? proposalStep !== 'idle' : false
+                return (
+                  <div key={i} className="flex items-center gap-1.5">
+                    {i > 0 && <span className="text-gray-700 text-xs">›</span>}
+                    <span className={`text-xs px-2 py-0.5 rounded-full border ${active || done ? 'bg-amber-900/30 text-amber-300 border-amber-700/40' : 'bg-gray-900 text-gray-600 border-gray-800'}`}>
+                      {label}
+                    </span>
                   </div>
-                </div>
-              )}
+                )
+              })}
+            </div>
 
-              {/* Sections */}
-              {proposalOutline.sections?.length > 0 && (
-                <div>
-                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
-                    <ClipboardList className="w-3.5 h-3.5" /> Proposed Sections
-                  </p>
-                  <div className="overflow-x-auto rounded-lg border border-gray-800">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-800 bg-gray-900/60">
-                          <th className="text-left px-3 py-2 text-xs text-gray-500 font-medium">Section</th>
-                          <th className="text-left px-3 py-2 text-xs text-gray-500 font-medium">Description</th>
-                          <th className="text-left px-3 py-2 text-xs text-gray-500 font-medium w-28">Pages</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {proposalOutline.sections.map((sec: any, i: number) => (
-                          <tr key={i} className="border-b border-gray-800/60 hover:bg-gray-800/20">
-                            <td className="px-3 py-2.5">
-                              <p className="text-gray-200 font-medium text-xs">{sec.title}</p>
-                              {sec.keyPoints?.length > 0 && (
-                                <div className="flex flex-wrap gap-1 mt-1">
-                                  {sec.keyPoints.map((kp: string, j: number) => (
-                                    <span key={j} className="text-[10px] bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded">{kp}</span>
-                                  ))}
-                                </div>
-                              )}
-                            </td>
-                            <td className="px-3 py-2.5 text-xs text-gray-400">{sec.description}</td>
-                            <td className="px-3 py-2.5 text-xs text-gray-500 font-mono">{sec.pageEstimate}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
+            {proposalError && (
+              <div className="mb-3 px-3 py-2 rounded-lg bg-red-950/30 border border-red-800/40 text-xs text-red-300 flex items-start gap-2">
+                <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                <span>{proposalError} {proposalError.includes('token') && <Link to="/billing" className="underline ml-1">Purchase tokens →</Link>}</span>
+              </div>
+            )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Discriminators */}
-                {proposalOutline.discriminators?.length > 0 && (
-                  <div className="bg-green-950/20 border border-green-800/30 rounded-lg p-3">
-                    <p className="text-xs text-green-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-                      <Star className="w-3.5 h-3.5" /> Key Discriminators
+            {proposalGenerating && (
+              <p className="text-gray-500 text-sm flex items-center gap-2 mb-3">
+                <Loader className="w-4 h-4 animate-spin" /> Generating proposal outline...
+              </p>
+            )}
+
+            {/* Step 1 idle state */}
+            {proposalStep === 'idle' && !proposalGenerating && (
+              <div className="bg-gray-900/50 border border-gray-800 rounded-lg px-4 py-4 text-sm text-gray-500">
+                <p className="font-medium text-gray-400 mb-1">Start with Step 1 — Generate an Outline</p>
+                <p>The AI will analyze this opportunity and create an executive summary, win themes, and section structure. Then it will ask you targeted questions to personalize your draft.</p>
+                <p className="mt-2 text-xs text-gray-600">Tip: Generate the Compliance Matrix first for best results. Outline costs 1 token · Full Draft PDF costs 5 tokens.</p>
+              </div>
+            )}
+
+            {/* Outline display */}
+            {proposalOutline && !proposalGenerating && (
+              <div className="space-y-4">
+                {proposalOutline.executiveSummary && (
+                  <div className="bg-blue-950/30 border border-blue-800/40 rounded-lg p-4">
+                    <p className="text-xs text-blue-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                      <FileText className="w-3.5 h-3.5" /> Executive Summary Approach
                     </p>
-                    <ul className="space-y-1.5">
-                      {proposalOutline.discriminators.map((d: string, i: number) => (
-                        <li key={i} className="text-xs text-gray-300 flex gap-2">
-                          <CheckCircle className="w-3.5 h-3.5 text-green-500 flex-shrink-0 mt-0.5" />
-                          {d}
-                        </li>
-                      ))}
-                    </ul>
+                    <p className="text-sm text-gray-200 leading-relaxed">{proposalOutline.executiveSummary}</p>
                   </div>
                 )}
-
-                {/* Risk Mitigations */}
-                {proposalOutline.riskMitigations?.length > 0 && (
-                  <div className="bg-orange-950/20 border border-orange-800/30 rounded-lg p-3">
-                    <p className="text-xs text-orange-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-                      <AlertTriangle className="w-3.5 h-3.5" /> Risk Mitigations
+                {proposalOutline.winThemes?.length > 0 && (
+                  <div>
+                    <p className="text-xs text-amber-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                      <Trophy className="w-3.5 h-3.5" /> Win Themes
                     </p>
-                    <ul className="space-y-1.5">
-                      {proposalOutline.riskMitigations.map((r: string, i: number) => (
-                        <li key={i} className="text-xs text-gray-300 flex gap-2">
-                          <span className="text-orange-500 flex-shrink-0">!</span>
-                          {r}
-                        </li>
+                    <div className="flex flex-wrap gap-2">
+                      {proposalOutline.winThemes.map((theme: string, i: number) => (
+                        <span key={i} className="text-xs bg-amber-900/20 text-amber-300 border border-amber-700/30 px-2 py-1 rounded">{theme}</span>
                       ))}
-                    </ul>
+                    </div>
+                  </div>
+                )}
+                {proposalOutline.sections?.length > 0 && (
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+                      <ClipboardList className="w-3.5 h-3.5" /> Proposed Sections
+                    </p>
+                    <div className="overflow-x-auto rounded-lg border border-gray-800">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-gray-800 bg-gray-900/60">
+                            <th className="text-left px-3 py-2 text-xs text-gray-500 font-medium">Section</th>
+                            <th className="text-left px-3 py-2 text-xs text-gray-500 font-medium">Description</th>
+                            <th className="text-left px-3 py-2 text-xs text-gray-500 font-medium w-28">Pages</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {proposalOutline.sections.map((sec: any, i: number) => (
+                            <tr key={i} className="border-b border-gray-800/60 hover:bg-gray-800/20">
+                              <td className="px-3 py-2.5">
+                                <p className="text-gray-200 font-medium text-xs">{sec.title}</p>
+                                {sec.keyPoints?.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {sec.keyPoints.map((kp: string, j: number) => (
+                                      <span key={j} className="text-[10px] bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded">{kp}</span>
+                                    ))}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-3 py-2.5 text-xs text-gray-400">{sec.description}</td>
+                              <td className="px-3 py-2.5 text-xs text-gray-500 font-mono">{sec.pageEstimate}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {proposalOutline.discriminators?.length > 0 && (
+                    <div className="bg-green-950/20 border border-green-800/30 rounded-lg p-3">
+                      <p className="text-xs text-green-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                        <Star className="w-3.5 h-3.5" /> Key Discriminators
+                      </p>
+                      <ul className="space-y-1.5">
+                        {proposalOutline.discriminators.map((d: string, i: number) => (
+                          <li key={i} className="text-xs text-gray-300 flex gap-2">
+                            <CheckCircle className="w-3.5 h-3.5 text-green-500 flex-shrink-0 mt-0.5" />{d}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {proposalOutline.riskMitigations?.length > 0 && (
+                    <div className="bg-orange-950/20 border border-orange-800/30 rounded-lg p-3">
+                      <p className="text-xs text-orange-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                        <AlertTriangle className="w-3.5 h-3.5" /> Risk Mitigations
+                      </p>
+                      <ul className="space-y-1.5">
+                        {proposalOutline.riskMitigations.map((r: string, i: number) => (
+                          <li key={i} className="text-xs text-gray-300 flex gap-2">
+                            <span className="text-orange-500 flex-shrink-0">!</span>{r}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+                {proposalOutline.pastPerformanceHint && (
+                  <div className="bg-purple-950/20 border border-purple-800/30 rounded-lg p-3">
+                    <p className="text-xs text-purple-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                      <UserCheck className="w-3.5 h-3.5" /> Past Performance Guidance
+                    </p>
+                    <p className="text-xs text-gray-300">{proposalOutline.pastPerformanceHint}</p>
                   </div>
                 )}
               </div>
+            )}
 
-              {/* Past Performance Hint */}
-              {proposalOutline.pastPerformanceHint && (
-                <div className="bg-purple-950/20 border border-purple-800/30 rounded-lg p-3">
-                  <p className="text-xs text-purple-400 uppercase tracking-wider mb-1 flex items-center gap-1">
-                    <UserCheck className="w-3.5 h-3.5" /> Past Performance Guidance
-                  </p>
-                  <p className="text-xs text-gray-300">{proposalOutline.pastPerformanceHint}</p>
+            {/* Step 2 — Q&A Interview */}
+            {proposalStep !== 'idle' && !proposalGenerating && (
+              <div className="mt-5 border-t border-gray-800 pt-5">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-gray-200 flex items-center gap-2">
+                    <Send className="w-4 h-4 text-blue-400" />
+                    Step 2 — Answer Questions to Strengthen Your Draft
+                  </h3>
+                  <button
+                    onClick={handleSkipAllQuestions}
+                    className="text-xs text-gray-500 hover:text-gray-300 underline"
+                  >
+                    Let AI handle everything
+                  </button>
                 </div>
-              )}
-            </div>
-          )}
-        </div>
-      ) : (
+
+                {questionsLoading ? (
+                  <p className="text-xs text-gray-500 flex items-center gap-2">
+                    <Loader className="w-3.5 h-3.5 animate-spin" /> Generating targeted questions...
+                  </p>
+                ) : proposalQuestions.length === 0 ? (
+                  <div className="flex items-center gap-3 text-xs text-gray-500">
+                    <span>Questions not loaded.</span>
+                    <button
+                      onClick={() => proposalOutline && handleGenerateQuestions(proposalOutline)}
+                      className="text-blue-400 hover:text-blue-300 underline"
+                    >
+                      Load questions
+                    </button>
+                    <span className="text-gray-700">or click "Let AI handle everything" above to skip.</span>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {proposalQuestions.map((q: any) => {
+                      const ans = proposalAnswers[q.id] ?? { answer: '', aiDecide: false }
+                      return (
+                        <div key={q.id} className="bg-gray-900/60 border border-gray-800 rounded-lg p-3">
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${CATEGORY_COLORS[q.category] ?? CATEGORY_COLORS.OTHER}`}>
+                                {q.category.replace(/_/g, ' ')}
+                              </span>
+                              {q.required && <span className="text-[10px] text-amber-400">★ Priority</span>}
+                              <span className="text-xs text-gray-300">{q.question}</span>
+                            </div>
+                            <label className="flex items-center gap-1.5 flex-shrink-0 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={ans.aiDecide}
+                                onChange={e => setProposalAnswers(prev => ({ ...prev, [q.id]: { ...ans, aiDecide: e.target.checked } }))}
+                                className="w-3.5 h-3.5 accent-blue-500"
+                              />
+                              <span className="text-[10px] text-gray-500 whitespace-nowrap">AI decide</span>
+                            </label>
+                          </div>
+                          {!ans.aiDecide && (
+                            <input
+                              type="text"
+                              value={ans.answer}
+                              onChange={e => setProposalAnswers(prev => ({ ...prev, [q.id]: { ...ans, answer: e.target.value } }))}
+                              placeholder={q.hint}
+                              className="w-full bg-gray-800 border border-gray-700 rounded text-xs text-gray-200 px-2.5 py-1.5 focus:outline-none focus:border-blue-500 placeholder-gray-600"
+                            />
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Step 3 — Generate Draft */}
+            {proposalStep !== 'idle' && !proposalGenerating && (
+              <div className="mt-5 border-t border-gray-800 pt-4 space-y-4">
+
+                {/* Bid Forms Upload */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold text-gray-400 flex items-center gap-1.5">
+                      <Upload className="w-3.5 h-3.5 text-amber-400" />
+                      Bid Forms <span className="text-gray-600 font-normal">(optional — PDF, Excel, CSV, Word)</span>
+                    </p>
+                    <button
+                      onClick={() => bidFormInputRef.current?.click()}
+                      disabled={bidFormUploading}
+                      className="text-xs px-2.5 py-1 rounded-lg flex items-center gap-1 transition-colors"
+                      style={{ background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.25)', color: '#f59e0b' }}
+                    >
+                      {bidFormUploading ? <><Loader className="w-3 h-3 animate-spin" /> Extracting...</> : <><Upload className="w-3 h-3" /> Upload Form</>}
+                    </button>
+                    <input
+                      ref={bidFormInputRef}
+                      type="file"
+                      className="hidden"
+                      accept=".pdf,.doc,.docx,.xlsx,.xls,.csv,.txt"
+                      onChange={handleBidFormUpload}
+                    />
+                  </div>
+                  {bidFormError && <p className="text-xs text-red-400 mb-1">{bidFormError}</p>}
+                  {bidForms.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {bidForms.map((f, i) => (
+                        <div key={i} className="flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-full"
+                          style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', color: '#4ade80' }}>
+                          <FileText className="w-3 h-3" />
+                          {f.name}
+                          <button onClick={() => setBidForms(prev => prev.filter((_, j) => j !== i))}
+                            className="text-gray-500 hover:text-red-400 ml-0.5">×</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {bidForms.length === 0 && !bidFormUploading && (
+                    <p className="text-[11px] text-gray-600">Upload government bid forms (SF-1449, SF-33, etc.) so the AI can incorporate required fields into the proposal.</p>
+                  )}
+                </div>
+
+                {/* Generate Draft */}
+                <div className="flex items-center justify-between border-t border-gray-800/60 pt-3">
+                  <p className="text-xs text-gray-500">
+                    {draftGenerating
+                      ? 'Writing full proposal draft — this takes 15–30 seconds...'
+                      : draftDownloadUrl
+                        ? 'Draft ready! Click Download if it did not save automatically.'
+                        : 'Ready to generate your full draft PDF. This will cost 5 proposal tokens.'}
+                  </p>
+                  <button
+                    onClick={handleGenerateDraftPdf}
+                    disabled={draftGenerating || questionsLoading || bidFormUploading}
+                    className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg transition-colors flex-shrink-0"
+                    style={{ background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.3)', color: '#22c55e' }}
+                  >
+                    {draftGenerating
+                      ? <><Loader className="w-3.5 h-3.5 animate-spin" /> Writing Draft...</>
+                      : <><FileDown className="w-3.5 h-3.5" /> Generate Full Draft PDF (5 tokens)</>}
+                  </button>
+                </div>
+                {draftDownloadUrl && (
+                  <div className="mt-3 flex items-center gap-3 p-3 rounded-lg"
+                    style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)' }}>
+                    <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                    <span className="text-sm text-green-300 flex-1">Draft generated successfully!</span>
+                    <a
+                      href={draftDownloadUrl}
+                      download={draftFileName}
+                      className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg font-medium"
+                      style={{ background: 'rgba(34,197,94,0.18)', border: '1px solid rgba(34,197,94,0.4)', color: '#4ade80' }}
+                    >
+                      <FileDown className="w-3.5 h-3.5" /> Download PDF
+                    </a>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })() : (
         <div className="card">
           <div className="flex items-start gap-4">
             <div className="p-3 rounded-xl flex-shrink-0"
@@ -1910,7 +2220,7 @@ ${data.amendments.map(a => `
                 </span>
               </div>
               <p className="text-sm text-slate-400 mb-3">
-                Turn your compliance matrix into a full proposal outline — executive summary, section drafts, discriminator suggestions, and win themes. Cuts proposal prep time by 60%.
+                AI-guided 3-step proposal workflow — outline, targeted Q&A interview, then a full draft PDF with your pricing, personnel, and win strategy woven in.
               </p>
               <Link
                 to="/billing"

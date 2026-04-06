@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   BarChart,
   Bar,
@@ -16,6 +17,8 @@ interface Stage {
 }
 
 export function PipelineFunnel({ stages }: { stages: Stage[] }) {
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null)
+
   return (
     <div className="card">
       <h3 className="font-semibold text-gray-200 mb-4">Opportunity Pipeline</h3>
@@ -39,9 +42,18 @@ export function PipelineFunnel({ stages }: { stages: Stage[] }) {
                 color: '#f3f4f6',
               }}
             />
-            <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+            <Bar
+              dataKey="count"
+              radius={[0, 4, 4, 0]}
+              onMouseLeave={() => setHoverIndex(null)}
+            >
               {stages.map((_, i) => (
-                <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                <Cell
+                  key={i}
+                  fill={hoverIndex === i ? '#ffffff' : COLORS[i % COLORS.length]}
+                  onMouseEnter={() => setHoverIndex(i)}
+                  style={{ cursor: 'pointer', transition: 'fill 0.15s ease' }}
+                />
               ))}
             </Bar>
           </BarChart>
