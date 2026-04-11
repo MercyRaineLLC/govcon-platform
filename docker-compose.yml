@@ -58,7 +58,7 @@ services:
       REDIS_URL: redis://redis:6379
       JWT_SECRET: dev-secret-change-in-production
       LOCALAI_BASE_URL: http://ollama:11434/v1
-      LOCALAI_MODEL: llama3.1:8b
+      LOCALAI_MODEL: mistral:7b-instruct
       GOOGLE_APPLICATION_CREDENTIALS: /app/adc.json
       GCP_PROJECT_ID: gov-con-491005
       BQ_DATASET: govcon_analytics

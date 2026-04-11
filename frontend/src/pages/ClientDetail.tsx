@@ -22,7 +22,29 @@ function InfoTip({ text }: { text: string }) {
     <span className="relative inline-flex items-center" onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
       <Info className="w-3.5 h-3.5 text-gray-600 hover:text-gray-400 cursor-help transition-colors" />
       {show && (
-        <span className="absolute left-5 top-0 z-50 w-64 bg-gray-800 border border-gray-700 text-xs text-gray-300 rounded-lg px-3 py-2 shadow-xl leading-relaxed whitespace-normal">
+        <span className="fixed z-[9999] w-72 bg-gray-800 border border-gray-700 text-xs text-gray-300 rounded-lg px-3 py-2 shadow-xl leading-relaxed whitespace-normal"
+          style={{ transform: 'translate(-50%, 8px)', left: '50%', top: 'auto', pointerEvents: 'none' }}
+          ref={(el) => {
+            if (el) {
+              const rect = el.parentElement?.getBoundingClientRect()
+              if (rect) {
+                el.style.left = rect.left + rect.width / 2 + 'px'
+                el.style.top = rect.bottom + 8 + 'px'
+                el.style.transform = 'translateX(-50%)'
+                // Keep within viewport
+                const elRect = el.getBoundingClientRect()
+                if (elRect.right > window.innerWidth - 8) {
+                  el.style.left = window.innerWidth - elRect.width - 8 + 'px'
+                  el.style.transform = 'none'
+                }
+                if (elRect.left < 8) {
+                  el.style.left = '8px'
+                  el.style.transform = 'none'
+                }
+              }
+            }
+          }}
+        >
           {text}
         </span>
       )}

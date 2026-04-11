@@ -18,8 +18,9 @@ export function buildProposalPdf(draft: ProposalDraft): Promise<Buffer> {
     doc.on('end', () => resolve(Buffer.concat(chunks)))
     doc.on('error', reject)
 
+    const validSections = draft.sections.filter(s => s.content && s.content.trim().length > 10)
+
     // ── COVER PAGE ──────────────────────────────────────────────
-    // Full-bleed navy header bar
     doc.rect(0, 0, doc.page.width, 220).fill(NAVY)
 
     doc.fontSize(9).fillColor('#8899bb').font('Helvetica')
@@ -35,7 +36,7 @@ export function buildProposalPdf(draft: ProposalDraft): Promise<Buffer> {
     // Gold divider line
     doc.rect(0, 220, doc.page.width, 4).fill(GOLD)
 
-    // Date / Prepared by block
+    // Date / classification block
     doc.rect(0, 224, doc.page.width, 56).fill('#f7f8fa')
     doc.fontSize(10).fillColor(MID_GRAY).font('Helvetica')
        .text(`Date Prepared: ${draft.preparedDate}`, 72, 240)
@@ -43,21 +44,33 @@ export function buildProposalPdf(draft: ProposalDraft): Promise<Buffer> {
 
     doc.rect(0, 280, doc.page.width, 4).fill(LIGHT_GRAY)
 
-    doc.moveDown(4)
+    // Cover page section listing (below the header)
+    doc.y = 320
+    doc.fontSize(12).fillColor(NAVY).font('Helvetica-Bold')
+       .text('PREPARED BY', 72, doc.y)
+    doc.moveDown(0.4)
+    doc.fontSize(10).fillColor(MID_GRAY).font('Helvetica')
+       .text('Mr GovCon — AI-Powered Proposal Intelligence', 72, doc.y)
+    doc.moveDown(2)
+
+    doc.fontSize(10).fillColor(DARK_GRAY).font('Helvetica-Bold')
+       .text('DOCUMENT CONTENTS', 72, doc.y)
+    doc.moveDown(0.5)
+    validSections.forEach((section, i) => {
+      doc.fontSize(10).fillColor(TEXT).font('Helvetica')
+         .text(`${i + 1}.  ${section.title}`, 90, doc.y)
+      doc.moveDown(0.3)
+    })
 
     // ── TABLE OF CONTENTS ───────────────────────────────────────
-    const validSections = draft.sections.filter(s => s.content && s.content.trim().length > 10)
-
     doc.addPage()
     drawSectionHeader(doc, 'TABLE OF CONTENTS')
     doc.moveDown(0.5)
 
     validSections.forEach((section, i) => {
       doc.fontSize(11).fillColor(TEXT).font('Helvetica')
-         .text(`${i + 1}.  ${section.title}`, 72, doc.y, { continued: true })
-      doc.fillColor(MID_GRAY).font('Helvetica').fontSize(10)
-         .text(` `, { align: 'right' })
-      doc.moveDown(0.4)
+         .text(`${i + 1}.  ${section.title}`, 72, doc.y)
+      doc.moveDown(0.5)
     })
 
     // ── PROPOSAL SECTIONS ────────────────────────────────────────
@@ -78,23 +91,33 @@ export function buildProposalPdf(draft: ProposalDraft): Promise<Buffer> {
       doc.y = headerBottom + 16
       doc.x = 72
 
-      // Section body text
+      // Section body text — split on double newlines for paragraph breaks
       const paragraphs = section.content.split(/\n{2,}/).filter(p => p.trim())
       paragraphs.forEach((para, pi) => {
-        doc.fontSize(10.5).fillColor(TEXT).font('Helvetica')
-           .text(para.trim(), 72, doc.y, {
-             width: doc.page.width - 144,
-             align: 'justify',
-             lineGap: 2,
-           })
+        // Handle single newlines within paragraphs as line breaks
+        const lines = para.trim().split(/\n/)
+        lines.forEach((line, li) => {
+          doc.fontSize(10.5).fillColor(TEXT).font('Helvetica')
+             .text(line.trim(), 72, doc.y, {
+               width: doc.page.width - 144,
+               align: 'justify',
+               lineGap: 2,
+             })
+          if (li < lines.length - 1) doc.moveDown(0.2)
+        })
         if (pi < paragraphs.length - 1) doc.moveDown(0.8)
       })
     })
 
+    // ── REMOVE TRAILING BLANK PAGES ─────────────────────────────
+    // PDFKit sometimes adds an extra page when content ends near bottom.
+    // Check if the last page has any meaningful content below the header area.
+    const range = doc.bufferedPageRange()
+    const totalPages = range.count
+
     // ── FOOTER ON ALL PAGES ─────────────────────────────────────
-    const pages = doc.bufferedPageRange()
-    for (let i = 0; i < pages.count; i++) {
-      doc.switchToPage(pages.start + i)
+    for (let i = 0; i < totalPages; i++) {
+      doc.switchToPage(range.start + i)
       const footerY = doc.page.height - 40
       doc.rect(0, footerY - 8, doc.page.width, 1).fill(LIGHT_GRAY)
       const footerTitle = draft.opportunityTitle.length > 60
@@ -102,7 +125,7 @@ export function buildProposalPdf(draft: ProposalDraft): Promise<Buffer> {
         : draft.opportunityTitle
       doc.fontSize(8).fillColor(MID_GRAY).font('Helvetica')
          .text(
-           `${footerTitle} | ${draft.agency} | Page ${i + 1} of ${pages.count}`,
+           `${footerTitle} | ${draft.agency} | Page ${i + 1} of ${totalPages}`,
            72, footerY,
            { width: doc.page.width - 144, align: 'center', lineBreak: false }
          )

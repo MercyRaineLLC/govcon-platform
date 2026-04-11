@@ -333,4 +333,59 @@ router.post('/:opportunityId/extract-form', upload.single('file'), async (req: A
   }
 })
 
+// ---------------------------------------------------------------
+// GET /api/proposal-assist/:opportunityId/saved
+// Returns saved outline, answers, and step so the user doesn't lose work
+// ---------------------------------------------------------------
+router.get('/:opportunityId/saved', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const consultingFirmId = getTenantId(req)
+    const opp = await prisma.opportunity.findFirst({
+      where: { id: req.params.opportunityId, consultingFirmId },
+      select: { savedProposalOutline: true, savedProposalAnswers: true, savedProposalStep: true },
+    })
+    if (!opp) throw new NotFoundError('Opportunity')
+    res.json({
+      success: true,
+      data: {
+        outline: opp.savedProposalOutline,
+        answers: opp.savedProposalAnswers,
+        step: opp.savedProposalStep,
+      },
+    })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ---------------------------------------------------------------
+// PUT /api/proposal-assist/:opportunityId/saved
+// Persists outline, answers, and step so navigating away doesn't lose work
+// ---------------------------------------------------------------
+router.put('/:opportunityId/saved', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const consultingFirmId = getTenantId(req)
+    const { outline, answers, step } = req.body
+
+    const opp = await prisma.opportunity.findFirst({
+      where: { id: req.params.opportunityId, consultingFirmId },
+      select: { id: true },
+    })
+    if (!opp) throw new NotFoundError('Opportunity')
+
+    await prisma.opportunity.update({
+      where: { id: opp.id },
+      data: {
+        savedProposalOutline: outline ?? undefined,
+        savedProposalAnswers: answers ?? undefined,
+        savedProposalStep: step ?? undefined,
+      },
+    })
+
+    res.json({ success: true })
+  } catch (err) {
+    next(err)
+  }
+})
+
 export default router

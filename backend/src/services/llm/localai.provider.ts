@@ -51,7 +51,14 @@ export class LocalAIProvider implements LLMProvider {
         model: this.model,
       }
     } catch (err) {
-      logger.error('LocalAI API error', { error: (err as Error).message })
+      const msg = (err as Error).message
+      logger.error('LocalAI API error', { error: msg, baseUrl: this.client.baseURL, model: this.model })
+      if (msg.includes('ECONNREFUSED') || msg.includes('ENOTFOUND') || msg.includes('fetch failed')) {
+        throw new Error(`Local AI (Ollama) is not reachable at ${this.client.baseURL}. Ensure the Ollama container is running: docker compose up -d ollama`)
+      }
+      if (msg.includes('model') && msg.includes('not found')) {
+        throw new Error(`Ollama model "${this.model}" not found. Pull it first: docker exec govcon_ollama ollama pull ${this.model}`)
+      }
       throw err
     }
   }

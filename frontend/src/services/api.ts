@@ -329,7 +329,18 @@ export const clientDocumentsApi = {
     api.get('/client-documents/templates', { params }).then((r) => r.data),
   downloadTemplate: async (templateId: string, fileName: string) => {
     const res = await api.get('/client-documents/templates/download/' + templateId, { responseType: 'blob' })
-    const url = URL.createObjectURL(res.data)
+    // Guard: if the blob is tiny or JSON (error response), don't download blank file
+    const blob: Blob = res.data
+    if (blob.size < 10) {
+      const text = await blob.text()
+      throw new Error(text || 'Downloaded file is empty — the template file may be missing from the server.')
+    }
+    if (blob.type === 'application/json') {
+      const text = await blob.text()
+      const err = JSON.parse(text)
+      throw new Error(err.error || 'Download failed')
+    }
+    const url = URL.createObjectURL(blob)
     const a = document.createElement('a'); a.href = url; a.download = fileName; a.click()
     URL.revokeObjectURL(url)
   },
@@ -370,6 +381,10 @@ export const proposalAssistApi = {
     api.post(`/proposal-assist/${opportunityId}/questions`, { outline }, { timeout: 60000 }).then(r => r.data),
   generateDraftPdf: (opportunityId: string, answers: any[], userGuidance?: string, bidFormContext?: string) =>
     api.post(`/proposal-assist/${opportunityId}/draft`, { answers, userGuidance, bidFormContext }, { timeout: 180000, responseType: 'blob' }).then(r => r.data),
+  getSaved: (opportunityId: string) =>
+    api.get(`/proposal-assist/${opportunityId}/saved`).then(r => r.data),
+  saveDraft: (opportunityId: string, data: { outline?: any; answers?: any; step?: string }) =>
+    api.put(`/proposal-assist/${opportunityId}/saved`, data).then(r => r.data),
 }
 
 // ---- Compliance Matrix ----

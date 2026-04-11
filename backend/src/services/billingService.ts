@@ -173,23 +173,37 @@ export async function getOrCreateSubscription(consultingFirmId: string) {
   })
 }
 
-const PROPOSAL_TOKENS_BY_TIER: Record<string, number> = {
-  starter:        0,
-  beta_lifetime:  20,
-  professional:   20,
-  enterprise:     50,
+// Monthly token allocation per tier (base allocation — every subscriber gets these)
+const BASE_TOKENS_BY_TIER: Record<string, number> = {
+  starter:        5,
+  beta_lifetime:  15,
+  professional:   15,
+  enterprise:     30,
   elite:          100,
 }
+
+// Bonus tokens when firm has proposal_assistant add-on (stacks on top of base)
+const ADDON_BONUS_TOKENS: Record<string, number> = {
+  starter:        10,
+  beta_lifetime:  15,
+  professional:   15,
+  enterprise:     25,
+  elite:          0, // Elite already includes everything
+}
+
+// One-time initial token grant for lifetime buyers
+const LIFETIME_INITIAL_GRANT = 200
 
 /** Called after plan change or proposal_assistant add-on purchase to grant the monthly allocation. */
 export async function refreshProposalTokens(consultingFirmId: string, planSlug: string): Promise<void> {
   const firm = await prisma.consultingFirm.findUnique({
     where: { id: consultingFirmId },
-    select: { purchasedAddons: true },
+    select: { purchasedAddons: true, proposalTokens: true },
   })
   const hasProposalAddon = firm?.purchasedAddons.includes('proposal_assistant') ?? false
-  const eligible = planSlug === 'elite' || hasProposalAddon
-  const tokens = eligible ? (PROPOSAL_TOKENS_BY_TIER[planSlug] ?? 0) : 0
+  const base = BASE_TOKENS_BY_TIER[planSlug] ?? 0
+  const bonus = hasProposalAddon ? (ADDON_BONUS_TOKENS[planSlug] ?? 0) : 0
+  const tokens = base + bonus
   await prisma.consultingFirm.update({
     where: { id: consultingFirmId },
     data: { proposalTokens: tokens, lastTokenRefreshAt: new Date() },
@@ -226,7 +240,11 @@ export async function activateLifetime(consultingFirmId: string) {
     },
     include: { plan: true },
   })
-  await refreshProposalTokens(consultingFirmId, 'beta_lifetime')
+  // Lifetime buyers get a generous initial token grant instead of the standard monthly refresh
+  await prisma.consultingFirm.update({
+    where: { id: consultingFirmId },
+    data: { proposalTokens: LIFETIME_INITIAL_GRANT, lastTokenRefreshAt: new Date() },
+  })
   return sub
 }
 

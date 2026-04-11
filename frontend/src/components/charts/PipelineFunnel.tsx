@@ -27,12 +27,13 @@ export function PipelineFunnel({ stages }: { stages: Stage[] }) {
       ) : (
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={stages} layout="vertical" margin={{ left: 10, right: 20 }}>
-            <XAxis type="number" tick={{ fill: '#9ca3af', fontSize: 12 }} />
+            <XAxis type="number" tick={{ fill: '#9ca3af', fontSize: 12 }} stroke="#374151" />
             <YAxis
               type="category"
               dataKey="label"
               width={80}
-              tick={{ fill: '#d1d5db', fontSize: 12 }}
+              tick={{ fill: '#e2e8f0', fontSize: 12 }}
+              stroke="#374151"
             />
             <Tooltip
               contentStyle={{
@@ -41,6 +42,8 @@ export function PipelineFunnel({ stages }: { stages: Stage[] }) {
                 borderRadius: '6px',
                 color: '#f3f4f6',
               }}
+              labelStyle={{ color: '#e2e8f0' }}
+              itemStyle={{ color: '#e2e8f0' }}
             />
             <Bar
               dataKey="count"
@@ -50,7 +53,7 @@ export function PipelineFunnel({ stages }: { stages: Stage[] }) {
               {stages.map((_, i) => (
                 <Cell
                   key={i}
-                  fill={hoverIndex === i ? '#ffffff' : COLORS[i % COLORS.length]}
+                  fill={hoverIndex === i ? '#fbbf24' : COLORS[i % COLORS.length]}
                   onMouseEnter={() => setHoverIndex(i)}
                   style={{ cursor: 'pointer', transition: 'fill 0.15s ease' }}
                 />

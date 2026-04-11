@@ -21,41 +21,52 @@ export interface ProposalDraft {
   sections: ProposalDraftSection[]
 }
 
-const DRAFT_SYSTEM_PROMPT = `You are an expert federal proposal writer with 20+ years of experience winning government contracts. Write a complete, professional proposal response for the opportunity described.
+const DRAFT_SYSTEM_PROMPT = `You are an expert federal proposal writer with 20+ years of experience winning government contracts. Write a complete, professional, submission-ready proposal response for the opportunity described.
 
-Write ACTUAL proposal prose — not bullet points, not an outline, not placeholders. Every section must be fully written in a formal government proposal style (first person plural "Our team", "We propose", etc.).
+CRITICAL REQUIREMENTS:
+- Write ACTUAL proposal prose — not bullet points, not an outline, not placeholders.
+- Every section must be fully written in formal government proposal style (first person plural: "Our team", "We propose", etc.).
+- Each section MUST be comprehensive: 5–10 substantive paragraphs minimum.
+- Reference specific requirements from the solicitation, the agency's mission, contract deliverables, and evaluation criteria.
+- Include specific methodologies, tools, staffing plans, transition plans, and quality assurance approaches where relevant.
+- Do NOT use placeholder text like [INSERT], [TBD], [COMPANY NAME], or similar. Fill in realistic, professional content throughout.
+- The Technical Approach must describe a clear methodology, phases/tasks, tools/technologies, and deliverables.
+- The Management Approach must include organizational structure, key personnel roles, communication plan, and risk mitigation.
+- Past Performance must include realistic contract narratives with scope, outcomes, and relevance.
 
 Return ONLY valid JSON — no markdown, no preamble:
 {
   "sections": [
     {
       "title": "Cover Letter",
-      "content": "Full written cover letter text..."
+      "content": "Full written cover letter..."
     },
     {
       "title": "Executive Summary",
-      "content": "Full written executive summary..."
+      "content": "Comprehensive executive summary — 2-3 pages worth of content covering understanding of requirements, proposed approach overview, key differentiators, and relevant experience..."
     },
     {
       "title": "Technical Approach",
-      "content": "Full written technical approach section..."
+      "content": "Detailed technical approach — 4-6 pages worth of content covering methodology, work breakdown, tools, technologies, deliverables, innovation, and compliance with SOW..."
     },
     {
       "title": "Management Approach",
-      "content": "Full written management section..."
+      "content": "Detailed management approach — organizational chart description, key personnel, staffing plan, communication plan, risk management, quality assurance, transition plan..."
     },
     {
       "title": "Past Performance",
-      "content": "Full written past performance narrative..."
+      "content": "3+ detailed past performance narratives with contract name, agency, period, value, scope, outcomes, and relevance to this opportunity..."
+    },
+    {
+      "title": "Staffing Plan",
+      "content": "Key personnel qualifications, organizational structure, labor categories, recruitment and retention approach..."
     },
     {
       "title": "Price/Cost Approach",
-      "content": "Full written pricing narrative..."
+      "content": "Pricing methodology, cost reasonableness narrative, value proposition, cost control measures..."
     }
   ]
-}
-
-Each section content must be 3–6 paragraphs of real, substantive proposal prose that directly addresses the requirements. Reference specific requirements, agency mission, and technical details from the solicitation. Do not use placeholder text like [INSERT] or TBD.`
+}`
 
 function buildAnswersBlock(answers: ProposalAnswer[]): string {
   if (!answers.length) return ''
@@ -115,7 +126,15 @@ ${mandatoryReqs || 'No requirements extracted — write based on the opportunity
 All Requirements:
 ${allReqs || 'See mandatory requirements above.'}
 
-Write a complete, submission-ready proposal draft. Each section should be substantive, specific to this opportunity, and address the actual requirements listed above.`
+Write a COMPLETE, COMPREHENSIVE, SUBMISSION-READY proposal draft. This must read like a real federal proposal that could win a contract.
+- Executive Summary: 2-3 pages of content. Cover understanding of the agency mission, summary of approach, team qualifications, and why the offeror is uniquely qualified.
+- Technical Approach: 4-6 pages. Detailed methodology, phased approach with tasks/milestones, specific tools and technologies, deliverables per phase, innovation, and direct traceability to SOW requirements.
+- Management Approach: 2-3 pages. Org chart narrative, key personnel with roles, communication cadence, risk register and mitigation strategies, quality control plan, transition approach.
+- Past Performance: 2-3 pages. At least 3 detailed contract narratives — include realistic contract names, agency, performance period, dollar value, scope description, quantified outcomes, and direct relevance to this requirement.
+- Staffing Plan: 1-2 pages. Labor categories, full-time equivalents, key personnel bios, recruitment strategy.
+- Price/Cost Approach: 1-2 pages. Pricing philosophy, cost realism narrative, value proposition, cost control and monitoring.
+
+Each section MUST be fully written prose. No placeholders, no bullet-point outlines, no [INSERT] markers.`
 
   let response
   try {
@@ -123,7 +142,7 @@ Write a complete, submission-ready proposal draft. Each section should be substa
       {
         systemPrompt: DRAFT_SYSTEM_PROMPT,
         userPrompt,
-        maxTokens: 8000,
+        maxTokens: 16000,
         temperature: 0.3,
       },
       consultingFirmId,

@@ -102,14 +102,6 @@ export function SettingsPage() {
     },
   });
 
-  const veteranMutation = useMutation({
-    mutationFn: (isVeteranOwned: boolean) => firmApi.updateVeteranStatus(isVeteranOwned),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['firm'] });
-      qc.invalidateQueries({ queryKey: ['billing-subscription'] });
-    },
-  });
-
   const providerMutation = useMutation({
     mutationFn: (provider: string) => firmApi.updateLlmProvider(provider),
     onSuccess: (_data, provider) => {
@@ -233,34 +225,26 @@ export function SettingsPage() {
 
         {/* Veteran Discount */}
         <div className="card lg:col-span-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Shield className="w-5 h-5 text-amber-400" />
-              <div>
-                <h2 className="font-semibold text-gray-200">Veteran Owned & Operated — 10% Discount</h2>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  If your firm is veteran-owned and operated, enable this to apply a 10% discount to your monthly subscription cost.
-                </p>
-              </div>
+          <div className="flex items-center gap-3">
+            <Shield className="w-5 h-5 text-amber-400" />
+            <div>
+              <h2 className="font-semibold text-gray-200">Veteran Owned & Operated — 10% Discount</h2>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Veteran-owned firms are eligible for a 10% discount on monthly subscription costs.
+                To apply, contact us at <a href="mailto:support@mercyraine.com?subject=Veteran Discount Request" className="text-amber-400 hover:text-amber-300 underline">support@mercyraine.com</a> with
+                proof of veteran status (DD-214, VA letter, or SBA VetCert).
+              </p>
             </div>
-            <button
-              onClick={() => veteranMutation.mutate(!firm?.isVeteranOwned)}
-              disabled={veteranMutation.isPending}
-              className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none ${
-                firm?.isVeteranOwned ? 'bg-amber-500' : 'bg-slate-600'
-              }`}
-            >
-              <span
-                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
-                  firm?.isVeteranOwned ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
-            </button>
           </div>
-          {firm?.isVeteranOwned && (
+          {firm?.isVeteranOwned ? (
             <div className="mt-3 flex items-center gap-2 text-xs text-amber-300 bg-amber-900/20 border border-amber-700/40 rounded-lg px-3 py-2">
               <CheckCircle className="w-3.5 h-3.5 shrink-0" />
               Veteran discount active — 10% off your monthly plan. Thank you for your service.
+            </div>
+          ) : (
+            <div className="mt-3 flex items-center gap-2 text-xs text-slate-500 bg-slate-800/40 border border-slate-700/40 rounded-lg px-3 py-2">
+              <Shield className="w-3.5 h-3.5 shrink-0" />
+              Not yet verified — email us to get your veteran discount applied to your account.
             </div>
           )}
         </div>

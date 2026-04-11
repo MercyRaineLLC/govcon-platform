@@ -24,7 +24,7 @@ export function SubcontractingPage() {
   const [selected, setSelected] = useState<any | null>(null)
   const [syncMsg, setSyncMsg] = useState('')
 
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ['subcontracting', search, naicsCode],
     queryFn: () => subcontractingApi.list({ search: search || undefined, naicsCode: naicsCode || undefined, limit: 100 }),
   })
@@ -73,13 +73,25 @@ export function SubcontractingPage() {
         </button>
       </div>
 
-      {syncMsg && <p className="text-sm text-green-400 mb-3">{syncMsg}</p>}
+      {syncMsg && (
+        <div className="mb-3 flex items-center gap-2 text-sm text-green-400">
+          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+          {syncMsg}
+        </div>
+      )}
 
       {/* Info banner */}
       <div className="mb-4 px-4 py-2.5 rounded-lg bg-blue-900/20 border border-blue-700/40 text-xs text-blue-300">
         <strong>Data sources:</strong> USAspending.gov set-aside contracts · SAM.gov small-business opportunities · SBA SUBNet listings.
         Syncs automatically pull the last 180 days of set-aside contract activity filtered to your client NAICS codes.
       </div>
+
+      {/* Loading bar for refetches */}
+      {isFetching && !isLoading && (
+        <div className="mb-4 w-full h-1 bg-gray-800 rounded-full overflow-hidden">
+          <div className="h-full bg-amber-500 rounded-full animate-pulse" style={{ width: '60%', animation: 'loading-bar 1.5s ease-in-out infinite' }} />
+        </div>
+      )}
 
       {isLoading ? (
         <div className="flex justify-center py-12"><Spinner /></div>

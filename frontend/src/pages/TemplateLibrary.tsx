@@ -76,13 +76,15 @@ export default function TemplateLibrary() {
   const pendingTemplates = adminTemplates.filter((t: any) => t.status === 'PENDING_REVIEW' || t.status === 'PENDING')
   const approvedTemplates = adminTemplates.filter((t: any) => t.status === 'APPROVED')
 
+  const [downloadError, setDownloadError] = useState('')
   const handleDownload = async (template: any) => {
     setDownloading(template.id)
+    setDownloadError('')
     try {
       const safeName = template.title.replace(/[^a-zA-Z0-9- ]/g, '').trim().replace(/ /g, '_')
       await clientDocumentsApi.downloadTemplate(template.id, safeName + '_template.txt')
-    } catch {
-      // non-fatal
+    } catch (err: any) {
+      setDownloadError(err?.message || 'Download failed — template file may be missing from the server.')
     } finally {
       setDownloading(null)
     }
@@ -224,6 +226,7 @@ export default function TemplateLibrary() {
       </div>
 
       {isLoading && <div className="flex justify-center mt-10"><Spinner size="lg" /></div>}
+      {downloadError && <ErrorBanner message={downloadError} />}
       {error && <ErrorBanner message="Failed to load templates" />}
       {!isLoading && templates.length === 0 && (
         <EmptyState message="No templates available yet. Be the first to contribute — upload a document from any client profile." />

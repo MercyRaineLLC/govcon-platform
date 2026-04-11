@@ -79,20 +79,30 @@ export async function checkClientLimit(consultingFirmId: string): Promise<{ allo
 // Proposal Token System
 // ---------------------------------------------------------------
 
-// Monthly token allocation by tier (and by having proposal_assistant add-on)
-const PROPOSAL_TOKENS_BY_TIER: Record<string, number> = {
-  starter:        0,
-  beta_lifetime:  20,
-  professional:   20,
-  enterprise:     50,
+// Monthly base token allocation by tier (every subscriber gets these)
+const BASE_TOKENS_BY_TIER: Record<string, number> = {
+  starter:        5,
+  beta_lifetime:  15,
+  professional:   15,
+  enterprise:     30,
   elite:          100,
 }
 
+// Bonus tokens when firm has proposal_assistant add-on (stacks on top of base)
+const ADDON_BONUS_TOKENS: Record<string, number> = {
+  starter:        10,
+  beta_lifetime:  15,
+  professional:   15,
+  enterprise:     25,
+  elite:          0,
+}
+
 // Refresh tokens if it's a new calendar month (lazy refresh — no cron needed)
+// Adds the monthly allocation ON TOP of any remaining purchased tokens
 async function maybeRefreshTokens(consultingFirmId: string): Promise<void> {
   const firm = await prisma.consultingFirm.findUnique({
     where: { id: consultingFirmId },
-    select: { lastTokenRefreshAt: true, purchasedAddons: true },
+    select: { lastTokenRefreshAt: true, purchasedAddons: true, proposalTokens: true },
   })
   if (!firm) return
 
@@ -102,13 +112,16 @@ async function maybeRefreshTokens(consultingFirmId: string): Promise<void> {
 
   const plan = await getFirmPlan(consultingFirmId)
   const hasProposalAddon = firm.purchasedAddons.includes('proposal_assistant')
-  // Elite always has proposal; other tiers (including beta_lifetime) need the add-on
-  const eligible = plan.slug === 'elite' || hasProposalAddon
-  const monthlyTokens = eligible ? (PROPOSAL_TOKENS_BY_TIER[plan.slug] ?? 0) : 0
+  const base = BASE_TOKENS_BY_TIER[plan.slug] ?? 0
+  const bonus = hasProposalAddon ? (ADDON_BONUS_TOKENS[plan.slug] ?? 0) : 0
+  const monthlyGrant = base + bonus
+
+  // Set to the monthly grant (don't stack infinitely — cap at grant + any purchased surplus)
+  const newBalance = Math.max(firm.proposalTokens, monthlyGrant)
 
   await prisma.consultingFirm.update({
     where: { id: consultingFirmId },
-    data: { proposalTokens: monthlyTokens, lastTokenRefreshAt: now },
+    data: { proposalTokens: newBalance, lastTokenRefreshAt: now },
   })
 }
 

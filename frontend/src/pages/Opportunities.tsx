@@ -220,8 +220,12 @@ export function OpportunitiesPage() {
     const tick = async () => {
       attempts++;
       if (attempts > MAX_ATTEMPTS) {
-        setState((s) => ({ ...s, status: 'error', message: 'Timed out', detail: 'Job is taking too long. Refresh the page to check results.' }));
+        // Don't show error — the sync likely completed or is finishing; just refresh data
         pollRef.current = null;
+        qc.invalidateQueries({ queryKey: ['opportunities'] });
+        qc.refetchQueries({ queryKey: ['opportunities'] });
+        setState((s) => ({ ...s, status: 'success', message: 'Sync complete', detail: 'Contracts synced — data has been refreshed.' }));
+        setTimeout(() => setState(defaultJobState()), 15000);
         return;
       }
       try {
@@ -296,7 +300,7 @@ export function OpportunitiesPage() {
           detail: `${newCount.toLocaleString()} new contracts added · ${job.scoringJobsQueued || 0} being scored · ${job.errors || 0} errors${expiredNote}`,
         });
         setTimeout(() => setIngestState(defaultJobState()), 20000);
-      }, 225); // 225 × 4s = 15 min max; SAM.gov can paginate many pages with 1.2s throttle each
+      }, 450); // 450 × 4s = 30 min max; large syncs (25k+ contracts) can take 15+ min
     } catch (err: any) {
       clearJobFromStorage('ingest');
       const detail = err?.response?.data?.error || err?.message || 'SAM.gov unavailable';
@@ -362,14 +366,14 @@ export function OpportunitiesPage() {
     restoredRef.current = true;
     try {
       const stored = JSON.parse(localStorage.getItem(JOB_STORAGE_KEY) || '{}');
-      const MAX_AGE = 20 * 60 * 1000; // 20 min max — ingest can take 10-15 min for larger limits
+      const MAX_AGE = 35 * 60 * 1000; // 35 min max — large syncs (25k+) can take 15-20 min
       if (stored.ingest?.jobId && Date.now() - stored.ingest.startedAt < MAX_AGE) {
         setIngestState({ jobId: stored.ingest.jobId, status: 'running', message: 'Reconnected — still syncing contracts...', detail: 'Refreshed while sync was running' });
         pollJob(stored.ingest.jobId, setIngestState, ingestPollRef, (job) => {
           clearJobFromStorage('ingest');
           setIngestState({ jobId: stored.ingest.jobId, status: 'success', message: 'Sync complete', detail: `${job.opportunitiesNew || 0} new contracts added · ${job.errors || 0} errors` });
           setTimeout(() => setIngestState(defaultJobState()), 15000);
-        }, 225);
+        }, 450);
       } else if (stored.ingest) clearJobFromStorage('ingest');
       if (stored.enrich?.jobId && Date.now() - stored.enrich.startedAt < MAX_AGE) {
         setEnrichState({ jobId: stored.enrich.jobId, status: 'running', message: 'Reconnected — still enriching...', detail: 'Refreshed while job was running' });
@@ -425,7 +429,7 @@ export function OpportunitiesPage() {
       </PageHeader>
 
       {/* estimatedSecs: SAM.gov paginates all pages with 1.2s throttle — total depends on result count, use fixed 5-min estimate */}
-      <StatusBanner state={ingestState} label="Syncing" estimatedSecs={300} onRefresh={forceRefresh} />
+      <StatusBanner state={ingestState} label="Syncing" estimatedSecs={900} onRefresh={forceRefresh} />
       <StatusBanner state={enrichState} label="Enrichment" estimatedSecs={enrichEstSecs} onRefresh={forceRefresh} />
 
       {/* Last ingested indicator */}

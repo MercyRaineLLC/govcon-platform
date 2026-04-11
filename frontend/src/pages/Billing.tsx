@@ -203,9 +203,10 @@ export default function BillingPage() {
     starter: 'rgba(255,255,255,0.07)',
     professional: 'rgba(245,158,11,0.35)',
     enterprise: 'rgba(59,130,246,0.25)',
+    elite: 'rgba(168,85,247,0.35)',
   }
 
-  const PLAN_RANK: Record<string, number> = { starter: 0, professional: 1, enterprise: 2 }
+  const PLAN_RANK: Record<string, number> = { starter: 0, professional: 1, enterprise: 2, elite: 3 }
   const currentRank = PLAN_RANK[plan?.slug ?? 'starter'] ?? 0
 
   if (subLoading) {
@@ -427,6 +428,22 @@ export default function BillingPage() {
                   (() => {
                     const targetRank = PLAN_RANK[p.slug] ?? 0
                     const isUpgrade = targetRank > currentRank
+                    // Elite tier: contact for pricing (not self-service)
+                    if (p.slug === 'elite') {
+                      return (
+                        <a
+                          href="mailto:support@mercyraine.com?subject=Elite Plan Inquiry"
+                          className="w-full py-2 rounded-lg text-sm font-semibold text-center block transition-all"
+                          style={{
+                            background: 'rgba(245,158,11,0.10)',
+                            border: '1px solid rgba(245,158,11,0.30)',
+                            color: '#f59e0b',
+                          }}
+                        >
+                          Contact for Pricing →
+                        </a>
+                      )
+                    }
                     return (
                       <button
                         onClick={() => subscribeMut.mutate({ planId: p.id, cycle: selectedCycle })}

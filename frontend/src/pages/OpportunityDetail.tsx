@@ -254,6 +254,8 @@ export default function OpportunityDetail() {
       setProposalOutline(res.data)
       if (res.tokensRemaining !== undefined) setTokenBalance(res.tokensRemaining)
       setProposalStep('outlined')
+      // Persist outline so it survives page navigation
+      proposalAssistApi.saveDraft(id, { outline: res.data, step: 'outlined' }).catch(() => {})
       // Auto-fetch questions after outline
       handleGenerateQuestions(res.data)
     } catch (err: any) {
@@ -316,6 +318,8 @@ export default function OpportunityDetail() {
     setProposalError('')
     setDraftDownloadUrl(null)
     setDraftFileName('')
+    // Persist answers before generating so work isn't lost on timeout/error
+    proposalAssistApi.saveDraft(id, { outline: proposalOutline, answers: proposalAnswers, step: proposalStep }).catch(() => {})
     try {
       const answersArray = proposalQuestions.map(q => ({
         questionId: q.id,
@@ -375,6 +379,20 @@ export default function OpportunityDetail() {
 
     fetchOpportunity()
     fetchMatrix()
+
+    // Restore saved proposal outline/answers if they exist
+    if (id) {
+      proposalAssistApi.getSaved(id).then((res: any) => {
+        const saved = res?.data
+        if (saved?.outline) {
+          setProposalOutline(saved.outline)
+          setProposalStep(saved.step || 'outlined')
+        }
+        if (saved?.answers) {
+          setProposalAnswers(saved.answers)
+        }
+      }).catch(() => {}) // ignore — just means no saved state
+    }
     return () => { if (pollRef.current) { clearTimeout(pollRef.current as any); pollRef.current = null } }
   }, [id])
 
@@ -400,54 +418,56 @@ export default function OpportunityDetail() {
   }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file || !id) return
+    const files = e.target.files
+    if (!files || files.length === 0 || !id) return
     setUploading(true)
     setUploadError('')
     try {
-      // ZIP: extract all files, then trigger analysis on each
-      if (file.name.toLowerCase().endsWith('.zip')) {
-        const zipRes = await documentsApi.uploadZip(id, file)
-        const extracted: any[] = zipRes.data ?? []
-        setUploadError('')
-        fetchOpportunity()
-        // Trigger analysis for each extracted doc
-        for (const doc of extracted) {
-          try { await jobsApi.triggerDocumentAnalysis(doc.id) } catch {}
-        }
-        setAnalyzeStatus(extracted.length > 0 ? 'running' : 'error')
-        setUploading(false)
-        if (fileInputRef.current) fileInputRef.current.value = ''
-        return
-      }
-      const uploadRes = await documentsApi.upload(id, file)
-      const documentId = uploadRes.data?.id ?? uploadRes.id
-      const jobRes = await jobsApi.triggerDocumentAnalysis(documentId)
-      const jobId = jobRes.data?.jobId ?? jobRes.jobId
-      setAnalyzeStatus('running')
-      let pollAttempts = 0
-      const pollAnalysis = async () => {
-        pollAttempts++
-        if (pollAttempts > 40) { setAnalyzeStatus('error'); pollRef.current = null; return } // 40 × 3s = 2 min cap
-        try {
-          const jobCheck = await jobsApi.getJob(jobId)
-          const status: string = jobCheck.data?.status ?? jobCheck.status ?? ''
-          if (status === 'COMPLETE') {
-            pollRef.current = null
-            setAnalyzeStatus('complete')
-            fetchOpportunity()
-          } else if (status === 'FAILED') {
-            pollRef.current = null
-            setAnalyzeStatus('error')
-          } else {
-            pollRef.current = setTimeout(pollAnalysis, 3000) as any
+      for (let fi = 0; fi < files.length; fi++) {
+        const file = files[fi]
+        // ZIP: extract all files, then trigger analysis on each
+        if (file.name.toLowerCase().endsWith('.zip')) {
+          const zipRes = await documentsApi.uploadZip(id, file)
+          const extracted: any[] = zipRes.data ?? []
+          fetchOpportunity()
+          for (const doc of extracted) {
+            try { await jobsApi.triggerDocumentAnalysis(doc.id) } catch {}
           }
-        } catch {
-          // transient error — keep polling
-          pollRef.current = setTimeout(pollAnalysis, 3000) as any
+          setAnalyzeStatus(extracted.length > 0 ? 'running' : 'error')
+          continue
+        }
+        const uploadRes = await documentsApi.upload(id, file)
+        const documentId = uploadRes.data?.id ?? uploadRes.id
+        const jobRes = await jobsApi.triggerDocumentAnalysis(documentId)
+        const jobId = jobRes.data?.jobId ?? jobRes.jobId
+        setAnalyzeStatus('running')
+        // Only poll the last file's analysis (earlier ones run in background)
+        if (fi === files.length - 1) {
+          let pollAttempts = 0
+          const pollAnalysis = async () => {
+            pollAttempts++
+            if (pollAttempts > 40) { setAnalyzeStatus('error'); pollRef.current = null; return }
+            try {
+              const jobCheck = await jobsApi.getJob(jobId)
+              const status: string = jobCheck.data?.status ?? jobCheck.status ?? ''
+              if (status === 'COMPLETE') {
+                pollRef.current = null
+                setAnalyzeStatus('complete')
+                fetchOpportunity()
+              } else if (status === 'FAILED') {
+                pollRef.current = null
+                setAnalyzeStatus('error')
+              } else {
+                pollRef.current = setTimeout(pollAnalysis, 3000) as any
+              }
+            } catch {
+              pollRef.current = setTimeout(pollAnalysis, 3000) as any
+            }
+          }
+          pollAnalysis()
         }
       }
-      pollAnalysis() // start immediately
+      if (files.length > 1) fetchOpportunity()
     } catch (err: any) {
       setUploadError(err?.response?.data?.error || 'Upload failed')
     } finally {
@@ -1091,9 +1111,15 @@ ${data.amendments.map(a => `
             <span className="text-blue-400 flex-shrink-0 mt-0.5">{'•'}</span>
             <p className="text-gray-300">
               <span className="text-gray-400">What they are buying: </span>
-              {data.description
-                ? data.description.split(/[.\n]/)[0].trim() + '.'
-                : `Services under NAICS ${data.naicsCode}${data.naicsDescription ? ` (${data.naicsDescription})` : ''}.`}
+              {(() => {
+                if (!data.description) return `Services under NAICS ${data.naicsCode}${data.naicsDescription ? ` (${data.naicsDescription})` : ''}.`
+                // Strip leading URLs and whitespace, then take first sentence
+                const cleaned = data.description.replace(/^[\s]*(?:https?:\/\/\S+[\s]*)*/g, '').trim()
+                if (!cleaned) return `Services under NAICS ${data.naicsCode}${data.naicsDescription ? ` (${data.naicsDescription})` : ''}.`
+                // Split on sentence-ending period (followed by space or EOL), not dots inside URLs
+                const match = cleaned.match(/^(.+?\.)\s/)
+                return match ? match[1] : cleaned.slice(0, 250) + (cleaned.length > 250 ? '…' : '.')
+              })()}
             </p>
           </div>
           {/* Who can bid */}
@@ -1308,6 +1334,7 @@ ${data.amendments.map(a => `
             ref={fileInputRef}
             type="file"
             accept=".pdf,.txt,.docx,.zip"
+            multiple
             className="hidden"
             onChange={handleFileUpload}
           />
