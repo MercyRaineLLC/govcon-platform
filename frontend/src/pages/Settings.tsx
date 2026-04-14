@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { firmApi, clientDocumentsApi } from '../services/api';
+import { firmApi, clientDocumentsApi, authApi } from '../services/api';
 import { PageHeader, Spinner } from '../components/ui';
-import { Settings, Users, Key, Eye, EyeOff, CheckCircle, XCircle, BookOpen, Brain, RefreshCw, BarChart2, Shield } from 'lucide-react';
+import { Settings, Users, Key, Eye, EyeOff, CheckCircle, XCircle, BookOpen, Brain, RefreshCw, BarChart2, Shield, Lock } from 'lucide-react';
 
 const SYNC_LIMIT_KEY = 'govcon_sync_limit';
 const SYNC_NAICS_KEY = 'govcon_sync_naics';
@@ -37,6 +37,10 @@ export function SettingsPage() {
   const [syncLimit, setSyncLimit] = useState(() => localStorage.getItem(SYNC_LIMIT_KEY) || '25');
   const [syncNaics, setSyncNaics] = useState(() => localStorage.getItem(SYNC_NAICS_KEY) || '');
   const [syncSaveMsg, setSyncSaveMsg] = useState('');
+  const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [pwMsg, setPwMsg] = useState('');
 
   const { data, isLoading } = useQuery({
     queryKey: ['firm'],
@@ -155,6 +159,19 @@ export function SettingsPage() {
     onError: (err: any) => setAiKeyMsg(err?.response?.data?.error || 'Save failed'),
   });
 
+  const pwMutation = useMutation({
+    mutationFn: () => authApi.changePassword(pwForm.currentPassword, pwForm.newPassword),
+    onSuccess: () => {
+      setPwMsg('Password updated successfully.');
+      setPwForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setTimeout(() => setPwMsg(''), 4000);
+    },
+    onError: (err: any) => {
+      setPwMsg(err?.response?.data?.error || 'Failed to change password');
+      setTimeout(() => setPwMsg(''), 5000);
+    },
+  });
+
   const firm = data?.data;
   const users = usersData?.data || [];
   const templates: any[] = templatesData?.data || [];
@@ -221,6 +238,86 @@ export function SettingsPage() {
               {samKeyMsg}
             </p>
           )}
+        </div>
+
+        {/* Change Password */}
+        <div className="card lg:col-span-2">
+          <div className="flex items-center gap-2 mb-2">
+            <Lock className="w-4 h-4 text-amber-400" />
+            <h2 className="font-semibold text-gray-200">Change Password</h2>
+          </div>
+          <p className="text-xs text-gray-500 mb-4">
+            Password must be at least 12 characters with uppercase, lowercase, a number, and a symbol.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="label">Current Password</label>
+              <div className="relative">
+                <input
+                  type={showCurrentPw ? 'text' : 'password'}
+                  className="input pr-10"
+                  placeholder="Enter current password"
+                  value={pwForm.currentPassword}
+                  onChange={(e) => setPwForm({ ...pwForm, currentPassword: e.target.value })}
+                />
+                <button type="button" onClick={() => setShowCurrentPw(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
+                  {showCurrentPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="label">New Password</label>
+              <div className="relative">
+                <input
+                  type={showNewPw ? 'text' : 'password'}
+                  className="input pr-10"
+                  placeholder="Min 12 chars"
+                  value={pwForm.newPassword}
+                  onChange={(e) => setPwForm({ ...pwForm, newPassword: e.target.value })}
+                />
+                <button type="button" onClick={() => setShowNewPw(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
+                  {showNewPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="label">Confirm New Password</label>
+              <input
+                type="password"
+                className="input"
+                placeholder="Re-enter new password"
+                value={pwForm.confirmPassword}
+                onChange={(e) => setPwForm({ ...pwForm, confirmPassword: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <div className="mt-4 flex items-center gap-3">
+            <button
+              onClick={() => pwMutation.mutate()}
+              disabled={
+                !pwForm.currentPassword ||
+                !pwForm.newPassword ||
+                pwForm.newPassword !== pwForm.confirmPassword ||
+                pwForm.newPassword.length < 12 ||
+                pwMutation.isPending
+              }
+              className="btn-primary disabled:opacity-50"
+            >
+              {pwMutation.isPending ? 'Updating...' : 'Update Password'}
+            </button>
+            {pwForm.newPassword && pwForm.confirmPassword && pwForm.newPassword !== pwForm.confirmPassword && (
+              <p className="text-xs text-red-400">Passwords do not match</p>
+            )}
+            {pwMsg && (
+              <p className={`text-sm ${pwMsg.includes('success') ? 'text-green-400' : 'text-red-400'}`}>
+                {pwMsg}
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Veteran Discount */}

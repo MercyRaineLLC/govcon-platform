@@ -545,4 +545,35 @@ router.delete('/:id/decline-opportunity/:oppId', requireRole('ADMIN'), async (re
   }
 });
 
+/**
+ * GET /api/clients/naics/search?q=consulting
+ * Search NAICS codes by code or description. Public within authenticated scope.
+ */
+router.get(
+  '/naics/search',
+  authenticateJWT,
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const q = (req.query.q as string || '').trim();
+      if (q.length < 2) {
+        return res.json({ success: true, data: [] });
+      }
+      const codes = await prisma.naicsCode.findMany({
+        where: {
+          OR: [
+            { code: { contains: q } },
+            { description: { contains: q, mode: 'insensitive' } },
+          ],
+        },
+        select: { code: true, description: true },
+        orderBy: { code: 'asc' },
+        take: 30,
+      });
+      res.json({ success: true, data: codes });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 export default router;

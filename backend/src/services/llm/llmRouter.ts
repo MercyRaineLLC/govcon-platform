@@ -9,7 +9,7 @@ import { DeepSeekProvider } from './deepseek.provider'
 import { InsightEngineProvider } from './insight.provider'
 import { LocalAIProvider } from './localai.provider'
 
-export type LLMTask = 'DOCUMENT_ANALYSIS' | 'COMPLIANCE_MATRIX' | 'BID_GUIDANCE'
+export type LLMTask = 'DOCUMENT_ANALYSIS' | 'COMPLIANCE_MATRIX' | 'BID_GUIDANCE' | 'AI_ASSISTANT'
 
 const CACHE_TTL_SECONDS = 60 * 60 * 24 * 7 // 7 days
 
@@ -24,8 +24,11 @@ export async function generateWithRouter(
   consultingFirmId: string | undefined,
   opts: { task: LLMTask; useCache?: boolean }
 ): Promise<LLMResponse> {
-  // Resolve provider config from DB (or fall back to env)
-  let llmProvider = 'claude'
+  // Resolve provider config from DB, with platform env vars as fallback.
+  // DEFAULT_LLM_PROVIDER env var sets the platform-wide default (e.g. 'openai')
+  // so AI features work out of the box without firms configuring their own keys.
+  const platformDefault = process.env.DEFAULT_LLM_PROVIDER || 'claude'
+  let llmProvider = platformDefault
   let anthropicApiKey: string | null = process.env.ANTHROPIC_API_KEY || null
   let openaiApiKey: string | null = process.env.OPENAI_API_KEY || null
   let deepseekApiKey: string | null = process.env.DEEPSEEK_API_KEY || null
@@ -40,7 +43,9 @@ export async function generateWithRouter(
         select: { llmProvider: true, anthropicApiKey: true, openaiApiKey: true, deepseekApiKey: true, insightEngineApiKey: true, localaiBaseUrl: true, localaiModel: true },
       })
       if (firm) {
-        llmProvider = firm.llmProvider ?? 'claude'
+        // Use firm's provider choice if they set one, otherwise use platform default
+        llmProvider = firm.llmProvider ?? platformDefault
+        // Firm-level keys override platform env keys
         if (firm.anthropicApiKey) anthropicApiKey = firm.anthropicApiKey
         if (firm.openaiApiKey) openaiApiKey = firm.openaiApiKey
         if (firm.deepseekApiKey) deepseekApiKey = firm.deepseekApiKey

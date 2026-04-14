@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { clientsApi, clientPortalUsersApi } from '../services/api';
 import { PageHeader, Spinner, EmptyState, ErrorBanner, formatCurrency } from '../components/ui';
 import { Plus, CheckCircle, XCircle, Shield, KeyRound, X, Search, Loader2, Upload, Download, FileSpreadsheet, AlertTriangle } from 'lucide-react';
+import { NaicsPicker } from '../components/NaicsPicker';
 
 // ── CSV template definition ───────────────────────────────────────────────────
 const CSV_HEADERS = [
@@ -452,8 +453,11 @@ export function ClientsPage() {
               <input className="input font-mono" value={form.cage} onChange={(e) => setForm({ ...form, cage: e.target.value })} />
             </div>
             <div className="md:col-span-2">
-              <label className="label">NAICS Codes (comma-separated)</label>
-              <input className="input" value={form.naicsCodes} onChange={(e) => setForm({ ...form, naicsCodes: e.target.value })} placeholder="484121, 541614" />
+              <NaicsPicker
+                label="NAICS Codes"
+                selected={form.naicsCodes ? form.naicsCodes.split(',').map(s => s.trim()).filter(Boolean) : []}
+                onChange={(codes) => setForm({ ...form, naicsCodes: codes.join(', ') })}
+              />
             </div>
 
             {/* Contact & Address */}

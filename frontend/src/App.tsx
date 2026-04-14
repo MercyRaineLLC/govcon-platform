@@ -4,6 +4,7 @@ import { Spinner } from "./components/ui"
 import { Layout } from "./components/layout"
 import { ProtectedRoute } from "./components/ProtectedRoute"
 import { ErrorBoundary } from "./components/ErrorBoundary"
+import { AiAssistant } from "./components/AiAssistant"
 
 // Lazy-loaded pages — each chunk loads on demand, reducing initial bundle
 const DashboardPage        = lazy(() => import("./pages/Dashboard"))
@@ -87,6 +88,7 @@ export default function App() {
           {/* 404 catch-all */}
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
+        <AiAssistant />
       </Suspense>
     </ErrorBoundary>
   )

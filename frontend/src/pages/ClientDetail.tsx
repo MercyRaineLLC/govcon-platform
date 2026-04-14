@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { clientsApi, clientDocumentsApi, clientOpportunitiesApi, clientPortalApi, clientPortalUsersApi } from '../services/api'
+import { NaicsPicker } from '../components/NaicsPicker'
 import { PageHeader, Spinner, ErrorBanner, formatCurrency } from '../components/ui'
 import {
   ArrowLeft, Shield, CheckCircle, XCircle, AlertTriangle,
@@ -128,6 +129,21 @@ function VehicleManager({ clientId, vehicles }: { clientId: string; vehicles: st
   )
 }
 
+function NaicsPickerInline({ clientId, naicsCodes }: { clientId: string; naicsCodes: string[] }) {
+  const qc = useQueryClient()
+  const saveMutation = useMutation({
+    mutationFn: (codes: string[]) => clientsApi.update(clientId, { naicsCodes: codes }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['client', clientId] }),
+  })
+  return (
+    <NaicsPicker
+      label="NAICS Codes"
+      selected={naicsCodes}
+      onChange={(codes) => saveMutation.mutate(codes)}
+    />
+  )
+}
+
 export default function ClientDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -195,16 +211,9 @@ export default function ClientDetail() {
               )}
             </div>
           )}
-          {client.naicsCodes?.length > 0 && (
-            <div className="col-span-2">
-              <p className="text-gray-500 text-xs mb-1 flex items-center gap-1"><Hash className="w-3 h-3" /> NAICS Codes</p>
-              <div className="flex flex-wrap gap-1">
-                {client.naicsCodes.map((code: string) => (
-                  <span key={code} className="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded font-mono">{code}</span>
-                ))}
-              </div>
-            </div>
-          )}
+          <div className="col-span-2">
+            <NaicsPickerInline clientId={client.id} naicsCodes={client.naicsCodes || []} />
+          </div>
         </div>
 
         {/* Contact & Address */}

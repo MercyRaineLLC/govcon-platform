@@ -44,6 +44,8 @@ export const authApi = {
   profile: () => api.get('/auth/profile').then((r) => r.data),
   betaStatus: () =>
     api.get('/auth/beta-status').then((r) => r.data),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    api.put('/auth/change-password', { currentPassword, newPassword }).then((r) => r.data),
 };
 
 // ---- Opportunities ----
@@ -122,6 +124,8 @@ export const clientsApi = {
       timeout: 60000,
     }).then((r) => r.data);
   },
+  searchNaics: (q: string) =>
+    api.get('/clients/naics/search', { params: { q } }).then((r) => r.data),
 };
 
 // ---- Submissions ----
@@ -450,6 +454,12 @@ export const subcontractingApi = {
   sync: () => api.post('/subcontracting/sync').then((r) => r.data),
   create: (data: Record<string, unknown>) => api.post('/subcontracting/opportunities', data).then((r) => r.data),
   delete: (id: string) => api.delete(`/subcontracting/opportunities/${id}`).then((r) => r.data),
+}
+
+// ---- AI Assistant ----
+export const assistantApi = {
+  chat: (message: string, history: Array<{ role: 'user' | 'assistant'; content: string }>) =>
+    api.post('/assistant/chat', { message, history }, { timeout: 60000 }).then((r) => r.data),
 }
 
 // ---- Manual Contract Upload ----

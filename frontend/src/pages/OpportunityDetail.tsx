@@ -1027,6 +1027,17 @@ ${data.amendments.map(a => `
           </button>
         </div>
         {scoreError && <p className="text-red-400 text-xs mt-2">{scoreError}</p>}
+        {clientScore && clientScore.winProbabilityPercent === '0%' && (
+          <div className="mt-3 flex items-start gap-2 px-3 py-2.5 rounded-lg bg-amber-900/20 border border-amber-700/40">
+            <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+            <div className="text-xs text-amber-300 leading-relaxed">
+              <strong>0% score — likely missing client data.</strong> Make sure this client has NAICS codes, past performance stats, and
+              set-aside certifications (SDVOSB, 8(a), etc.) configured in their{' '}
+              <Link to={`/clients/${selectedClientId}`} className="underline hover:text-amber-200">client profile</Link>.
+              The scoring engine needs this data to calculate a meaningful win probability.
+            </div>
+          </div>
+        )}
         {clientScore && (
           <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 border-t border-gray-800 pt-4">
             <div>

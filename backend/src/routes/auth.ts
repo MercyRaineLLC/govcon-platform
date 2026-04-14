@@ -300,4 +300,42 @@ router.post(
   }
 );
 
+/**
+ * PUT /api/auth/change-password
+ * Authenticated user changes their own password.
+ */
+router.put(
+  '/change-password',
+  authenticateJWT,
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const schema = z.object({
+        currentPassword: z.string().min(1),
+        newPassword: passwordSchema,
+      });
+      const { currentPassword, newPassword } = schema.parse(req.body);
+
+      const user = await prisma.user.findUnique({
+        where: { id: req.user!.userId },
+      });
+      if (!user) throw new NotFoundError('User');
+
+      const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+      if (!valid) throw new UnauthorizedError('Current password is incorrect');
+
+      const passwordHash = await bcrypt.hash(newPassword, 12);
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash },
+      });
+
+      logger.info('User changed password', { userId: user.id });
+
+      res.json({ success: true, message: 'Password updated successfully' });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 export default router;

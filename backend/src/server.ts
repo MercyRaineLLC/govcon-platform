@@ -43,6 +43,7 @@ import proposalAssistRoutes from './routes/proposalAssist'
 import stateMunicipalRoutes from './routes/stateMunicipal'
 import subcontractingRoutes from './routes/subcontracting'
 import contractsRoutes from './routes/contracts'
+import assistantRoutes from './routes/assistant'
 
 async function bootstrap(): Promise<void> {
   const app = express()
@@ -165,6 +166,7 @@ async function bootstrap(): Promise<void> {
   apiRouter.use('/state-municipal', stateMunicipalRoutes)
   apiRouter.use('/subcontracting', subcontractingRoutes)
   apiRouter.use('/contracts', contractsRoutes)
+  apiRouter.use('/assistant', assistantRoutes)
 
   app.use('/api', apiRouter)
 
