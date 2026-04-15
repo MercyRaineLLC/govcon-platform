@@ -10,7 +10,11 @@ export function useOnboarding() {
     localStorage.setItem(STORAGE_KEY, '1')
     setDismissed(true)
   }
-  return { showWizard: !dismissed, dismiss }
+  function replay() {
+    localStorage.removeItem(STORAGE_KEY)
+    setDismissed(false)
+  }
+  return { showWizard: !dismissed, dismiss, replay }
 }
 
 interface Step {
@@ -29,7 +33,7 @@ const STEPS: Step[] = [
   {
     icon: <Key className="w-10 h-10 text-amber-400" />,
     title: 'Connect your SAM.gov API Key',
-    body: 'Add your SAM.gov API key in Settings so we can sync live contract opportunities directly from the federal marketplace. Your Anthropic AI key enables compliance matrix generation.',
+    body: 'Add your SAM.gov API key in Settings so we can sync live contract opportunities directly from the federal marketplace. You can also configure your preferred AI provider (Claude, OpenAI, DeepSeek, or local Ollama) for compliance matrix generation.',
     action: { label: 'Go to Settings', to: '/settings' },
   },
   {

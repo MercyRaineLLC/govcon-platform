@@ -53,7 +53,7 @@ export default function Dashboard() {
   const [seeding, setSeeding] = useState(false)
   const [seedResult, setSeedResult] = useState<string | null>(null)
   const { logout, user } = useAuth()
-  const { showWizard, dismiss: dismissWizard } = useOnboarding()
+  const { showWizard, dismiss: dismissWizard, replay: replayOnboarding } = useOnboarding()
 
   const handleSeedDemo = async () => {
     setSeeding(true)
@@ -131,6 +131,16 @@ export default function Dashboard() {
         subtitle="Real-time intelligence · All data refreshes every 60s"
         live
       >
+        {!showWizard && (
+          <button
+            onClick={replayOnboarding}
+            className="btn-secondary text-xs"
+            title="Replay the setup guide"
+          >
+            <Zap className="w-3.5 h-3.5" />
+            Setup Guide
+          </button>
+        )}
         <button
           onClick={handleSeedDemo}
           disabled={seeding}

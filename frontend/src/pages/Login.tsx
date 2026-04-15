@@ -262,8 +262,17 @@ export function LoginPage() {
             </button>
           </form>
 
+          <div className="mt-4 text-center">
+            <Link
+              to="/forgot-password"
+              className="text-xs text-slate-500 hover:text-amber-400 transition-colors"
+            >
+              Forgot your password?
+            </Link>
+          </div>
+
           <div
-            className="mt-6 pt-5 text-center"
+            className="mt-4 pt-5 text-center"
             style={{ borderTop: '1px solid #1a2e4a' }}
           >
             <p className="text-sm text-slate-500">

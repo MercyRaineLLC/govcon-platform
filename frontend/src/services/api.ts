@@ -46,6 +46,10 @@ export const authApi = {
     api.get('/auth/beta-status').then((r) => r.data),
   changePassword: (currentPassword: string, newPassword: string) =>
     api.put('/auth/change-password', { currentPassword, newPassword }).then((r) => r.data),
+  forgotPassword: (email: string) =>
+    api.post('/auth/forgot-password', { email }).then((r) => r.data),
+  resetPassword: (token: string, newPassword: string) =>
+    api.post('/auth/reset-password', { token, newPassword }).then((r) => r.data),
 };
 
 // ---- Opportunities ----

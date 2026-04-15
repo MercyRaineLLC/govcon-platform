@@ -32,7 +32,7 @@ export function SubcontractingPage() {
   const syncMutation = useMutation({
     mutationFn: () => subcontractingApi.sync(),
     onSuccess: () => {
-      setSyncMsg('Sync started — pulling subcontracting opportunities from SBA SUBNet.')
+      setSyncMsg('Sync started — pulling subcontracting opportunities from SBA SUBNet, SAM.gov set-asides, and USAspending.')
       // Auto-refresh at 15s and 45s to catch results as they land
       setTimeout(() => refetch(), 15000)
       setTimeout(() => { refetch(); setSyncMsg('') }, 45000)

@@ -31,6 +31,8 @@ const StateMunicipalPage     = lazy(() => import("./pages/StateMunicipalPage").t
 const SubcontractingPage     = lazy(() => import("./pages/SubcontractingPage").then(m => ({ default: m.SubcontractingPage })))
 const RoiCalculatorPage      = lazy(() => import("./pages/RoiCalculator"))
 const ContractUploadPage     = lazy(() => import("./pages/ContractUpload"))
+const ForgotPasswordPage      = lazy(() => import("./pages/ForgotPassword").then(m => ({ default: m.ForgotPasswordPage })))
+const ResetPasswordPage       = lazy(() => import("./pages/ResetPassword").then(m => ({ default: m.ResetPasswordPage })))
 const LandingPage            = lazy(() => import("./pages/Landing").then(m => ({ default: m.LandingPage })))
 const NotFoundPage           = lazy(() => import("./pages/NotFound"))
 
@@ -51,6 +53,8 @@ export default function App() {
           <Route path="/welcome" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
 
           {/* Client portal (standalone, no consultant layout) */}
           <Route path="/client-login" element={<ClientPortalLogin />} />

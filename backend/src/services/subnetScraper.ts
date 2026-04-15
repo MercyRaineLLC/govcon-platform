@@ -142,9 +142,14 @@ export async function fetchSubnetOpportunities(naicsCodes?: string[]): Promise<S
     }
 
     logger.info('SBA SUBNet scrape complete', { count: results.length })
+
+    // Health check: warn if scraper returns zero results (possible SBA.gov redesign)
+    if (results.length === 0) {
+      logger.error('SUBNet scraper returned 0 results — SBA.gov page structure may have changed. Check HTML regex patterns in subnetScraper.ts.')
+    }
   } catch (err) {
     const msg = (err as Error).message
-    logger.warn('SBA SUBNet scrape failed', { error: msg })
+    logger.error('SBA SUBNet scrape failed — site may be down or redesigned', { error: msg })
   }
 
   return results

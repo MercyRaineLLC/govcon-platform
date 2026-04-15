@@ -338,4 +338,99 @@ router.put(
   }
 );
 
+/**
+ * POST /api/auth/forgot-password
+ * Generates a password reset token (valid 1 hour).
+ * In production, this would send an email. For now, returns the token in response
+ * so the frontend can redirect to the reset page.
+ */
+router.post('/forgot-password', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { email } = z.object({ email: z.string().email() }).parse(req.body);
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, email: true, firstName: true },
+    });
+
+    // Always return success to prevent email enumeration
+    if (!user) {
+      return res.json({ success: true, message: 'If that email exists, a reset link has been sent.' });
+    }
+
+    // Generate a secure random token
+    const crypto = await import('crypto');
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    // Invalidate any existing tokens for this user
+    await prisma.passwordResetToken.updateMany({
+      where: { userId: user.id, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+
+    await prisma.passwordResetToken.create({
+      data: { userId: user.id, token, expiresAt },
+    });
+
+    logger.info('Password reset token generated', { userId: user.id, email });
+
+    // In production: send email with reset link
+    // For now: return token so frontend can use it
+    res.json({
+      success: true,
+      message: 'If that email exists, a reset link has been sent.',
+      // Remove resetToken from response once email service is configured
+      resetToken: token,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/auth/reset-password
+ * Resets password using a valid token.
+ */
+router.post('/reset-password', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const schema = z.object({
+      token: z.string().min(1),
+      newPassword: passwordSchema,
+    });
+    const { token, newPassword } = schema.parse(req.body);
+
+    const resetToken = await prisma.passwordResetToken.findUnique({
+      where: { token },
+      include: { user: true },
+    });
+
+    if (!resetToken || resetToken.usedAt || resetToken.expiresAt < new Date()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid or expired reset token. Please request a new one.',
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: resetToken.userId },
+        data: { passwordHash },
+      }),
+      prisma.passwordResetToken.update({
+        where: { id: resetToken.id },
+        data: { usedAt: new Date() },
+      }),
+    ]);
+
+    logger.info('Password reset completed', { userId: resetToken.userId });
+
+    res.json({ success: true, message: 'Password has been reset. You can now sign in.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

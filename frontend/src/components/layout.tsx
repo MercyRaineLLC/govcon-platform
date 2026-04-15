@@ -41,6 +41,7 @@ interface NavItem {
   label: string
   adminOnly?: boolean
   adminOptional?: boolean
+  badge?: string
 }
 
 const navSections: { label: string; items: NavItem[] }[] = [
@@ -58,7 +59,7 @@ const navSections: { label: string; items: NavItem[] }[] = [
     items: [
       { to: '/submissions', icon: FileText, label: 'Submissions' },
       { to: '/subcontracting', icon: GitBranch, label: 'Subcontracting' },
-      { to: '/state-municipal', icon: MapPin, label: 'State & Municipal' },
+      { to: '/state-municipal', icon: MapPin, label: 'State & Municipal', badge: 'Soon' },
       { to: '/penalties', icon: DollarSign, label: 'Penalties' },
     ],
   },
@@ -230,6 +231,12 @@ export function Layout() {
                     >
                       <item.icon className="w-4 h-4 flex-shrink-0" strokeWidth={active ? 2 : 1.75} />
                       <span>{item.label}</span>
+                      {item.badge && (
+                        <span className="ml-auto text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+                          style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.25)' }}>
+                          {item.badge}
+                        </span>
+                      )}
                     </Link>
                   )
                 })}

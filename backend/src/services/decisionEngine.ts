@@ -104,7 +104,7 @@ export async function evaluateBidDecision(
       blockers: complianceResult.blockers,
     })
 
-    return prisma.bidDecision.upsert({
+    const ineligibleDecision = await prisma.bidDecision.upsert({
       where: { opportunityId_clientCompanyId: { opportunityId, clientCompanyId } },
       update: {
         recommendation: 'NO_BID',
@@ -148,6 +148,20 @@ export async function evaluateBidDecision(
         },
       },
     })
+
+    // Record ineligible decision in audit trail (non-blocking)
+    prisma.bidDecisionHistory.create({
+      data: {
+        consultingFirmId,
+        opportunityId,
+        clientCompanyId,
+        recommendation: 'NO_BID',
+        winProbability: 0,
+        changeReason: `INELIGIBLE: ${complianceResult.blockers.join('; ')}`,
+      },
+    }).catch(() => {})
+
+    return ineligibleDecision
   }
 
   // ──────────────────────────────────────────────────────────
@@ -397,6 +411,22 @@ export async function evaluateBidDecision(
       explanationJson: { ...explanationJson },
     },
   })
+
+  // Record decision in audit trail (non-blocking)
+  prisma.bidDecisionHistory.create({
+    data: {
+      consultingFirmId,
+      opportunityId,
+      clientCompanyId,
+      recommendation,
+      winProbability,
+      fitScore: fitResult.total,
+      marketScore: marketResult.total,
+      expectedValue,
+      roiRatio,
+      snapshotJson: { ...explanationJson },
+    },
+  }).catch((e: unknown) => logger.warn('Failed to log decision history', { error: (e as Error).message }))
 
   logger.info('Bid decision evaluated (3-layer)', {
     opportunityId,

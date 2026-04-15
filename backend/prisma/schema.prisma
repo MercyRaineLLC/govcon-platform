@@ -127,8 +127,55 @@ model User {
   submissionRecords SubmissionRecord[]
   createdTemplates  DocumentTemplate[] @relation("TemplateCreator")
 
+  passwordResetTokens PasswordResetToken[]
+
   @@index([consultingFirmId])
   @@map("users")
+}
+
+//////////////////////////////////////////////////////////////
+// PASSWORD RESET
+//////////////////////////////////////////////////////////////
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+//////////////////////////////////////////////////////////////
+// BID DECISION AUDIT TRAIL
+//////////////////////////////////////////////////////////////
+
+model BidDecisionHistory {
+  id                String   @id @default(uuid())
+  consultingFirmId  String
+  opportunityId     String
+  clientCompanyId   String
+  recommendation    String
+  winProbability    Float?
+  fitScore          Float?
+  marketScore       Float?
+  expectedValue     Float?
+  roiRatio          Float?
+  changedBy         String?
+  changeReason      String?
+  snapshotJson      Json?
+  createdAt         DateTime @default(now())
+
+  @@index([consultingFirmId])
+  @@index([opportunityId])
+  @@index([clientCompanyId])
+  @@map("bid_decision_history")
 }
 
 //////////////////////////////////////////////////////////////

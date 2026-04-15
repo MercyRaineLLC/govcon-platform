@@ -116,8 +116,9 @@ async function maybeRefreshTokens(consultingFirmId: string): Promise<void> {
   const bonus = hasProposalAddon ? (ADDON_BONUS_TOKENS[plan.slug] ?? 0) : 0
   const monthlyGrant = base + bonus
 
-  // Set to the monthly grant (don't stack infinitely — cap at grant + any purchased surplus)
-  const newBalance = Math.max(firm.proposalTokens, monthlyGrant)
+  // Add the monthly grant on top of existing balance (preserves purchased tokens)
+  // Cap at 500 to prevent unbounded accumulation
+  const newBalance = Math.min(500, firm.proposalTokens + monthlyGrant)
 
   await prisma.consultingFirm.update({
     where: { id: consultingFirmId },

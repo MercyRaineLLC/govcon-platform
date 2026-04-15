@@ -53,7 +53,7 @@ export async function computeRiskRadar(consultingFirmId: string): Promise<RiskIt
       if (!hasSubmission && (hasBidPrime || daysLeft <= 3)) {
         const severity: RiskItem['severity'] =
           daysLeft <= 3 ? 'CRITICAL' : daysLeft <= 7 ? 'HIGH' : 'MODERATE'
-        const score = Math.min(100, Math.round((1 - daysLeft / 20) * 100))
+        const score = Math.min(100, Math.max(0, Math.round((1 - Math.max(daysLeft, 0) / 20) * 100)))
 
         risks.push({
           entityType: 'DEADLINE',
