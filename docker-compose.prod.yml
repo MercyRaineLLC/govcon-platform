@@ -72,7 +72,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.prod
       args:
-        VITE_API_URL: ""
+        VITE_API_URL: ${VITE_API_URL:-https://mrgovcon.co}
         VITE_STRIPE_PUBLISHABLE_KEY: ${VITE_STRIPE_PUBLISHABLE_KEY:-}
         VITE_STRIPE_PRICING_TABLE_ID: ${VITE_STRIPE_PRICING_TABLE_ID:-}
     container_name: govcon_frontend
