@@ -48,6 +48,7 @@ import contractsRoutes from './routes/contracts'
 import assistantRoutes from './routes/assistant'
 import brandingRoutes from './routes/branding'
 import stripeWebhookRoutes from './routes/stripeWebhook'
+import { getVerifiedCustomDomains, PLATFORM_ROOT_DOMAIN } from './services/hostResolver'
 
 async function bootstrap(): Promise<void> {
   const app = express()
@@ -66,20 +67,45 @@ async function bootstrap(): Promise<void> {
 
   app.use(
     cors({
-      origin: (origin, cb) => {
+      origin: async (origin, cb) => {
         if (!config.isProduction) {
           cb(null, true)
           return
         }
 
+        if (!origin) {
+          cb(null, true)
+          return
+        }
+
+        // Static allowlist from env
         const allowed = (process.env.ALLOWED_ORIGINS || '')
           .split(',')
           .map((o) => o.trim())
           .filter(Boolean)
 
-        if (!origin || allowed.includes(origin)) {
+        if (allowed.includes(origin)) {
           cb(null, true)
           return
+        }
+
+        // Always allow platform root + its subdomains
+        try {
+          const url = new URL(origin)
+          const host = url.hostname.toLowerCase()
+          if (host === PLATFORM_ROOT_DOMAIN || host.endsWith(`.${PLATFORM_ROOT_DOMAIN}`)) {
+            cb(null, true)
+            return
+          }
+
+          // Check verified custom domains (cached 5min in hostResolver)
+          const customDomains = await getVerifiedCustomDomains()
+          if (customDomains.includes(host)) {
+            cb(null, true)
+            return
+          }
+        } catch {
+          // fall through to deny
         }
 
         cb(new Error('Origin not allowed by CORS'))

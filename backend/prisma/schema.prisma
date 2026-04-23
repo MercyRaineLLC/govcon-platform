@@ -140,6 +140,9 @@ model ConsultingFirm {
   stripeCustomerId    String?  @unique
   stripeSubscriptionId String? @unique
   lifetimeAccessAt    DateTime?
+  subdomain           String?  @unique
+  customDomain        String?  @unique
+  customDomainVerifiedAt DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 

@@ -31,24 +31,40 @@ export function useBranding(firmId?: string) {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!firmId) {
-      setLoading(false)
-      return
-    }
+    const API_BASE = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001'
 
     const fetchBranding = async () => {
       try {
         setLoading(true)
-        const API_BASE = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001'
-        const res = await axios.get(`${API_BASE}/api/branding/${firmId}`)
-        if (res.data.success && res.data.data) {
-          setBranding(res.data.data)
-          setError(null)
+
+        // 1. Prefer firmId when known (consultant logged in, client logged in)
+        if (firmId) {
+          const res = await axios.get(`${API_BASE}/api/branding/${firmId}`)
+          if (res.data.success && res.data.data) {
+            setBranding(res.data.data)
+            setError(null)
+            return
+          }
         }
+
+        // 2. Fall back to host-based resolution (subdomain or custom domain)
+        // Skip on localhost/dev when running on different port from API
+        const host = window.location.hostname
+        if (host && host !== 'localhost' && host !== '127.0.0.1') {
+          const res = await axios.get(`${API_BASE}/api/branding/by-host/${encodeURIComponent(host)}`)
+          if (res.data.success && res.data.data) {
+            setBranding(res.data.data)
+            setError(null)
+            return
+          }
+        }
+
+        // 3. Defaults
+        setBranding(DEFAULT_BRANDING)
+        setError(null)
       } catch (err: any) {
         console.warn('Failed to load branding config:', err.message)
         setError(err.message)
-        // Fall back to defaults
         setBranding(DEFAULT_BRANDING)
       } finally {
         setLoading(false)
