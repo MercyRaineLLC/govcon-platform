@@ -1,7 +1,8 @@
 {
-  "name": "govcon-platform-frontend",
+  "name": "mrgovcon-frontend",
   "version": "1.0.0",
   "private": true,
+  "description": "MrGovCon - BANKV Engine Frontend",
   "dependencies": {
     "@tanstack/react-query": "^5.17.9",
     "axios": "^1.6.2",

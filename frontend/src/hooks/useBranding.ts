@@ -15,9 +15,9 @@ export interface BrandingConfig {
 
 const DEFAULT_BRANDING: BrandingConfig = {
   firmId: 'default',
-  firmName: 'MR GOVCON',
-  displayName: 'MR GOVCON',
-  tagline: 'GovCon Advisory Intelligence',
+  firmName: 'MrGovCon',
+  displayName: 'MrGovCon',
+  tagline: 'Transporting Goods, Transforming Lives',
   logoUrl: null,
   primaryColor: '#fbbf24',
   secondaryColor: '#f59e0b',

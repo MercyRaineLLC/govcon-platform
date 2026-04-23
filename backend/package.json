@@ -1,7 +1,7 @@
 {
-  "name": "govcon-platform-backend",
+  "name": "mrgovcon-backend",
   "version": "1.0.0",
-  "description": "GovCon Advisory Intelligence SaaS Platform - Backend",
+  "description": "MrGovCon BANKV Engine - Backend (Bid Analytics, Nexus Knowledge Vault)",
   "main": "dist/server.js",
   "private": true,
   "scripts": {

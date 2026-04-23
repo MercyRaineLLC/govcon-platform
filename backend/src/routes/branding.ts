@@ -39,12 +39,14 @@ router.get('/:firmId', async (req: Request, res: Response, next: NextFunction) =
       firmId: firm.id,
       firmName: firm.name,
       displayName: firm.brandingDisplayName || firm.name,
-      tagline: firm.brandingTagline || 'GovCon Advisory Intelligence',
+      tagline: firm.brandingTagline || 'Transporting Goods, Transforming Lives',
       logoUrl: firm.brandingLogoUrl || null,
       primaryColor: firm.brandingPrimaryColor || '#fbbf24',
       secondaryColor: firm.brandingSecondaryColor || '#f59e0b',
       faviconUrl: firm.brandingFaviconUrl || null,
       isVeteranOwned: firm.isVeteranOwned,
+      platform: 'MrGovCon',
+      engine: 'BANKV Engine',
     }
 
     res.json({

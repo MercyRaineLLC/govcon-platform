@@ -194,10 +194,11 @@ async function bootstrap(): Promise<void> {
   // Start HTTP Server
   // -------------------------------------------------------------
   const server = app.listen(config.port, () => {
-    logger.info('GovCon Platform server running', {
+    logger.info('MrGovCon Platform running - BANKV Engine Active', {
       port: config.port,
       environment: config.env,
       pid: process.pid,
+      tagline: 'Transporting Goods, Transforming Lives',
     })
   })
 

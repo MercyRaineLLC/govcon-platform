@@ -16,7 +16,7 @@ export function BrandingSettings() {
   const { firm, user } = useAuth()
   const [form, setForm] = useState<BrandingForm>({
     displayName: firm?.name || '',
-    tagline: 'GovCon Advisory Intelligence',
+    tagline: 'Transporting Goods, Transforming Lives',
     primaryColor: '#fbbf24',
     secondaryColor: '#f59e0b',
     logoUrl: '',
