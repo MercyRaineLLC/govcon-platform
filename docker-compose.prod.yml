@@ -59,6 +59,8 @@ services:
         condition: service_healthy
     volumes:
       - uploads_data:/app/uploads
+    ports:
+      - "127.0.0.1:3001:3001"
     command: sh -c "npx prisma migrate deploy 2>/dev/null; npx prisma db push --accept-data-loss 2>/dev/null; npx prisma generate && node dist/server.js"
     restart: unless-stopped
 
@@ -74,6 +76,8 @@ services:
         VITE_STRIPE_PUBLISHABLE_KEY: ${VITE_STRIPE_PUBLISHABLE_KEY:-}
         VITE_STRIPE_PRICING_TABLE_ID: ${VITE_STRIPE_PRICING_TABLE_ID:-}
     container_name: govcon_frontend
+    ports:
+      - "127.0.0.1:3000:80"
     depends_on:
       - backend
     restart: unless-stopped
