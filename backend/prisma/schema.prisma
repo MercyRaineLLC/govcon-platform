@@ -815,6 +815,7 @@ model ClientDocument {
   consultingFirm ConsultingFirm  @relation(fields: [consultingFirmId], references: [id], onDelete: Cascade)
   clientCompany  ClientCompany   @relation(fields: [clientCompanyId], references: [id], onDelete: Cascade)
   sharedTemplate SharedTemplate?
+  comments       DeliverableComment[]
 
   @@index([consultingFirmId])
   @@index([clientCompanyId])
@@ -1143,4 +1144,34 @@ model AgencyAwardProfile {
   lastRefreshedAt DateTime @default(now())
 
   @@map("agency_award_profiles")
+}
+
+//////////////////////////////////////////////////////////////
+// DELIVERABLE COMMENTS — Threaded discussion on ClientDocument
+//////////////////////////////////////////////////////////////
+
+enum CommentAuthorType {
+  CONSULTANT
+  CLIENT
+}
+
+model DeliverableComment {
+  id             String            @id @default(cuid())
+  deliverableId  String
+  authorType     CommentAuthorType
+  authorId       String
+  authorName     String
+  body           String
+  parentId       String?
+  isResolved     Boolean           @default(false)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  deliverable ClientDocument       @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
+  parent      DeliverableComment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies     DeliverableComment[] @relation("CommentReplies")
+
+  @@index([deliverableId])
+  @@index([parentId])
+  @@map("deliverable_comments")
 }

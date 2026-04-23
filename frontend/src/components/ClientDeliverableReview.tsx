@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { FileText, CheckCircle, AlertCircle, Download, Send, X, Loader } from 'lucide-react'
 import axios from 'axios'
+import { DeliverableThread } from './DeliverableThread'
 
 const API_BASE = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001'
 
@@ -181,6 +182,18 @@ export function ClientDeliverableReview({
               </div>
             )}
           </div>
+
+          {/* Threaded discussion — visible only when deliverable is selected */}
+          {selectedId === deliverable.id && clientAuth?.token && clientAuth?.user?.id && (
+            <div className="mt-4 pt-4 border-t border-gray-800" onClick={(e) => e.stopPropagation()}>
+              <DeliverableThread
+                deliverableId={deliverable.id}
+                authToken={clientAuth.token}
+                currentAuthorId={clientAuth.user.id}
+                currentAuthorType="CLIENT"
+              />
+            </div>
+          )}
         </div>
       ))}
 

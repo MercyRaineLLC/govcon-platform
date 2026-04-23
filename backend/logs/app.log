@@ -542,3 +542,11 @@
 {"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":21988,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 02:42:24"}
 {"level":"info","message":"Deadline notification worker started (daily at 09:00 UTC)","timestamp":"2026-04-23 02:42:24"}
 {"length":32,"level":"info","message":"AI clause extractor: insufficient text","opportunityId":"00228478-709d-4028-9628-d46023976e83","timestamp":"2026-04-23 02:43:07"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 02:52:16"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 02:52:16"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 02:52:16"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 02:52:16"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 02:52:16"}
+{"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":33504,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 02:52:16"}
+{"level":"info","message":"Deadline notification worker started (daily at 09:00 UTC)","timestamp":"2026-04-23 02:52:16"}
+{"code":"VALIDATION_ERROR","level":"warn","message":"Client error Invalid host format","path":"/api/branding/by-host/not-a-host","statusCode":422,"timestamp":"2026-04-23 02:53:29"}
