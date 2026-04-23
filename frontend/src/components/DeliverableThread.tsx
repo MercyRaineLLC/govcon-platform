@@ -33,7 +33,8 @@ interface Props {
   brandingColor?: string
 }
 
-function buildTree(flat: Comment[]): CommentNode[] {
+// Exported for unit tests
+export function buildTree(flat: Comment[]): CommentNode[] {
   const byId = new Map<string, CommentNode>()
   flat.forEach(c => byId.set(c.id, { ...c, replies: [] }))
   const roots: CommentNode[] = []

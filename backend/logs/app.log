@@ -550,3 +550,72 @@
 {"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":33504,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 02:52:16"}
 {"level":"info","message":"Deadline notification worker started (daily at 09:00 UTC)","timestamp":"2026-04-23 02:52:16"}
 {"code":"VALIDATION_ERROR","level":"warn","message":"Client error Invalid host format","path":"/api/branding/by-host/not-a-host","statusCode":422,"timestamp":"2026-04-23 02:53:29"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 03:01:50"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 03:01:50"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 03:01:50"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 03:01:50"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 03:01:50"}
+{"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":25904,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 03:01:50"}
+{"level":"info","message":"Deadline notification worker started (daily at 09:00 UTC)","timestamp":"2026-04-23 03:01:50"}
+{"level":"warn","message":"SMTP_HOST not configured — emails will be logged only","timestamp":"2026-04-23 03:02:28"}
+{"from":"noreply@mrgovcon.com","level":"info","message":"Email (dev mode, not sent)","subject":"Approved: New comment on \"Federal Proposal - IT Services\" from Alice Johnson","timestamp":"2026-04-23 03:02:28","to":"attempt2@1.com"}
+{"code":"UNAUTHORIZED","level":"warn","message":"Client error Invalid token","path":"/api/client-deliverables/cmoawcdrg00016m3uv455xf4f/comments","statusCode":401,"timestamp":"2026-04-23 03:02:28"}
+{"level":"warn","message":"SMTP_HOST not configured — emails will be logged only","timestamp":"2026-04-23 03:04:23"}
+{"from":"noreply@mrgovcon.com","level":"info","message":"Email (dev mode, not sent)","subject":"Approved: New comment on \"Federal Proposal - IT Services\" from Alice Johnson","timestamp":"2026-04-23 03:04:23","to":"attempt2@1.com"}
+{"level":"warn","message":"SMTP_HOST not configured — emails will be logged only","timestamp":"2026-04-23 03:04:23"}
+{"from":"noreply@mrgovcon.com","level":"info","message":"Email (dev mode, not sent)","subject":"New deliverable ready for review: New comment on \"Federal Proposal - IT Services\"","timestamp":"2026-04-23 03:04:23","to":"client-test@apexfederal.com"}
+{"code":"UNAUTHORIZED","level":"warn","message":"Client error You can only delete your own comments","path":"/api/client-deliverables/cmoawcdrg00016m3uv455xf4f/comments/cmob744d60005sagt7u99rgfv","statusCode":401,"timestamp":"2026-04-23 03:04:23"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 03:30:59"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 03:30:59"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 03:30:59"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 03:30:59"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 03:30:59"}
+{"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":36832,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 03:30:59"}
+{"level":"info","message":"Deadline notification worker started (daily at 09:00 UTC)","timestamp":"2026-04-23 03:30:59"}
+{"customerId":"cus_UO4pOB7u7UJ0qc","firmId":"633962dd-94a0-4ca5-aa27-8e980861021c","level":"info","message":"Stripe customer created","timestamp":"2026-04-23 03:31:41"}
+{"firmId":"633962dd-94a0-4ca5-aa27-8e980861021c","level":"info","message":"Stripe checkout session created","productType":"lifetime","sessionId":"cs_test_a172aceNzbkYq7BsQUkUJurX0TkzqbHmMVdbM7IUAIDz5Me7qY4hvkDDDe","timestamp":"2026-04-23 03:31:42"}
+{"addonSlug":"state_municipal","firmId":"633962dd-94a0-4ca5-aa27-8e980861021c","level":"info","message":"Stripe addon checkout created","sessionId":"cs_test_a10fSpQo2AgS9i9C8Uf44otuYwrdR2y6Xzis8DQ4tzNEdfk0XahBEZHJaO","timestamp":"2026-04-23 03:31:42"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 03:34:13"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 03:34:13"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 03:34:47"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 03:34:47"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 03:34:47"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 03:34:47"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 03:34:47"}
+{"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":23852,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 03:34:47"}
+{"level":"info","message":"Deadline notification worker started (daily at 09:00 UTC)","timestamp":"2026-04-23 03:34:47"}
+{"firmId":"633962dd-94a0-4ca5-aa27-8e980861021c","level":"info","message":"Stripe checkout session created","productType":"lifetime","sessionId":"cs_test_a1w4zR0OZyY9BwneFy4wmtATUO6YD1EPCDKF49fudERrxyhQuEE8i9J6go","timestamp":"2026-04-23 03:37:42"}
+{"firmId":"633962dd-94a0-4ca5-aa27-8e980861021c","level":"info","message":"Stripe checkout session created","productType":"lifetime","sessionId":"cs_test_a1pm9oZHwdZjvzdvfrDJvQW9WRXZtVD3Z56rsWIQuhDu4V9JoxoojoCqqZ","timestamp":"2026-04-23 03:38:31"}
+{"eventId":"evt_3TPImvRzyNJh46IB0LKaweqG","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 03:39:11","type":"payment_intent.created"}
+{"eventId":"evt_3TPImvRzyNJh46IB0BQzzuy7","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 03:39:13","type":"payment_intent.requires_action"}
+{"eventId":"evt_3TPImvRzyNJh46IB0SmSdtAr","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 03:39:29","type":"payment_intent.succeeded"}
+{"eventId":"evt_3TPImvRzyNJh46IB0XcC7QIn","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 03:39:29","type":"charge.succeeded"}
+{"amount":124900,"firmId":"633962dd-94a0-4ca5-aa27-8e980861021c","level":"info","message":"Stripe checkout processed","productType":"lifetime","sessionId":"cs_test_a1pm9oZHwdZjvzdvfrDJvQW9WRXZtVD3Z56rsWIQuhDu4V9JoxoojoCqqZ","timestamp":"2026-04-23 03:39:29"}
+{"eventId":"evt_3TPImvRzyNJh46IB0bJLuXkN","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 03:39:31","type":"charge.updated"}
+{"level":"warn","message":"SMS rejected — invalid E.164 phone","phone":"***-1234","timestamp":"2026-04-23 04:46:11"}
+{"level":"warn","message":"SMS rejected — invalid E.164 phone","phone":"****","timestamp":"2026-04-23 04:46:11"}
+{"level":"warn","message":"SMS rejected — invalid E.164 phone","phone":"****","timestamp":"2026-04-23 04:46:11"}
+{"bodyLength":2,"level":"info","message":"SMS (dev mode, not sent)","timestamp":"2026-04-23 04:46:11","to":"***-1234"}
+{"bodyLength":2,"level":"info","message":"SMS (dev mode, not sent)","timestamp":"2026-04-23 04:46:11","to":"***-1234"}
+{"bodyLength":320,"level":"info","message":"SMS (dev mode, not sent)","timestamp":"2026-04-23 04:46:11","to":"***-1234"}
+{"code":"SUPERFAKE 99.9-99","level":"warn","message":"AI clause extractor: rejected implausible code","timestamp":"2026-04-23 04:46:11"}
+{"error":"Unexpected token 'o', \"not json\" is not valid JSON","level":"warn","message":"AI clause extractor: JSON parse failed","preview":"not json","timestamp":"2026-04-23 04:46:11"}
+{"error":"Unexpected end of JSON input","level":"warn","message":"AI clause extractor: JSON parse failed","preview":"{\"clauses\":","timestamp":"2026-04-23 04:46:11"}
+{"error":"Unexpected end of JSON input","level":"warn","message":"AI clause extractor: JSON parse failed","preview":"","timestamp":"2026-04-23 04:46:11"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 04:46:22"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 04:46:22"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 04:46:22"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 04:46:22"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 04:46:22"}
+{"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":20940,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 04:46:22"}
+{"level":"info","message":"Deadline notification worker started (daily at 09:00 UTC)","timestamp":"2026-04-23 04:46:22"}
+{"level":"warn","message":"SMS rejected — invalid E.164 phone","phone":"***-1234","timestamp":"2026-04-23 04:46:37"}
+{"level":"warn","message":"SMS rejected — invalid E.164 phone","phone":"****","timestamp":"2026-04-23 04:46:37"}
+{"level":"warn","message":"SMS rejected — invalid E.164 phone","phone":"****","timestamp":"2026-04-23 04:46:37"}
+{"bodyLength":2,"level":"info","message":"SMS (dev mode, not sent)","timestamp":"2026-04-23 04:46:37","to":"***-1234"}
+{"bodyLength":2,"level":"info","message":"SMS (dev mode, not sent)","timestamp":"2026-04-23 04:46:37","to":"***-1234"}
+{"bodyLength":320,"level":"info","message":"SMS (dev mode, not sent)","timestamp":"2026-04-23 04:46:37","to":"***-1234"}
+{"code":"SUPERFAKE 99.9-99","level":"warn","message":"AI clause extractor: rejected implausible code","timestamp":"2026-04-23 04:46:37"}
+{"error":"Unexpected token 'o', \"not json\" is not valid JSON","level":"warn","message":"AI clause extractor: JSON parse failed","preview":"not json","timestamp":"2026-04-23 04:46:37"}
+{"error":"Unexpected end of JSON input","level":"warn","message":"AI clause extractor: JSON parse failed","preview":"{\"clauses\":","timestamp":"2026-04-23 04:46:37"}
+{"error":"Unexpected end of JSON input","level":"warn","message":"AI clause extractor: JSON parse failed","preview":"","timestamp":"2026-04-23 04:46:37"}

@@ -33,10 +33,12 @@ const HOST_REGEX = /^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i
 
 export function isValidSubdomain(s: string): boolean {
   if (!s) return false
-  const lower = s.toLowerCase()
-  if (RESERVED_SUBDOMAINS.has(lower)) return false
-  if (lower.length < 2 || lower.length > 63) return false
-  return SUBDOMAIN_REGEX.test(lower)
+  // Reject any uppercase before lowercasing — caller must submit
+  // canonical lowercase form (matches DNS RFC 1035 + our DB unique index)
+  if (s !== s.toLowerCase()) return false
+  if (RESERVED_SUBDOMAINS.has(s)) return false
+  if (s.length < 2 || s.length > 63) return false
+  return SUBDOMAIN_REGEX.test(s)
 }
 
 export function isValidHost(host: string): boolean {

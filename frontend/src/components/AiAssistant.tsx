@@ -41,9 +41,6 @@ export function AiAssistant() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Don't render if not logged in
-  if (!isAuthenticated) return null
-
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
@@ -55,6 +52,9 @@ export function AiAssistant() {
   useEffect(() => {
     if (isOpen) inputRef.current?.focus()
   }, [isOpen])
+
+  // Don't render if not logged in (must come AFTER all hooks — React Rules of Hooks)
+  if (!isAuthenticated) return null
 
   const sendMessage = async (text?: string) => {
     const msg = (text || input).trim()

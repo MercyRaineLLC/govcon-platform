@@ -109,7 +109,8 @@ function buildUserPrompt(content: string): string {
 // Parser — defensive, tolerates LLM quirks (markdown fences, preamble)
 // -------------------------------------------------------------
 
-function parseLLMResponse(text: string): ExtractedClause[] {
+// Exported for unit tests — see aiClauseExtractor.test.ts
+export function parseLLMResponse(text: string): ExtractedClause[] {
   // Strip markdown code fences if present
   let cleaned = text.trim()
   if (cleaned.startsWith('```')) {
@@ -136,9 +137,10 @@ function parseLLMResponse(text: string): ExtractedClause[] {
     return []
   }
 
+  // Guard against null/non-object parse results (e.g., LLM returns "null" or a string)
   const rawClauses: any[] = Array.isArray(parsed)
     ? parsed
-    : Array.isArray(parsed.clauses)
+    : (parsed && typeof parsed === 'object' && Array.isArray(parsed.clauses))
       ? parsed.clauses
       : []
 
