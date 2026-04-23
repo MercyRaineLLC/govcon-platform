@@ -5,6 +5,7 @@ import { logger } from '../utils/logger'
 import { upload } from '../middleware/upload'
 import jwt from 'jsonwebtoken'
 import { config } from '../config/config'
+import { notifyDeliverableReady, notifyApprovalReceived } from '../services/emailService'
 
 const router = Router()
 
@@ -126,6 +127,28 @@ router.post(
         clientId: clientCompanyId,
       })
 
+      // Fire-and-forget notification to all opted-in client portal users
+      ;(async () => {
+        try {
+          const portalUsers = await prisma.clientPortalUser.findMany({
+            where: { clientCompanyId, isActive: true, notifyDeliverables: true },
+            select: { email: true, firstName: true, lastName: true },
+          })
+          const portalUrl = (process.env.FRONTEND_URL || 'http://localhost:3000') + '/client-portal'
+          await Promise.all(portalUsers.map(u =>
+            notifyDeliverableReady({
+              firmId: clientCompany.consultingFirmId,
+              recipientEmail: u.email,
+              recipientName: `${u.firstName} ${u.lastName}`.trim(),
+              deliverableTitle: title,
+              portalUrl,
+            })
+          ))
+        } catch (err: any) {
+          logger.warn('Failed to send deliverable notifications', { error: err.message })
+        }
+      })()
+
       res.status(201).json({
         success: true,
         data: deliverable,
@@ -198,6 +221,32 @@ router.post('/:id/approve', authenticateClientJWT, async (req: Request, res: Res
         triggeredBy: clientPortalUserId,
       },
     })
+
+    // Fire-and-forget: notify consultant firm of approval
+    ;(async () => {
+      try {
+        const firm = await prisma.consultingFirm.findUnique({
+          where: { id: deliverable.consultingFirmId },
+          select: { contactEmail: true, name: true },
+        })
+        const portalUser = await prisma.clientPortalUser.findUnique({
+          where: { id: clientPortalUserId },
+          select: { firstName: true, lastName: true },
+        })
+        if (firm && portalUser) {
+          const portalUrl = (process.env.FRONTEND_URL || 'http://localhost:3000') + '/clients'
+          await notifyApprovalReceived({
+            firmId: deliverable.consultingFirmId,
+            recipientEmail: firm.contactEmail,
+            recipientName: firm.name,
+            deliverableTitle: `${deliverable.title} (approved by ${portalUser.firstName} ${portalUser.lastName})`,
+            portalUrl,
+          })
+        }
+      } catch (err: any) {
+        logger.warn('Failed to send approval notification', { error: err.message })
+      }
+    })()
 
     res.json({
       success: true,

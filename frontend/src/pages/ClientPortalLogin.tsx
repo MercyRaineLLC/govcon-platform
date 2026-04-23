@@ -1,12 +1,17 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { Shield, Loader } from 'lucide-react'
 import axios from 'axios'
+import { useBranding } from '../hooks/useBranding'
 
 const API_BASE = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001'
 
 export default function ClientPortalLogin() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const firmIdFromQuery = searchParams.get('firm') || undefined
+  const { branding } = useBranding(firmIdFromQuery)
+
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -28,17 +33,41 @@ export default function ClientPortalLogin() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
+    <div
+      className="min-h-screen flex items-center justify-center p-4"
+      style={{ background: '#040d1a' }}
+    >
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-2 mb-3">
-            <Shield className="w-8 h-8 text-blue-400" />
+            {branding.logoUrl ? (
+              <img src={branding.logoUrl} alt={branding.displayName} className="w-12 h-12 object-contain" />
+            ) : (
+              <Shield className="w-8 h-8" style={{ color: branding.secondaryColor }} />
+            )}
           </div>
-          <h1 className="text-2xl font-bold text-gray-100">Client Portal</h1>
-          <p className="text-gray-500 text-sm mt-1">Log in to view your documents and deadlines</p>
+          <h1
+            className="text-2xl font-bold tracking-wide"
+            style={{
+              background: `linear-gradient(90deg, ${branding.primaryColor}, ${branding.secondaryColor})`,
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+            }}
+          >
+            {branding.displayName}
+          </h1>
+          <p className="text-gray-500 text-sm mt-1">{branding.tagline}</p>
+          <p className="text-gray-600 text-xs mt-2">Log in to view your documents and deadlines</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-4">
+        <form
+          onSubmit={handleSubmit}
+          className="rounded-xl p-6 space-y-4"
+          style={{
+            background: 'rgba(7, 17, 32, 0.7)',
+            border: `1px solid ${branding.secondaryColor}33`,
+          }}
+        >
           <div>
             <label className="block text-sm text-gray-400 mb-1">Email</label>
             <input
@@ -46,7 +75,10 @@ export default function ClientPortalLogin() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-200 text-sm focus:outline-none focus:border-blue-500"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-200 text-sm focus:outline-none"
+              style={{
+                borderColor: email ? `${branding.secondaryColor}99` : undefined,
+              }}
             />
           </div>
           <div>
@@ -56,7 +88,10 @@ export default function ClientPortalLogin() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-200 text-sm focus:outline-none focus:border-blue-500"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-200 text-sm focus:outline-none"
+              style={{
+                borderColor: password ? `${branding.secondaryColor}99` : undefined,
+              }}
             />
           </div>
 
@@ -69,16 +104,26 @@ export default function ClientPortalLogin() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium py-2 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+            className="w-full disabled:opacity-50 font-medium py-2 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+            style={{
+              background: `linear-gradient(90deg, ${branding.primaryColor}, ${branding.secondaryColor})`,
+              color: '#0b0f1a',
+            }}
           >
             {loading && <Loader className="w-4 h-4 animate-spin" />}
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
 
+        {branding.isVeteranOwned && (
+          <p className="text-center text-[10px] text-amber-500/70 tracking-widest uppercase mt-4">
+            ★ Veteran Owned · Patriot Operated
+          </p>
+        )}
+
         <p className="text-center text-xs text-gray-600 mt-4">
           Are you a consultant?{' '}
-          <Link to="/login" className="text-blue-400 hover:text-blue-300">
+          <Link to="/login" className="hover:underline" style={{ color: branding.secondaryColor }}>
             Sign in here
           </Link>
         </p>

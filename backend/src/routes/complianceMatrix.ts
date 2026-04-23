@@ -8,6 +8,7 @@ import { AuthenticatedRequest } from '../types'
 import { NotFoundError, ValidationError } from '../utils/errors'
 import { logger } from '../utils/logger'
 import { generateComplianceMatrix, extractTextFromDocument, generateBidGuidance, EnrichmentContext } from '../services/complianceMatrixService'
+import { analyzeOpportunityCompliance } from '../services/complianceGapAnalysis'
 
 const router = Router()
 router.use(authenticateJWT, enforceTenantScope)
@@ -325,6 +326,25 @@ router.patch('/requirements/:requirementId', async (req: AuthenticatedRequest, r
 
     res.json({ success: true, data: updated })
   } catch (err) {
+    next(err)
+  }
+})
+
+// =============================================================
+// GET /api/compliance-matrix/:opportunityId/gap-analysis
+// Returns FAR/DFARS clause matching, set-aside requirements,
+// and plain-language explanations for the opportunity
+// =============================================================
+router.get('/:opportunityId/gap-analysis', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const consultingFirmId = getTenantId(req)
+    const { opportunityId } = req.params
+    const result = await analyzeOpportunityCompliance(opportunityId, consultingFirmId)
+    res.json({ success: true, data: result })
+  } catch (err: any) {
+    if (err.message === 'Opportunity not found') {
+      return next(new NotFoundError(err.message))
+    }
     next(err)
   }
 })

@@ -302,3 +302,111 @@
 {"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 00:48:14"}
 {"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 00:48:14"}
 {"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":7960,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 00:48:14"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 01:28:58"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 01:28:58"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 01:28:58"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 01:28:58"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 01:28:58"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 01:28:58"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 01:28:58"}
+{"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":12208,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 01:28:58"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 01:29:07"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 01:29:07"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 01:29:07"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 01:29:07"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 01:29:07"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 01:29:07"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 01:29:07"}
+{"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":30952,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 01:29:07"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 01:29:18"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 01:29:18"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 01:29:18"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 01:29:18"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 01:29:18"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 01:29:18"}
+{"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":15484,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 01:29:18"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 01:29:18"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 01:29:44"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 01:29:44"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 01:29:44"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 01:29:44"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 01:29:44"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 01:29:44"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 01:29:44"}
+{"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":7252,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 01:29:44"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 01:29:49"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 01:29:49"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 01:29:49"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 01:29:49"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 01:29:49"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 01:29:49"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 01:29:49"}
+{"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":31936,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 01:29:49"}
+{"level":"info","message":"Deadline notification worker started (daily at 09:00 UTC)","timestamp":"2026-04-23 01:29:49"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 01:29:55"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 01:29:55"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 01:29:55"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 01:29:55"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 01:29:55"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 01:29:55"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 01:29:55"}
+{"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":3232,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 01:29:55"}
+{"level":"info","message":"Deadline notification worker started (daily at 09:00 UTC)","timestamp":"2026-04-23 01:29:55"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 01:30:30"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 01:30:30"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 01:30:30"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 01:30:30"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 01:30:30"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 01:30:30"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 01:30:30"}
+{"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":4176,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 01:30:30"}
+{"level":"info","message":"Deadline notification worker started (daily at 09:00 UTC)","timestamp":"2026-04-23 01:30:30"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 01:32:46"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 01:32:46"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 01:32:46"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 01:32:46"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 01:32:46"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 01:32:46"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 01:32:46"}
+{"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":29356,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 01:32:46"}
+{"level":"info","message":"Deadline notification worker started (daily at 09:00 UTC)","timestamp":"2026-04-23 01:32:46"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 01:32:52"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 01:32:52"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 01:32:52"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 01:32:52"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 01:32:52"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 01:32:52"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 01:32:52"}
+{"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":10784,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 01:32:52"}
+{"level":"info","message":"Deadline notification worker started (daily at 09:00 UTC)","timestamp":"2026-04-23 01:32:52"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 01:32:57"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 01:32:57"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 01:32:57"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 01:32:57"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 01:32:57"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 01:32:57"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 01:32:57"}
+{"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":6120,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 01:32:57"}
+{"level":"info","message":"Deadline notification worker started (daily at 09:00 UTC)","timestamp":"2026-04-23 01:32:57"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 01:33:57"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 01:33:57"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 01:33:57"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 01:33:57"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 01:33:57"}
+{"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":11732,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 01:33:57"}
+{"level":"info","message":"Deadline notification worker started (daily at 09:00 UTC)","timestamp":"2026-04-23 01:33:57"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 01:37:13"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 01:37:13"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 01:37:13"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 01:37:13"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 01:37:13"}
+{"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":28988,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 01:37:13"}
+{"level":"info","message":"Deadline notification worker started (daily at 09:00 UTC)","timestamp":"2026-04-23 01:37:13"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 01:37:25"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 01:37:25"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 01:37:25"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 01:37:25"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 01:37:25"}
+{"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":22340,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 01:37:25"}
+{"level":"info","message":"Deadline notification worker started (daily at 09:00 UTC)","timestamp":"2026-04-23 01:37:25"}
+{"level":"error","message":"Prisma error \nInvalid `prisma.opportunity.findFirst()` invocation in\nC:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\src\\services\\complianceGapAnalysis.ts:210:40\n\n  207   opportunityId: string,\n  208   consultingFirmId: string\n  209 ): Promise<ComplianceAnalysisResult> {\n→ 210   const opp = await prisma.opportunity.findFirst(\nCan't reach database server at `postgres:5432`\n\nPlease make sure your database server is running at `postgres:5432`.","timestamp":"2026-04-23 01:44:10"}

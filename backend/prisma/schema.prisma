@@ -645,6 +645,11 @@ model ClientPortalUser {
   lastName        String
   isActive        Boolean   @default(true)
   lastLoginAt     DateTime?
+  notifyDeliverables Boolean @default(true)
+  notifyDeadlines    Boolean @default(true)
+  notifyApprovals    Boolean @default(true)
+  smsPhone           String?
+  smsEnabled         Boolean @default(false)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 

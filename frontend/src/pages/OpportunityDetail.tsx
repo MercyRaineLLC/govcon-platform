@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { opportunitiesApi, jobsApi, documentsApi, scoreApi, clientsApi, decisionsApi, complianceMatrixApi, proposalAssistApi } from '../services/api'
+import { ComplianceGapAnalysis } from '../components/ComplianceGapAnalysis'
 import { useQuery } from '@tanstack/react-query'
 import { useTier } from '../hooks/useTier'
 import { Link } from 'react-router-dom'
@@ -1736,6 +1737,13 @@ ${data.amendments.map(a => `
           </div>
         )}
       </div>
+
+      {/* ── COMPLIANCE GAP ANALYSIS (FAR/DFARS) ─────────────── */}
+      {id && (
+        <div className="card">
+          <ComplianceGapAnalysis opportunityId={id} />
+        </div>
+      )}
 
       {/* ── COMPLIANCE MATRIX ────────────────────────────────── */}
       {(() => {

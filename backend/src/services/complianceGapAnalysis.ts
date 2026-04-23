@@ -1,0 +1,349 @@
+// =============================================================
+// Compliance Gap Analysis Service
+// Scans opportunity text for FAR/DFARS clauses and identifies
+// gaps in client capability/documentation requirements.
+// =============================================================
+
+import { prisma } from '../config/database'
+
+// -------------------------------------------------------------
+// FAR/DFARS Clause Library
+// Most common clauses encountered in federal opportunities
+// -------------------------------------------------------------
+
+export interface ClauseDefinition {
+  code: string
+  category: 'FAR' | 'DFARS'
+  title: string
+  shortDescription: string
+  plainLanguage: string
+  requirementType: 'CERTIFICATION' | 'CAPABILITY' | 'DOCUMENTATION' | 'COMPLIANCE'
+  documentNeeded?: string
+  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
+}
+
+export const CLAUSE_LIBRARY: ClauseDefinition[] = [
+  {
+    code: 'FAR 52.204-7',
+    category: 'FAR',
+    title: 'System for Award Management',
+    shortDescription: 'Active SAM.gov registration required',
+    plainLanguage: 'You must have an active registration in SAM.gov (System for Award Management). Registration must be current—not expired or in renewal.',
+    requirementType: 'CERTIFICATION',
+    documentNeeded: 'SAM.gov registration confirmation (UEI number)',
+    severity: 'CRITICAL',
+  },
+  {
+    code: 'FAR 52.204-10',
+    category: 'FAR',
+    title: 'Reporting Executive Compensation',
+    shortDescription: 'Disclose executive compensation if applicable',
+    plainLanguage: 'If you receive 80%+ of revenue from federal contracts AND that revenue exceeds $25M, you must disclose top 5 executive compensation in SAM.gov.',
+    requirementType: 'COMPLIANCE',
+    severity: 'MEDIUM',
+  },
+  {
+    code: 'FAR 52.219-14',
+    category: 'FAR',
+    title: 'Limitations on Subcontracting',
+    shortDescription: 'Prime contractor must perform minimum % of work',
+    plainLanguage: 'For services contracts, you must perform at least 50% of the cost of the contract personnel with your own employees (not subs). For supply contracts, 50% of cost of manufacturing.',
+    requirementType: 'CAPABILITY',
+    severity: 'HIGH',
+  },
+  {
+    code: 'FAR 52.219-28',
+    category: 'FAR',
+    title: 'Post-Award Small Business Representation',
+    shortDescription: 'Maintain small business status during contract',
+    plainLanguage: 'You must remain a small business under the assigned NAICS code throughout the contract. If your status changes (e.g., revenue grows beyond size standard), you must notify the contracting officer.',
+    requirementType: 'CERTIFICATION',
+    severity: 'HIGH',
+  },
+  {
+    code: 'FAR 52.222-50',
+    category: 'FAR',
+    title: 'Combating Trafficking in Persons',
+    shortDescription: 'Anti-trafficking compliance plan required',
+    plainLanguage: 'You must have a compliance plan and certify your subcontractors do not engage in human trafficking. Required for all federal contracts.',
+    requirementType: 'DOCUMENTATION',
+    documentNeeded: 'Anti-trafficking compliance plan and policy',
+    severity: 'MEDIUM',
+  },
+  {
+    code: 'FAR 52.225-5',
+    category: 'FAR',
+    title: 'Trade Agreements Act',
+    shortDescription: 'End products must come from designated countries',
+    plainLanguage: 'Products you supply must be made in the U.S. or a country with a U.S. trade agreement (specific list). Excludes most non-WTO countries.',
+    requirementType: 'COMPLIANCE',
+    severity: 'HIGH',
+  },
+  {
+    code: 'FAR 52.232-33',
+    category: 'FAR',
+    title: 'Payment by EFT - SAM',
+    shortDescription: 'Electronic Funds Transfer required for payment',
+    plainLanguage: 'You must accept payment via Electronic Funds Transfer (EFT). Banking info goes in your SAM.gov profile.',
+    requirementType: 'COMPLIANCE',
+    severity: 'LOW',
+  },
+  {
+    code: 'DFARS 252.204-7012',
+    category: 'DFARS',
+    title: 'Safeguarding Covered Defense Information',
+    shortDescription: 'NIST SP 800-171 cybersecurity controls required',
+    plainLanguage: 'If you handle Controlled Unclassified Information (CUI) for DoD, you must implement NIST SP 800-171 cybersecurity controls (110 specific requirements) and report cyber incidents within 72 hours.',
+    requirementType: 'CAPABILITY',
+    documentNeeded: 'NIST SP 800-171 System Security Plan (SSP) and POA&M',
+    severity: 'CRITICAL',
+  },
+  {
+    code: 'DFARS 252.204-7019',
+    category: 'DFARS',
+    title: 'NIST SP 800-171 DoD Assessment',
+    shortDescription: 'Self-assessment score must be in SPRS',
+    plainLanguage: 'You must complete a NIST SP 800-171 self-assessment and submit your score (-203 to 110) to DoD\'s Supplier Performance Risk System (SPRS) before contract award.',
+    requirementType: 'CERTIFICATION',
+    documentNeeded: 'SPRS-submitted assessment score',
+    severity: 'CRITICAL',
+  },
+  {
+    code: 'DFARS 252.225-7001',
+    category: 'DFARS',
+    title: 'Buy American and Balance of Payments',
+    shortDescription: 'Defense items must be domestic-end products',
+    plainLanguage: 'For DoD contracts, manufactured items must use domestic components or qualifying country components (with limited exceptions for non-availability).',
+    requirementType: 'COMPLIANCE',
+    severity: 'HIGH',
+  },
+  {
+    code: 'DFARS 252.227-7013',
+    category: 'DFARS',
+    title: 'Rights in Technical Data — Noncommercial',
+    shortDescription: 'Government rights to your technical data',
+    plainLanguage: 'The government gets unlimited rights to technical data developed exclusively with government funds, restricted rights for mixed-funded data, and limited rights for privately-developed data.',
+    requirementType: 'DOCUMENTATION',
+    documentNeeded: 'Asserted rights list and data markings',
+    severity: 'MEDIUM',
+  },
+  {
+    code: 'FAR 52.219-9',
+    category: 'FAR',
+    title: 'Small Business Subcontracting Plan',
+    shortDescription: 'Required for contracts > $750K',
+    plainLanguage: 'For large business prime contracts over $750K (or $1.5M for construction), you must submit a Small Business Subcontracting Plan with goals for SB, SDB, WOSB, HUBZone, SDVOSB, and VOSB.',
+    requirementType: 'DOCUMENTATION',
+    documentNeeded: 'Small Business Subcontracting Plan',
+    severity: 'HIGH',
+  },
+]
+
+// -------------------------------------------------------------
+// Set-aside specific requirements
+// -------------------------------------------------------------
+
+const SET_ASIDE_CAPABILITIES: Record<string, { name: string; cert: string; plain: string }> = {
+  SDVOSB: {
+    name: 'Service-Disabled Veteran-Owned Small Business',
+    cert: 'VetCert (formerly SBA VOSB Verification)',
+    plain: 'Owner must be a service-disabled veteran (rated 0%+) who controls daily operations. Must be verified through SBA VetCert program.',
+  },
+  WOSB: {
+    name: 'Woman-Owned Small Business',
+    cert: 'SBA WOSB certification (or third-party)',
+    plain: 'At least 51% owned and controlled by women who are U.S. citizens, with at least one woman managing daily operations.',
+  },
+  HUBZONE: {
+    name: 'HUBZone Small Business',
+    cert: 'SBA HUBZone certification',
+    plain: 'Principal office in a HUBZone, 35%+ employees living in HUBZones, and ownership by U.S. citizens.',
+  },
+  SBA_8A: {
+    name: '8(a) Business Development',
+    cert: 'SBA 8(a) certification',
+    plain: '9-year program for small businesses owned by socially & economically disadvantaged individuals. Provides set-aside contracts and mentorship.',
+  },
+  SMALL_BUSINESS: {
+    name: 'Small Business',
+    cert: 'SAM.gov small business representation',
+    plain: 'Must be at or below the SBA size standard for the assigned NAICS code (revenue or employee count).',
+  },
+}
+
+// -------------------------------------------------------------
+// Analysis function
+// -------------------------------------------------------------
+
+export interface ComplianceGap {
+  clauseCode: string
+  category: 'FAR' | 'DFARS' | 'SET_ASIDE'
+  title: string
+  shortDescription: string
+  plainLanguage: string
+  requirementType: string
+  documentNeeded?: string
+  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
+  detected: boolean
+  status: 'GAP' | 'MET' | 'UNKNOWN'
+  recommendation: string
+}
+
+export interface ComplianceAnalysisResult {
+  opportunityId: string
+  opportunityTitle: string
+  agency: string
+  setAsideType: string | null
+  totalClauses: number
+  criticalGaps: number
+  highGaps: number
+  mediumGaps: number
+  lowGaps: number
+  gaps: ComplianceGap[]
+  recommendations: string[]
+}
+
+export async function analyzeOpportunityCompliance(
+  opportunityId: string,
+  consultingFirmId: string
+): Promise<ComplianceAnalysisResult> {
+  const opp = await prisma.opportunity.findFirst({
+    where: { id: opportunityId, consultingFirmId },
+    select: {
+      id: true,
+      title: true,
+      agency: true,
+      description: true,
+      setAsideType: true,
+      naicsCode: true,
+      estimatedValue: true,
+    },
+  })
+
+  if (!opp) {
+    throw new Error('Opportunity not found')
+  }
+
+  const text = [opp.title, opp.description || '', opp.agency].join(' ').toLowerCase()
+  const isDoD = opp.agency.toLowerCase().match(/defense|army|navy|air force|marine|dod|space force/)
+  const value = Number(opp.estimatedValue || 0)
+
+  const gaps: ComplianceGap[] = []
+
+  // Scan clause library
+  for (const clause of CLAUSE_LIBRARY) {
+    const codeMatch = text.includes(clause.code.toLowerCase()) || text.includes(clause.code.replace(/\s/g, '').toLowerCase())
+    const isDFARSandNotDoD = clause.category === 'DFARS' && !isDoD
+
+    // Skip DFARS if not a DoD agency (unless explicitly mentioned)
+    if (isDFARSandNotDoD && !codeMatch) continue
+
+    let detected = codeMatch
+    let status: 'GAP' | 'MET' | 'UNKNOWN' = 'UNKNOWN'
+    let recommendation = `Review ${clause.code} requirements before bidding.`
+
+    // Heuristics
+    if (clause.code === 'FAR 52.219-9' && value < 750_000) {
+      continue // Not applicable below threshold
+    }
+    if (clause.code === 'FAR 52.219-9' && value >= 750_000) {
+      detected = true
+      status = 'GAP'
+      recommendation = 'Prepare Small Business Subcontracting Plan with goals before submission.'
+    }
+    if (clause.code === 'DFARS 252.204-7012' && isDoD) {
+      detected = true
+      status = 'GAP'
+      recommendation = 'Implement NIST SP 800-171 controls and document SSP/POA&M before bidding.'
+    }
+    if (clause.code === 'DFARS 252.204-7019' && isDoD) {
+      detected = true
+      status = 'GAP'
+      recommendation = 'Complete and submit NIST SP 800-171 self-assessment to SPRS.'
+    }
+    if (clause.code === 'FAR 52.204-7') {
+      detected = true
+      status = 'UNKNOWN' // Can't verify SAM.gov from here
+      recommendation = 'Verify SAM.gov registration is active before bidding.'
+    }
+    if (codeMatch) {
+      detected = true
+      status = 'GAP'
+    }
+
+    if (detected) {
+      gaps.push({
+        clauseCode: clause.code,
+        category: clause.category,
+        title: clause.title,
+        shortDescription: clause.shortDescription,
+        plainLanguage: clause.plainLanguage,
+        requirementType: clause.requirementType,
+        documentNeeded: clause.documentNeeded,
+        severity: clause.severity,
+        detected,
+        status,
+        recommendation,
+      })
+    }
+  }
+
+  // Set-aside requirements
+  if (opp.setAsideType && opp.setAsideType !== 'NONE' && SET_ASIDE_CAPABILITIES[opp.setAsideType]) {
+    const sa = SET_ASIDE_CAPABILITIES[opp.setAsideType]
+    gaps.push({
+      clauseCode: opp.setAsideType,
+      category: 'SET_ASIDE',
+      title: sa.name,
+      shortDescription: `Requires ${sa.cert}`,
+      plainLanguage: sa.plain,
+      requirementType: 'CERTIFICATION',
+      documentNeeded: sa.cert,
+      severity: 'CRITICAL',
+      detected: true,
+      status: 'GAP',
+      recommendation: `Verify ${sa.cert} is active and current before bidding.`,
+    })
+  }
+
+  // Aggregate counts
+  const criticalGaps = gaps.filter(g => g.severity === 'CRITICAL').length
+  const highGaps = gaps.filter(g => g.severity === 'HIGH').length
+  const mediumGaps = gaps.filter(g => g.severity === 'MEDIUM').length
+  const lowGaps = gaps.filter(g => g.severity === 'LOW').length
+
+  // Summary recommendations
+  const recommendations: string[] = []
+  if (criticalGaps > 0) {
+    recommendations.push(`⚠️ ${criticalGaps} CRITICAL requirement${criticalGaps === 1 ? '' : 's'} must be met before bidding.`)
+  }
+  if (highGaps > 0) {
+    recommendations.push(`📋 ${highGaps} HIGH-priority requirement${highGaps === 1 ? '' : 's'} require preparation.`)
+  }
+  if (gaps.some(g => g.documentNeeded)) {
+    recommendations.push('📁 Prepare required documents in advance — most cannot be obtained quickly.')
+  }
+  if (isDoD) {
+    recommendations.push('🛡️ DoD opportunity: Ensure NIST SP 800-171 / CMMC compliance is up to date.')
+  }
+  if (opp.setAsideType && opp.setAsideType !== 'NONE') {
+    recommendations.push(`✓ Set-aside: ${opp.setAsideType} — confirm certification status in SAM.gov.`)
+  }
+
+  return {
+    opportunityId: opp.id,
+    opportunityTitle: opp.title,
+    agency: opp.agency,
+    setAsideType: opp.setAsideType,
+    totalClauses: gaps.length,
+    criticalGaps,
+    highGaps,
+    mediumGaps,
+    lowGaps,
+    gaps: gaps.sort((a, b) => {
+      const order = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 }
+      return order[a.severity] - order[b.severity]
+    }),
+    recommendations,
+  }
+}

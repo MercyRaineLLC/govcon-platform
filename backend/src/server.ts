@@ -18,6 +18,7 @@ import { errorHandler, notFoundHandler } from './middleware/errorHandler'
 import { startScoringWorker } from './workers/scoringWorker'
 import { startEnrichmentWorker } from './workers/enrichmentWorker'
 import { startRecalibrationWorker } from './workers/recalibrationWorker'
+import { startDeadlineNotificationWorker } from './workers/deadlineNotificationWorker'
 
 // Route imports
 import authRoutes from './routes/auth'
@@ -189,6 +190,7 @@ async function bootstrap(): Promise<void> {
   const scoringWorker = startScoringWorker()
   const enrichmentWorker = startEnrichmentWorker()
   const recalibrationWorker = startRecalibrationWorker()
+  const deadlineNotificationWorker = startDeadlineNotificationWorker()
 
   // -------------------------------------------------------------
   // Start HTTP Server
@@ -214,6 +216,7 @@ async function bootstrap(): Promise<void> {
       await scoringWorker.close()
       await enrichmentWorker.close()
       await recalibrationWorker.close()
+      await deadlineNotificationWorker.close()
       logger.info('Workers stopped')
 
       await disconnectDatabase()

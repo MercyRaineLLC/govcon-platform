@@ -255,6 +255,67 @@ router.get('/rewards', authenticateClientJWT, async (req: Request, res: Response
 // PUT /api/client-portal/doc-requirements/:id/submit
 // Allows client users to mark their own requirement as submitted.
 // -------------------------------------------------------------
+// -------------------------------------------------------------
+// GET /api/client-portal/notification-preferences
+// Returns the current user's notification preferences
+// -------------------------------------------------------------
+router.get(
+  '/notification-preferences',
+  authenticateClientJWT,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { clientPortalUserId } = (req as any).clientUser as ClientJwtPayload
+      const user = await prisma.clientPortalUser.findUnique({
+        where: { id: clientPortalUserId },
+        select: {
+          notifyDeliverables: true,
+          notifyDeadlines: true,
+          notifyApprovals: true,
+          smsPhone: true,
+          smsEnabled: true,
+          email: true,
+        },
+      })
+      if (!user) throw new NotFoundError('User not found')
+      res.json({ success: true, data: user })
+    } catch (err) { next(err) }
+  }
+)
+
+// -------------------------------------------------------------
+// PUT /api/client-portal/notification-preferences
+// Updates the current user's notification preferences
+// -------------------------------------------------------------
+router.put(
+  '/notification-preferences',
+  authenticateClientJWT,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { clientPortalUserId } = (req as any).clientUser as ClientJwtPayload
+      const { notifyDeliverables, notifyDeadlines, notifyApprovals, smsPhone, smsEnabled } = req.body
+
+      const updated = await prisma.clientPortalUser.update({
+        where: { id: clientPortalUserId },
+        data: {
+          notifyDeliverables: notifyDeliverables ?? undefined,
+          notifyDeadlines: notifyDeadlines ?? undefined,
+          notifyApprovals: notifyApprovals ?? undefined,
+          smsPhone: smsPhone === '' ? null : (smsPhone ?? undefined),
+          smsEnabled: smsEnabled ?? undefined,
+        },
+        select: {
+          notifyDeliverables: true,
+          notifyDeadlines: true,
+          notifyApprovals: true,
+          smsPhone: true,
+          smsEnabled: true,
+        },
+      })
+      res.json({ success: true, data: updated })
+    } catch (err) { next(err) }
+  }
+)
+
 router.put(
   '/doc-requirements/:id/submit',
   authenticateClientJWT,

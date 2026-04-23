@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import {
   Shield, LogOut, FileText, DollarSign, Gift, CheckCircle,
   AlertTriangle, Clock, ChevronDown, ChevronUp, Upload,
-  Briefcase, TrendingUp, Building2, X, Loader,
+  Briefcase, TrendingUp, Building2, X, Loader, Settings as SettingsIcon,
 } from 'lucide-react'
 import axios from 'axios'
 import { clientPortalApi } from '../services/api'
 import { ClientDeliverableReview } from '../components/ClientDeliverableReview'
+import { NotificationPreferences } from '../components/NotificationPreferences'
+import { useBranding } from '../hooks/useBranding'
 
 const API_BASE = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001'
 
@@ -165,7 +167,7 @@ export default function ClientPortalDashboard() {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [tab, setTab] = useState<'docs' | 'deliverables' | 'contracts' | 'uploads' | 'penalties' | 'rewards'>('docs')
+  const [tab, setTab] = useState<'docs' | 'deliverables' | 'contracts' | 'uploads' | 'penalties' | 'rewards' | 'settings'>('docs')
   const [contracts, setContracts] = useState<ContractOpp[]>([])
   const [contractsLoading, setContractsLoading] = useState(false)
   const [uploads, setUploads] = useState<any[]>([])
@@ -173,6 +175,7 @@ export default function ClientPortalDashboard() {
   const [contractFilter, setContractFilter] = useState<'all' | 'active' | 'declined'>('active')
 
   const auth = (() => { try { return JSON.parse(localStorage.getItem('govcon_client_auth') ?? '') } catch { return null } })()
+  const { branding } = useBranding(data?.client?.consultingFirmId)
 
   const loadDashboard = () => {
     if (!auth?.token) { navigate('/client-login'); return }
@@ -231,17 +234,44 @@ export default function ClientPortalDashboard() {
       )}
 
       {/* Header */}
-      <header className="bg-gray-900 border-b border-gray-800 px-6 py-4">
+      <header
+        className="border-b px-6 py-4"
+        style={{
+          background: 'linear-gradient(180deg, #050e1e 0%, #071120 100%)',
+          borderColor: `${branding.secondaryColor}30`,
+        }}
+      >
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Shield className="w-5 h-5 text-blue-400" />
+            {branding.logoUrl ? (
+              <img src={branding.logoUrl} alt={branding.displayName} className="w-8 h-8 rounded object-contain" />
+            ) : (
+              <Shield className="w-5 h-5" style={{ color: branding.secondaryColor }} />
+            )}
             <div>
-              <p className="text-sm font-semibold text-gray-200">{client?.name}</p>
-              <p className="text-xs text-gray-500">Client Portal</p>
+              <p
+                className="text-sm font-bold tracking-wide"
+                style={{
+                  background: `linear-gradient(90deg, ${branding.primaryColor}, ${branding.secondaryColor})`,
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                }}
+              >
+                {branding.displayName}
+              </p>
+              <p className="text-xs text-gray-500">{client?.name} · {branding.tagline}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={() => setShowUploadModal(true)} className="flex items-center gap-2 text-xs bg-blue-900/40 hover:bg-blue-900/60 text-blue-300 border border-blue-700 px-3 py-1.5 rounded transition-colors">
+            <button
+              onClick={() => setShowUploadModal(true)}
+              className="flex items-center gap-2 text-xs px-3 py-1.5 rounded transition-colors"
+              style={{
+                background: `${branding.secondaryColor}26`,
+                border: `1px solid ${branding.secondaryColor}66`,
+                color: branding.secondaryColor,
+              }}
+            >
               <Upload className="w-3.5 h-3.5" /> Send File to Consultant
             </button>
             <button onClick={handleLogout} className="flex items-center gap-2 text-xs text-gray-500 hover:text-red-400 transition-colors">
@@ -286,6 +316,7 @@ export default function ClientPortalDashboard() {
             { key: 'uploads', label: 'My Uploads', icon: Upload, count: uploads.length },
             { key: 'penalties', label: 'Fees', icon: DollarSign, count: penalties?.filter((p: any) => !p.isPaid).length },
             { key: 'rewards', label: 'Rewards', icon: Gift, count: summary.activeRewards },
+            { key: 'settings', label: 'Notifications', icon: SettingsIcon, count: 0 },
           ] as const).map(({ key, label, icon: Icon, count }) => (
             <button key={key} onClick={() => setTab(key as any)}
               className={`flex items-center gap-2 px-4 py-2 text-sm border-b-2 transition-colors -mb-px whitespace-nowrap ${tab === key ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
@@ -454,6 +485,11 @@ export default function ClientPortalDashboard() {
               </div>
             ))}
           </div>
+        )}
+
+        {/* Tab: Notification Settings */}
+        {tab === 'settings' && (
+          <NotificationPreferences clientAuth={auth} brandingColor={branding.secondaryColor} />
         )}
       </div>
     </div>
