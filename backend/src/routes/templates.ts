@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { Router, Response, NextFunction } from 'express'
 import { z } from 'zod'
+import { DocumentRequirementStatus } from '@prisma/client'
 import { prisma } from '../config/database'
 import { authenticateJWT } from '../middleware/auth'
 import { enforceTenantScope, getTenantId } from '../middleware/tenant'
@@ -296,7 +297,7 @@ router.post('/:id/assign', async (req: AuthenticatedRequest, res: Response, next
             ? input.penaltyPercent
             : null,
         notes: input.notes || null,
-        status: 'PENDING',
+        status: DocumentRequirementStatus.PENDING,
       }))
 
     if (rows.length > 0) {

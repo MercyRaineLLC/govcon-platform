@@ -32,7 +32,7 @@ const UpdateRequirementSchema = z.object({
   isPenaltyEnabled: z.boolean().optional(),
   penaltyAmount: z.coerce.number().min(0).optional().nullable(),
   penaltyPercent: z.coerce.number().min(0).max(100).optional().nullable(),
-  status: z.enum(['PENDING', 'SUBMITTED', 'OVERDUE']).optional(),
+  status: z.enum(['PENDING', 'IN_PROGRESS', 'SUBMITTED', 'APPROVED', 'REJECTED']).optional(),
   notes: z.string().max(4000).optional().nullable(),
 })
 

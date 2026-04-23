@@ -234,7 +234,7 @@ router.post('/analyze/:documentId', async (req: AuthenticatedRequest, res: Respo
 
         await prisma.opportunityDocument.update({
           where: { id: documentId },
-          data: { analysisStatus: 'RUNNING' },
+          data: { analysisStatus: 'IN_PROGRESS' },
         });
 
         const clients = await prisma.clientCompany.findMany({
@@ -306,7 +306,7 @@ router.post('/analyze/:documentId', async (req: AuthenticatedRequest, res: Respo
         await prisma.opportunityDocument.update({
           where: { id: documentId },
           data: {
-            analysisStatus: isNoKey ? 'NO_AI_KEY' : 'FAILED',
+            analysisStatus: isNoKey ? 'SKIPPED' : 'FAILED',
             analysisError: isNoKey
               ? 'No AI provider key configured. Add it in Settings → AI Intelligence Provider.'
               : errorMsg,

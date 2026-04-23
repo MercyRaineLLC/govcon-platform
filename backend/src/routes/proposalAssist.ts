@@ -86,10 +86,10 @@ router.post('/:opportunityId/outline', async (req: AuthenticatedRequest, res: Re
     res.json({ success: true, data: outline, tokensRemaining })
   } catch (err: any) {
     if (err?.message === 'NO_LLM_KEY') {
-      return res.status(400).json({ error: 'NO_AI_KEY', message: 'No AI key configured — go to Settings to add your API key.' })
+      return res.status(400).json({ success: false, error: 'No AI key configured — go to Settings to add your API key.', code: 'NO_AI_KEY' })
     }
     if (err?.message === 'RATE_LIMITED') {
-      return res.status(429).json({ error: 'RATE_LIMITED', message: 'AI rate limit reached — please wait 60 seconds and try again.' })
+      return res.status(429).json({ success: false, error: 'AI rate limit reached — please wait 60 seconds and try again.', code: 'RATE_LIMITED' })
     }
     next(err)
   }
@@ -265,10 +265,10 @@ router.post('/:opportunityId/draft', async (req: AuthenticatedRequest, res: Resp
     res.send(pdfBuffer)
   } catch (err: any) {
     if (err?.message === 'NO_LLM_KEY') {
-      return res.status(400).json({ error: 'NO_AI_KEY', message: 'No AI key configured — go to Settings to add your API key.' })
+      return res.status(400).json({ success: false, error: 'No AI key configured — go to Settings to add your API key.', code: 'NO_AI_KEY' })
     }
     if (err?.message === 'RATE_LIMITED') {
-      return res.status(429).json({ error: 'RATE_LIMITED', message: 'AI rate limit reached — please wait 60 seconds and try again.' })
+      return res.status(429).json({ success: false, error: 'AI rate limit reached — please wait 60 seconds and try again.', code: 'RATE_LIMITED' })
     }
     next(err)
   }

@@ -2,18 +2,19 @@ import { useState, useRef, useEffect } from 'react'
 import { MessageCircle, X, Send, Loader, Bot, User, Minimize2 } from 'lucide-react'
 import { assistantApi } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
+import { useBranding } from '../hooks/useBranding'
 
 interface Message {
   role: 'user' | 'assistant'
   content: string
 }
 
-function UmbrellaMini() {
+function UmbrellaMini({ color }: { color: string }) {
   return (
     <svg width="20" height="20" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M32 7 C15 7 3 19 3 33 L61 33 C61 19 49 7 32 7Z" fill="#f59e0b" />
-      <line x1="32" y1="33" x2="32" y2="54" stroke="#f59e0b" strokeWidth="3" strokeLinecap="round" />
-      <path d="M32 54 Q32 61 25 61 Q20 61 20 55.5" stroke="#f59e0b" strokeWidth="3" fill="none" strokeLinecap="round" />
+      <path d="M32 7 C15 7 3 19 3 33 L61 33 C61 19 49 7 32 7Z" fill={color} />
+      <line x1="32" y1="33" x2="32" y2="54" stroke={color} strokeWidth="3" strokeLinecap="round" />
+      <path d="M32 54 Q32 61 25 61 Q20 61 20 55.5" stroke={color} strokeWidth="3" fill="none" strokeLinecap="round" />
     </svg>
   )
 }
@@ -28,7 +29,8 @@ const QUICK_ACTIONS = [
 ]
 
 export function AiAssistant() {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, firm } = useAuth()
+  const { branding } = useBranding(firm?.id)
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState<Message[]>([
     { role: 'assistant', content: GREETING },
@@ -97,8 +99,8 @@ export function AiAssistant() {
           onClick={() => setIsOpen(true)}
           className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-all hover:scale-110 active:scale-95"
           style={{
-            background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-            boxShadow: '0 4px 24px rgba(245,158,11,0.4)',
+            background: `linear-gradient(135deg, ${branding.primaryColor} 0%, ${branding.secondaryColor} 100%)`,
+            boxShadow: `0 4px 24px ${branding.secondaryColor}66`,
           }}
         >
           <MessageCircle className="w-6 h-6 text-gray-900" />
@@ -127,7 +129,7 @@ export function AiAssistant() {
           >
             <div className="w-8 h-8 rounded-full flex items-center justify-center"
               style={{ background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)' }}>
-              <UmbrellaMini />
+              <UmbrellaMini color={branding.secondaryColor} />
             </div>
             <div className="flex-1">
               <p className="text-sm font-semibold text-amber-300">Mr GovCon AI</p>
@@ -225,7 +227,7 @@ export function AiAssistant() {
               disabled={!input.trim() || loading}
               className="w-9 h-9 rounded-xl flex items-center justify-center transition-all disabled:opacity-30"
               style={{
-                background: input.trim() ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'transparent',
+                background: input.trim() ? `linear-gradient(135deg, ${branding.primaryColor}, ${branding.secondaryColor})` : 'transparent',
                 border: input.trim() ? 'none' : '1px solid rgba(107,114,128,0.3)',
               }}
             >
