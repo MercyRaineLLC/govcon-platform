@@ -1,7 +1,8 @@
 import { Router, Request, Response, NextFunction } from 'express'
 import { prisma } from '../config/database'
 import { authenticateJWT, requireRole } from '../middleware/auth'
-import { enforceTenantScope } from '../middleware/tenant'
+import { enforceTenantScope, getTenantId } from '../middleware/tenant'
+import type { AuthenticatedRequest } from '../types'
 import { ValidationError, NotFoundError } from '../utils/errors'
 import { logger } from '../utils/logger'
 import {
@@ -78,7 +79,7 @@ router.put(
   enforceTenantScope,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const firmId = (req as any).firmId
+      const firmId = getTenantId(req as AuthenticatedRequest)
       const {
         displayName,
         tagline,
@@ -224,7 +225,7 @@ router.get(
   enforceTenantScope,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const firmId = (req as any).firmId
+      const firmId = getTenantId(req as AuthenticatedRequest)
       const firm = await prisma.consultingFirm.findUnique({
         where: { id: firmId },
         select: {
@@ -278,7 +279,7 @@ router.put(
   enforceTenantScope,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const firmId = (req as any).firmId
+      const firmId = getTenantId(req as AuthenticatedRequest)
       const { subdomain } = req.body
 
       if (subdomain !== null && (typeof subdomain !== 'string' || !isValidSubdomain(subdomain))) {
@@ -352,7 +353,7 @@ router.put(
   enforceTenantScope,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const firmId = (req as any).firmId
+      const firmId = getTenantId(req as AuthenticatedRequest)
       const { customDomain } = req.body
 
       if (customDomain !== null && (typeof customDomain !== 'string' || !isValidHost(customDomain))) {
@@ -441,7 +442,7 @@ router.post(
   enforceTenantScope,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const firmId = (req as any).firmId
+      const firmId = getTenantId(req as AuthenticatedRequest)
       const firm = await prisma.consultingFirm.findUnique({
         where: { id: firmId },
         select: { customDomain: true },
