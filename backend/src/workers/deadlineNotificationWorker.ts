@@ -7,6 +7,7 @@ import { Queue, Worker } from 'bullmq'
 import { prisma } from '../config/database'
 import { logger } from '../utils/logger'
 import { notifyDeadlineApproaching } from '../services/emailService'
+import { smsDeadlineUrgent } from '../services/smsService'
 import { config } from '../config/config'
 
 const QUEUE_NAME = 'deadline-notifications'
@@ -52,15 +53,34 @@ async function sendDailyReminders() {
           name: true,
           consultingFirmId: true,
           clientPortalUsers: {
-            where: { isActive: true, notifyDeadlines: true },
-            select: { email: true, firstName: true, lastName: true },
+            where: {
+              isActive: true,
+              OR: [{ notifyDeadlines: true }, { smsEnabled: true }],
+            },
+            select: {
+              email: true,
+              firstName: true,
+              lastName: true,
+              notifyDeadlines: true,
+              smsEnabled: true,
+              smsPhone: true,
+            },
           },
         },
       },
     },
   })
 
-  let sentCount = 0
+  // Cache firm display names (avoid N queries)
+  const firmIds = Array.from(new Set(requirements.map(r => r.clientCompany.consultingFirmId)))
+  const firms = await prisma.consultingFirm.findMany({
+    where: { id: { in: firmIds } },
+    select: { id: true, name: true, brandingDisplayName: true },
+  })
+  const firmDisplayMap = new Map(firms.map(f => [f.id, f.brandingDisplayName || f.name]))
+
+  let emailsSent = 0
+  let smsSent = 0
   let skippedCount = 0
 
   for (const req of requirements) {
@@ -73,35 +93,59 @@ async function sendDailyReminders() {
     }
 
     const portalUrl = (process.env.FRONTEND_URL || 'http://localhost:3000') + '/client-portal'
+    const firmDisplayName = firmDisplayMap.get(req.clientCompany.consultingFirmId) || 'MrGovCon'
 
     for (const user of req.clientCompany.clientPortalUsers) {
-      try {
-        await notifyDeadlineApproaching({
-          firmId: req.clientCompany.consultingFirmId,
-          recipientEmail: user.email,
-          recipientName: `${user.firstName} ${user.lastName}`.trim(),
-          documentTitle: req.title,
-          daysUntilDue: daysUntil,
-          portalUrl,
-        })
-        sentCount++
-      } catch (err: any) {
-        logger.warn('Deadline reminder send failed', {
-          email: user.email,
-          docId: req.id,
-          error: err.message,
-        })
+      // Email reminder (if opted in)
+      if (user.notifyDeadlines) {
+        try {
+          await notifyDeadlineApproaching({
+            firmId: req.clientCompany.consultingFirmId,
+            recipientEmail: user.email,
+            recipientName: `${user.firstName} ${user.lastName}`.trim(),
+            documentTitle: req.title,
+            daysUntilDue: daysUntil,
+            portalUrl,
+          })
+          emailsSent++
+        } catch (err: any) {
+          logger.warn('Deadline email reminder failed', {
+            email: user.email,
+            docId: req.id,
+            error: err.message,
+          })
+        }
+      }
+
+      // SMS only for the urgent 1-day milestone (avoid SMS fatigue)
+      if (daysUntil === 1 && user.smsEnabled && user.smsPhone) {
+        try {
+          const result = await smsDeadlineUrgent({
+            to: user.smsPhone,
+            consultingFirmId: req.clientCompany.consultingFirmId,
+            firmDisplayName,
+            documentTitle: req.title,
+            hoursUntilDue: 24,
+          })
+          if (result.success) smsSent++
+        } catch (err: any) {
+          logger.warn('Deadline SMS reminder failed', {
+            docId: req.id,
+            error: err.message,
+          })
+        }
       }
     }
   }
 
   logger.info('Deadline notification scan complete', {
     total: requirements.length,
-    sent: sentCount,
+    emailsSent,
+    smsSent,
     skipped: skippedCount,
   })
 
-  return { total: requirements.length, sent: sentCount, skipped: skippedCount }
+  return { total: requirements.length, emailsSent, smsSent, skipped: skippedCount }
 }
 
 // -------------------------------------------------------------

@@ -6,6 +6,7 @@ import { upload } from '../middleware/upload'
 import jwt from 'jsonwebtoken'
 import { config } from '../config/config'
 import { notifyDeliverableReady, notifyApprovalReceived } from '../services/emailService'
+import { smsDeliverableReady } from '../services/smsService'
 
 const router = Router()
 
@@ -127,23 +128,59 @@ router.post(
         clientId: clientCompanyId,
       })
 
-      // Fire-and-forget notification to all opted-in client portal users
+      // Fire-and-forget notifications to all opted-in client portal users
+      // Email goes to notifyDeliverables=true users
+      // SMS goes to smsEnabled=true users with valid smsPhone (urgent channel only)
       ;(async () => {
         try {
           const portalUsers = await prisma.clientPortalUser.findMany({
-            where: { clientCompanyId, isActive: true, notifyDeliverables: true },
-            select: { email: true, firstName: true, lastName: true },
+            where: {
+              clientCompanyId,
+              isActive: true,
+              OR: [
+                { notifyDeliverables: true },
+                { smsEnabled: true },
+              ],
+            },
+            select: {
+              email: true,
+              firstName: true,
+              lastName: true,
+              notifyDeliverables: true,
+              smsEnabled: true,
+              smsPhone: true,
+            },
           })
           const portalUrl = (process.env.FRONTEND_URL || 'http://localhost:3000') + '/client-portal'
-          await Promise.all(portalUsers.map(u =>
-            notifyDeliverableReady({
-              firmId: clientCompany.consultingFirmId,
-              recipientEmail: u.email,
-              recipientName: `${u.firstName} ${u.lastName}`.trim(),
-              deliverableTitle: title,
-              portalUrl,
-            })
-          ))
+
+          // Fetch firm display name once for SMS branding
+          const firm = await prisma.consultingFirm.findUnique({
+            where: { id: clientCompany.consultingFirmId },
+            select: { name: true, brandingDisplayName: true },
+          })
+          const firmDisplayName = firm?.brandingDisplayName || firm?.name || 'MrGovCon'
+
+          await Promise.all(portalUsers.flatMap(u => {
+            const tasks: Promise<unknown>[] = []
+            if (u.notifyDeliverables) {
+              tasks.push(notifyDeliverableReady({
+                firmId: clientCompany.consultingFirmId,
+                recipientEmail: u.email,
+                recipientName: `${u.firstName} ${u.lastName}`.trim(),
+                deliverableTitle: title,
+                portalUrl,
+              }))
+            }
+            if (u.smsEnabled && u.smsPhone) {
+              tasks.push(smsDeliverableReady({
+                to: u.smsPhone,
+                consultingFirmId: clientCompany.consultingFirmId,
+                firmDisplayName,
+                deliverableTitle: title,
+              }))
+            }
+            return tasks
+          }))
         } catch (err: any) {
           logger.warn('Failed to send deliverable notifications', { error: err.message })
         }
