@@ -339,7 +339,9 @@ router.get('/:opportunityId/gap-analysis', async (req: AuthenticatedRequest, res
   try {
     const consultingFirmId = getTenantId(req)
     const { opportunityId } = req.params
-    const result = await analyzeOpportunityCompliance(opportunityId, consultingFirmId)
+    // ?ai=true opts into LLM-powered clause extraction (extends keyword analysis)
+    const useAi = req.query.ai === 'true' || req.query.ai === '1'
+    const result = await analyzeOpportunityCompliance(opportunityId, consultingFirmId, { useAi })
     res.json({ success: true, data: result })
   } catch (err: any) {
     if (err.message === 'Opportunity not found') {

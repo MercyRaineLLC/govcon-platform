@@ -177,7 +177,7 @@ const SET_ASIDE_CAPABILITIES: Record<string, { name: string; cert: string; plain
 
 export interface ComplianceGap {
   clauseCode: string
-  category: 'FAR' | 'DFARS' | 'SET_ASIDE'
+  category: 'FAR' | 'DFARS' | 'SET_ASIDE' | 'OTHER'
   title: string
   shortDescription: string
   plainLanguage: string
@@ -187,6 +187,10 @@ export interface ComplianceGap {
   detected: boolean
   status: 'GAP' | 'MET' | 'UNKNOWN'
   recommendation: string
+  // Phase 5D: source attribution — KEYWORD, AI, or BOTH
+  detectedBy?: 'KEYWORD' | 'AI' | 'BOTH'
+  aiConfidence?: number
+  aiExcerpt?: string
 }
 
 export interface ComplianceAnalysisResult {
@@ -201,11 +205,20 @@ export interface ComplianceAnalysisResult {
   lowGaps: number
   gaps: ComplianceGap[]
   recommendations: string[]
+  // Phase 5D: AI extraction metadata
+  aiExtraction?: {
+    enabled: boolean
+    modelUsed: string
+    tokensUsed: number
+    cached: boolean
+    aiOnlyClauseCount: number
+  }
 }
 
 export async function analyzeOpportunityCompliance(
   opportunityId: string,
-  consultingFirmId: string
+  consultingFirmId: string,
+  opts: { useAi?: boolean } = {}
 ): Promise<ComplianceAnalysisResult> {
   const opp = await prisma.opportunity.findFirst({
     where: { id: opportunityId, consultingFirmId },
@@ -312,13 +325,84 @@ export async function analyzeOpportunityCompliance(
   const mediumGaps = gaps.filter(g => g.severity === 'MEDIUM').length
   const lowGaps = gaps.filter(g => g.severity === 'LOW').length
 
+  // Source attribution: existing keyword-detected gaps default to KEYWORD
+  for (const gap of gaps) {
+    if (!gap.detectedBy && gap.category !== 'SET_ASIDE') {
+      gap.detectedBy = 'KEYWORD'
+    }
+  }
+
+  // Phase 5D: Optionally augment with AI clause extraction
+  let aiMeta: ComplianceAnalysisResult['aiExtraction'] = undefined
+  if (opts.useAi) {
+    try {
+      // Lazy import to keep keyword-only path lean (no Redis touch when unused)
+      const { extractClausesFromOpportunity } = await import('./aiClauseExtractor')
+      const extraction = await extractClausesFromOpportunity(opportunityId, consultingFirmId)
+
+      let aiOnlyCount = 0
+      const existingByCode = new Map(gaps.map(g => [g.clauseCode, g]))
+
+      for (const aiClause of extraction.clauses) {
+        const existing = existingByCode.get(aiClause.clauseCode)
+        if (existing) {
+          // Merge: mark as detected by both, attach AI evidence
+          existing.detectedBy = 'BOTH'
+          existing.aiConfidence = aiClause.confidence
+          existing.aiExcerpt = aiClause.excerpt
+        } else {
+          // AI found a clause not in our keyword library — add as OTHER severity MEDIUM
+          gaps.push({
+            clauseCode: aiClause.clauseCode,
+            category: aiClause.category === 'OTHER' ? 'OTHER' : aiClause.category,
+            title: aiClause.clauseCode,
+            shortDescription: 'AI-detected clause reference',
+            plainLanguage: `AI extracted this clause from the solicitation. Look up exact requirements in the FAR/DFARS reference. Excerpt: "${aiClause.excerpt}"`,
+            requirementType: 'COMPLIANCE',
+            severity: 'MEDIUM',
+            detected: true,
+            status: 'GAP',
+            recommendation: `Review ${aiClause.clauseCode} requirements before bidding (AI-detected — verify against current FAR/DFARS).`,
+            detectedBy: 'AI',
+            aiConfidence: aiClause.confidence,
+            aiExcerpt: aiClause.excerpt,
+          })
+          aiOnlyCount++
+        }
+      }
+
+      aiMeta = {
+        enabled: true,
+        modelUsed: extraction.modelUsed,
+        tokensUsed: extraction.tokensUsed,
+        cached: extraction.cached,
+        aiOnlyClauseCount: aiOnlyCount,
+      }
+    } catch (err: any) {
+      // AI is best-effort — never break the keyword analysis
+      aiMeta = {
+        enabled: false,
+        modelUsed: 'error',
+        tokensUsed: 0,
+        cached: false,
+        aiOnlyClauseCount: 0,
+      }
+    }
+  }
+
+  // Recompute counts after possible AI additions
+  const finalCritical = gaps.filter(g => g.severity === 'CRITICAL').length
+  const finalHigh = gaps.filter(g => g.severity === 'HIGH').length
+  const finalMedium = gaps.filter(g => g.severity === 'MEDIUM').length
+  const finalLow = gaps.filter(g => g.severity === 'LOW').length
+
   // Summary recommendations
   const recommendations: string[] = []
-  if (criticalGaps > 0) {
-    recommendations.push(`⚠️ ${criticalGaps} CRITICAL requirement${criticalGaps === 1 ? '' : 's'} must be met before bidding.`)
+  if (finalCritical > 0) {
+    recommendations.push(`⚠️ ${finalCritical} CRITICAL requirement${finalCritical === 1 ? '' : 's'} must be met before bidding.`)
   }
-  if (highGaps > 0) {
-    recommendations.push(`📋 ${highGaps} HIGH-priority requirement${highGaps === 1 ? '' : 's'} require preparation.`)
+  if (finalHigh > 0) {
+    recommendations.push(`📋 ${finalHigh} HIGH-priority requirement${finalHigh === 1 ? '' : 's'} require preparation.`)
   }
   if (gaps.some(g => g.documentNeeded)) {
     recommendations.push('📁 Prepare required documents in advance — most cannot be obtained quickly.')
@@ -329,6 +413,9 @@ export async function analyzeOpportunityCompliance(
   if (opp.setAsideType && opp.setAsideType !== 'NONE') {
     recommendations.push(`✓ Set-aside: ${opp.setAsideType} — confirm certification status in SAM.gov.`)
   }
+  if (aiMeta && aiMeta.aiOnlyClauseCount > 0) {
+    recommendations.push(`🤖 ${aiMeta.aiOnlyClauseCount} additional clause${aiMeta.aiOnlyClauseCount === 1 ? '' : 's'} detected by AI — review evidence excerpts.`)
+  }
 
   return {
     opportunityId: opp.id,
@@ -336,14 +423,15 @@ export async function analyzeOpportunityCompliance(
     agency: opp.agency,
     setAsideType: opp.setAsideType,
     totalClauses: gaps.length,
-    criticalGaps,
-    highGaps,
-    mediumGaps,
-    lowGaps,
+    criticalGaps: finalCritical,
+    highGaps: finalHigh,
+    mediumGaps: finalMedium,
+    lowGaps: finalLow,
     gaps: gaps.sort((a, b) => {
       const order = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 }
       return order[a.severity] - order[b.severity]
     }),
     recommendations,
+    aiExtraction: aiMeta,
   }
 }
