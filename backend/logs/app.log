@@ -619,3 +619,134 @@
 {"error":"Unexpected token 'o', \"not json\" is not valid JSON","level":"warn","message":"AI clause extractor: JSON parse failed","preview":"not json","timestamp":"2026-04-23 04:46:37"}
 {"error":"Unexpected end of JSON input","level":"warn","message":"AI clause extractor: JSON parse failed","preview":"{\"clauses\":","timestamp":"2026-04-23 04:46:37"}
 {"error":"Unexpected end of JSON input","level":"warn","message":"AI clause extractor: JSON parse failed","preview":"","timestamp":"2026-04-23 04:46:37"}
+{"eventId":"evt_1TPJqzRzyNJh46IB4rTzrAcB","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:47:25","type":"account.updated"}
+{"eventId":"evt_1TPJr2RzyNJh46IBu7hlKpvK","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:47:27","type":"account.updated"}
+{"eventId":"evt_1TPJr2RzyNJh46IBQTL5mGbc","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:47:28","type":"account.updated"}
+{"eventId":"evt_1TPJr4RzyNJh46IBJwvtefkR","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:47:30","type":"account.updated"}
+{"eventId":"evt_1TPJrARzyNJh46IB5Tn7yCCj","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:47:36","type":"account.updated"}
+{"eventId":"evt_1TPJrERzyNJh46IBKY3fcIlC","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:47:40","type":"capability.updated"}
+{"eventId":"evt_1TPJrERzyNJh46IBrCv9VD2t","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:47:40","type":"capability.updated"}
+{"eventId":"evt_1TPJrFRzyNJh46IBeKR3i6Rw","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:47:40","type":"capability.updated"}
+{"eventId":"evt_1TPJrFRzyNJh46IBR06IrRvW","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:47:41","type":"capability.updated"}
+{"eventId":"evt_1TPJrFRzyNJh46IBhQAyfQsC","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:47:41","type":"capability.updated"}
+{"eventId":"evt_1TPJrFRzyNJh46IBxPmoRoes","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:47:41","type":"capability.updated"}
+{"eventId":"evt_1TPJrGRzyNJh46IBfYriNzL1","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:47:41","type":"capability.updated"}
+{"eventId":"evt_1TPJrGRzyNJh46IB9HcLy0T9","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:47:42","type":"capability.updated"}
+{"eventId":"evt_1TPJrGRzyNJh46IBEiHuDVO3","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:47:42","type":"capability.updated"}
+{"eventId":"evt_1TPJrGRzyNJh46IBPSK8A97b","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:47:42","type":"capability.updated"}
+{"eventId":"evt_1TPJrHRzyNJh46IBVzGZ6jRw","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:47:42","type":"capability.updated"}
+{"eventId":"evt_1TPJrHRzyNJh46IBpWq63XAS","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:47:43","type":"capability.updated"}
+{"eventId":"evt_1TPJrFRzyNJh46IBeYuRKkm7","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:47:46","type":"capability.updated"}
+{"eventId":"evt_1TPJrXRzyNJh46IB7XubTIXr","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:47:58","type":"account.updated"}
+{"eventId":"evt_1TPJrXRzyNJh46IBsqwg7XQH","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:47:59","type":"capability.updated"}
+{"eventId":"evt_1TPJrXRzyNJh46IBYbUehC38","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:47:59","type":"capability.updated"}
+{"eventId":"evt_1TPJrXRzyNJh46IBXIbrZ7zw","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:47:59","type":"capability.updated"}
+{"eventId":"evt_1TPJrYRzyNJh46IBLiX8Vbgc","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:47:59","type":"capability.updated"}
+{"eventId":"evt_1TPJrYRzyNJh46IBHJC6kqqA","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:00","type":"capability.updated"}
+{"eventId":"evt_1TPJrYRzyNJh46IBSlLjNc6x","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:00","type":"capability.updated"}
+{"eventId":"evt_1TPJrZRzyNJh46IBdzE3VfgS","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:00","type":"capability.updated"}
+{"eventId":"evt_1TPJrZRzyNJh46IBJAwrwH8B","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:01","type":"capability.updated"}
+{"eventId":"evt_1TPJrZRzyNJh46IBZDmNip4F","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:01","type":"capability.updated"}
+{"eventId":"evt_1TPJrZRzyNJh46IBvKnJJ1Nt","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:01","type":"capability.updated"}
+{"eventId":"evt_1TPJrdRzyNJh46IBaMyjUpuT","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:04","type":"account.updated"}
+{"eventId":"evt_1TPJrdRzyNJh46IBojEmc26w","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:05","type":"capability.updated"}
+{"eventId":"evt_1TPJrdRzyNJh46IBRlrixQ2Q","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:05","type":"capability.updated"}
+{"eventId":"evt_1TPJrdRzyNJh46IB6seYkQlq","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:05","type":"capability.updated"}
+{"eventId":"evt_1TPJreRzyNJh46IBVzrXOwNi","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:05","type":"capability.updated"}
+{"eventId":"evt_1TPJreRzyNJh46IBvqNgZHlG","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:06","type":"capability.updated"}
+{"eventId":"evt_1TPJrYRzyNJh46IBfFrmLidf","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:06","type":"capability.updated"}
+{"eventId":"evt_1TPJreRzyNJh46IBHL5X2Qhn","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:06","type":"capability.updated"}
+{"eventId":"evt_1TPJrfRzyNJh46IBCMHhsLcY","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:06","type":"capability.updated"}
+{"eventId":"evt_1TPJrfRzyNJh46IBwb5vR2vs","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:07","type":"capability.updated"}
+{"eventId":"evt_1TPJrfRzyNJh46IBJXpvWVpN","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:07","type":"capability.updated"}
+{"eventId":"evt_1TPJrfRzyNJh46IBoAj1XfrY","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:07","type":"capability.updated"}
+{"eventId":"evt_1TPJrYRzyNJh46IBkpi9L961","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:08","type":"capability.updated"}
+{"eventId":"evt_1TPJrXRzyNJh46IBtUBiUSqn","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:08","type":"capability.updated"}
+{"eventId":"evt_1TPJrdRzyNJh46IBobYROr6c","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:09","type":"capability.updated"}
+{"eventId":"evt_1TPJreRzyNJh46IB80zp5ntr","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:09","type":"capability.updated"}
+{"eventId":"evt_1TPJsIRzyNJh46IBTimq7KEi","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:46","type":"account.updated"}
+{"eventId":"evt_1TPJsIRzyNJh46IB7hRoPQDl","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:46","type":"capability.updated"}
+{"eventId":"evt_1TPJsIRzyNJh46IBRZwR3pS3","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:46","type":"capability.updated"}
+{"eventId":"evt_1TPJsJRzyNJh46IBtfcx2MMs","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:47","type":"capability.updated"}
+{"eventId":"evt_1TPJsJRzyNJh46IBDecY4rk5","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:47","type":"capability.updated"}
+{"eventId":"evt_1TPJsJRzyNJh46IBrth8llkc","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:47","type":"capability.updated"}
+{"eventId":"evt_1TPJsJRzyNJh46IBMb2dnBEa","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:47","type":"capability.updated"}
+{"eventId":"evt_1TPJsKRzyNJh46IBg1opKpjC","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:47","type":"capability.updated"}
+{"eventId":"evt_1TPJsKRzyNJh46IBf2cEU34P","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:48","type":"capability.updated"}
+{"eventId":"evt_1TPJsKRzyNJh46IBYlJuU024","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:48","type":"capability.updated"}
+{"eventId":"evt_1TPJsKRzyNJh46IBf9GvCI3g","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:48","type":"capability.updated"}
+{"eventId":"evt_1TPJsKRzyNJh46IBqUzc4WKI","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:50","type":"capability.updated"}
+{"eventId":"evt_1TPJsJRzyNJh46IBSxJvFHI8","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 04:48:54","type":"capability.updated"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 05:04:51"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 05:04:51"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 05:04:51"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 05:04:51"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 05:04:51"}
+{"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":34560,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 05:04:51"}
+{"level":"info","message":"Deadline notification worker started (daily at 09:00 UTC)","timestamp":"2026-04-23 05:04:51"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 05:05:18"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 05:05:18"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 05:05:18"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 05:05:18"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 05:05:18"}
+{"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":26712,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 05:05:18"}
+{"level":"info","message":"Deadline notification worker started (daily at 09:00 UTC)","timestamp":"2026-04-23 05:05:18"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 05:05:34"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 05:05:34"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 05:05:34"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 05:05:34"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 05:05:34"}
+{"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":36000,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 05:05:34"}
+{"level":"info","message":"Deadline notification worker started (daily at 09:00 UTC)","timestamp":"2026-04-23 05:05:34"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 05:05:44"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 05:05:44"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 05:05:44"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 05:05:44"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 05:05:44"}
+{"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":33252,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 05:05:44"}
+{"level":"info","message":"Deadline notification worker started (daily at 09:00 UTC)","timestamp":"2026-04-23 05:05:44"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 05:06:01"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 05:06:01"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 05:06:01"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 05:06:01"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 05:06:01"}
+{"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":36036,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 05:06:01"}
+{"level":"info","message":"Deadline notification worker started (daily at 09:00 UTC)","timestamp":"2026-04-23 05:06:01"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 05:06:22"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 05:06:22"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 05:06:22"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 05:06:22"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 05:06:22"}
+{"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":33316,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 05:06:22"}
+{"level":"info","message":"Deadline notification worker started (daily at 09:00 UTC)","timestamp":"2026-04-23 05:06:23"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 05:06:32"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 05:06:32"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 05:06:32"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 05:06:32"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 05:06:32"}
+{"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":34756,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 05:06:32"}
+{"level":"info","message":"Deadline notification worker started (daily at 09:00 UTC)","timestamp":"2026-04-23 05:06:32"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 05:06:43"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 05:06:43"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 05:06:43"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 05:06:43"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 05:06:43"}
+{"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":32992,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 05:06:43"}
+{"level":"info","message":"Deadline notification worker started (daily at 09:00 UTC)","timestamp":"2026-04-23 05:06:43"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 05:07:02"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 05:07:02"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 05:07:02"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 05:07:02"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 05:07:02"}
+{"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":33316,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 05:07:02"}
+{"level":"info","message":"Deadline notification worker started (daily at 09:00 UTC)","timestamp":"2026-04-23 05:07:02"}
+{"level":"warn","message":"SMS rejected — invalid E.164 phone","phone":"***-1234","timestamp":"2026-04-23 05:07:22"}
+{"level":"warn","message":"SMS rejected — invalid E.164 phone","phone":"****","timestamp":"2026-04-23 05:07:22"}
+{"level":"warn","message":"SMS rejected — invalid E.164 phone","phone":"****","timestamp":"2026-04-23 05:07:22"}
+{"bodyLength":2,"level":"info","message":"SMS (dev mode, not sent)","timestamp":"2026-04-23 05:07:22","to":"***-1234"}
+{"bodyLength":2,"level":"info","message":"SMS (dev mode, not sent)","timestamp":"2026-04-23 05:07:22","to":"***-1234"}
+{"bodyLength":320,"level":"info","message":"SMS (dev mode, not sent)","timestamp":"2026-04-23 05:07:22","to":"***-1234"}
+{"code":"SUPERFAKE 99.9-99","level":"warn","message":"AI clause extractor: rejected implausible code","timestamp":"2026-04-23 05:07:22"}
+{"error":"Unexpected token 'o', \"not json\" is not valid JSON","level":"warn","message":"AI clause extractor: JSON parse failed","preview":"not json","timestamp":"2026-04-23 05:07:22"}
+{"error":"Unexpected end of JSON input","level":"warn","message":"AI clause extractor: JSON parse failed","preview":"{\"clauses\":","timestamp":"2026-04-23 05:07:22"}
+{"error":"Unexpected end of JSON input","level":"warn","message":"AI clause extractor: JSON parse failed","preview":"","timestamp":"2026-04-23 05:07:22"}

@@ -16,11 +16,16 @@ import {
 import {
   createLifetimeCheckoutSession,
   createAddOnCheckoutSession,
+  createSubscriptionCheckoutSession,
+  createCustomerPortalSession,
   isStripeConfigured,
   hasLifetimeAccess,
   ADDON_CATALOG,
   LIFETIME_PRICE_CENTS,
   LIFETIME_PRODUCT_NAME,
+  TIER_CATALOG,
+  isTierConfigured,
+  SubscriptionTier,
 } from '../services/stripeService'
 
 const router = Router()
@@ -240,6 +245,14 @@ router.get('/stripe/catalog', async (_req: AuthenticatedRequest, res: Response, 
           priceUsd: a.priceCents / 100,
           description: a.description,
         })),
+        // Recurring subscription tiers — only listed if STRIPE_PRICE_<TIER> is set
+        tiers: TIER_CATALOG.map(t => ({
+          slug: t.slug,
+          name: t.name,
+          description: t.description,
+          features: t.features,
+          configured: isTierConfigured(t.slug),
+        })),
       },
     })
   } catch (err) { next(err) }
@@ -302,6 +315,59 @@ router.post('/stripe/checkout/addon', requireRole('ADMIN'), async (req: Authenti
       addonSlug,
       successUrl,
       cancelUrl,
+    })
+
+    res.json({ success: true, data: session })
+  } catch (err) { next(err) }
+})
+
+// -------------------------------------------------------------
+// POST /api/billing/stripe/checkout/subscription — start recurring sub
+// Body: { tier: 'starter'|'professional'|'enterprise' }
+// successUrl/cancelUrl optional — defaults to APP_URL/billing
+// -------------------------------------------------------------
+router.post('/stripe/checkout/subscription', requireRole('ADMIN'), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!isStripeConfigured()) throw new ValidationError('Stripe is not configured on this server')
+
+    const { tier, successUrl, cancelUrl } = req.body
+    const validTiers: SubscriptionTier[] = ['starter', 'professional', 'enterprise']
+    if (!validTiers.includes(tier)) {
+      throw new ValidationError(`tier must be one of: ${validTiers.join(', ')}`)
+    }
+    if (!isTierConfigured(tier)) {
+      throw new ValidationError(`Subscription tier '${tier}' is not configured (set STRIPE_PRICE_${tier.toUpperCase()} in env)`)
+    }
+
+    const consultingFirmId = getTenantId(req)
+    const appUrl = process.env.APP_URL || 'http://localhost:3000'
+
+    const session = await createSubscriptionCheckoutSession({
+      consultingFirmId,
+      tier,
+      successUrl: successUrl || `${appUrl}/billing?checkout=success&tier=${tier}`,
+      cancelUrl: cancelUrl || `${appUrl}/billing?checkout=canceled`,
+    })
+
+    res.json({ success: true, data: session })
+  } catch (err) { next(err) }
+})
+
+// -------------------------------------------------------------
+// POST /api/billing/stripe/portal — open Stripe Customer Portal
+// Body: { returnUrl? }
+// Customer can manage subscription, update card, view invoices.
+// -------------------------------------------------------------
+router.post('/stripe/portal', requireRole('ADMIN'), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!isStripeConfigured()) throw new ValidationError('Stripe is not configured on this server')
+
+    const consultingFirmId = getTenantId(req)
+    const appUrl = process.env.APP_URL || 'http://localhost:3000'
+
+    const session = await createCustomerPortalSession({
+      consultingFirmId,
+      returnUrl: req.body.returnUrl || `${appUrl}/billing`,
     })
 
     res.json({ success: true, data: session })

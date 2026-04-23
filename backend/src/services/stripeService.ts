@@ -35,6 +35,15 @@ interface StripeCharge {
   metadata?: { [key: string]: string } | null
 }
 
+interface StripeSubscription {
+  id: string
+  status: string
+  customer: string
+  metadata?: { [key: string]: string } | null
+  current_period_end?: number
+  cancel_at_period_end?: boolean
+}
+
 // -------------------------------------------------------------
 // Stripe Client (lazy init — env vars required at first call)
 // -------------------------------------------------------------
@@ -94,6 +103,94 @@ export const ADDON_CATALOG: AddOnDefinition[] = [
     description: 'AI-drafted proposal sections with PDF export.',
   },
 ]
+
+// -------------------------------------------------------------
+// Recurring subscription tiers — Price IDs from Stripe Dashboard
+// Each tier maps to a STRIPE_PRICE_<TIER> env var.
+// Per engineering.md Rule 5: env-driven so admin can rotate Price IDs
+// without code changes.
+// -------------------------------------------------------------
+
+export type SubscriptionTier = 'starter' | 'professional' | 'enterprise'
+
+export interface TierDefinition {
+  slug: SubscriptionTier
+  name: string
+  priceEnvVar: string
+  description: string
+  features: string[]
+}
+
+export const TIER_CATALOG: TierDefinition[] = [
+  {
+    slug: 'starter',
+    name: 'Starter',
+    priceEnvVar: 'STRIPE_PRICE_STARTER',
+    description: 'For solo consultants getting started with federal contracting.',
+    features: [
+      'Up to 5 client companies',
+      '500 opportunity scores per month',
+      'BANKV Engine — keyword compliance gap analysis',
+      'Email support',
+    ],
+  },
+  {
+    slug: 'professional',
+    name: 'Professional',
+    priceEnvVar: 'STRIPE_PRICE_PROFESSIONAL',
+    description: 'For growing consulting firms managing multiple clients.',
+    features: [
+      'Up to 25 client companies',
+      'Unlimited opportunity scoring',
+      'AI-powered FAR/DFARS clause extraction',
+      'White-label client portal',
+      'Email + SMS notifications',
+      'Priority email support',
+    ],
+  },
+  {
+    slug: 'enterprise',
+    name: 'Enterprise',
+    priceEnvVar: 'STRIPE_PRICE_ENTERPRISE',
+    description: 'For established firms with custom domain and full automation.',
+    features: [
+      'Unlimited client companies',
+      'Everything in Professional',
+      'Custom domain + SSO',
+      'Dedicated success manager',
+      'Custom integrations',
+      'SLA + phone support',
+    ],
+  },
+]
+
+export function getPriceIdForTier(tier: SubscriptionTier): string {
+  const def = TIER_CATALOG.find(t => t.slug === tier)
+  if (!def) throw new Error(`Unknown subscription tier: ${tier}`)
+  const priceId = process.env[def.priceEnvVar]
+  if (!priceId) {
+    throw new Error(
+      `${def.priceEnvVar} is not configured. Create the price in Stripe Dashboard ` +
+      `and set the env var to the price_xxx ID.`
+    )
+  }
+  // Reject placeholder values to fail fast
+  if (priceId.includes('REPLACE_WITH')) {
+    throw new Error(
+      `${def.priceEnvVar} contains a placeholder value. Replace it with a real Stripe price_xxx ID.`
+    )
+  }
+  return priceId
+}
+
+export function isTierConfigured(tier: SubscriptionTier): boolean {
+  try {
+    getPriceIdForTier(tier)
+    return true
+  } catch {
+    return false
+  }
+}
 
 // -------------------------------------------------------------
 // Customer creation (idempotent — uses stripeCustomerId on firm)
@@ -235,6 +332,91 @@ export async function createAddOnCheckoutSession(opts: {
 }
 
 // -------------------------------------------------------------
+// Recurring subscription checkout (Starter / Professional / Enterprise)
+// Uses Stripe Price IDs from STRIPE_PRICE_<TIER> env vars.
+// Mode: 'subscription' creates a Stripe Subscription on payment success.
+// -------------------------------------------------------------
+
+export async function createSubscriptionCheckoutSession(opts: {
+  consultingFirmId: string
+  tier: SubscriptionTier
+  successUrl: string
+  cancelUrl: string
+}): Promise<{ sessionId: string; url: string }> {
+  const priceId = getPriceIdForTier(opts.tier) // throws if not configured
+  const stripe = getStripe()
+  const customerId = await getOrCreateCustomer(opts.consultingFirmId)
+
+  const session = await stripe.checkout.sessions.create({
+    mode: 'subscription',
+    customer: customerId,
+    line_items: [
+      {
+        price: priceId,
+        quantity: 1,
+      },
+    ],
+    success_url: opts.successUrl,
+    cancel_url: opts.cancelUrl,
+    metadata: {
+      consultingFirmId: opts.consultingFirmId,
+      productType: 'subscription',
+      tier: opts.tier,
+    },
+    subscription_data: {
+      metadata: {
+        consultingFirmId: opts.consultingFirmId,
+        productType: 'subscription',
+        tier: opts.tier,
+      },
+    },
+  })
+
+  if (!session.url) {
+    throw new Error('Stripe checkout session has no URL')
+  }
+
+  logger.info('Stripe subscription checkout created', {
+    firmId: opts.consultingFirmId,
+    sessionId: session.id,
+    tier: opts.tier,
+  })
+
+  return { sessionId: session.id, url: session.url }
+}
+
+// -------------------------------------------------------------
+// Customer Portal session — lets customers manage their subscription
+// (update card, cancel, view invoices) without leaving Stripe.
+// -------------------------------------------------------------
+
+export async function createCustomerPortalSession(opts: {
+  consultingFirmId: string
+  returnUrl: string
+}): Promise<{ url: string }> {
+  const firm = await prisma.consultingFirm.findUnique({
+    where: { id: opts.consultingFirmId },
+    select: { stripeCustomerId: true },
+  })
+  if (!firm?.stripeCustomerId) {
+    throw new Error('Firm has no Stripe customer record yet — purchase something first')
+  }
+
+  const stripe = getStripe()
+  const session = await stripe.billingPortal.sessions.create({
+    customer: firm.stripeCustomerId,
+    return_url: opts.returnUrl,
+  })
+
+  logger.info('Stripe customer portal session created', {
+    firmId: opts.consultingFirmId,
+    sessionId: session.id,
+  })
+
+  return { url: session.url }
+}
+
+// -------------------------------------------------------------
 // Webhook signature verification
 // -------------------------------------------------------------
 
@@ -269,6 +451,16 @@ export async function handleWebhookEvent(event: StripeEvent): Promise<{ processe
 
     case 'charge.refunded':
       return handleRefund(event)
+
+    case 'customer.subscription.created':
+    case 'customer.subscription.updated':
+      return handleSubscriptionUpsert(event)
+
+    case 'customer.subscription.deleted':
+      return handleSubscriptionDeleted(event)
+
+    case 'invoice.payment_failed':
+      return handleInvoicePaymentFailed(event)
 
     default:
       logger.info('Stripe webhook received (no handler)', { eventId: event.id, type: event.type })
@@ -308,6 +500,15 @@ async function handleCheckoutCompleted(event: StripeEvent): Promise<{ processed:
         data: { purchasedAddons: { push: addonSlug } },
       })
     }
+  } else if (productType === 'subscription') {
+    // Subscription created — Stripe will also fire customer.subscription.created
+    // which is the canonical place to capture stripeSubscriptionId. We just
+    // log here for the audit trail. Tier metadata is on the subscription too.
+    logger.info('Subscription checkout completed (subscription event will follow)', {
+      firmId: consultingFirmId,
+      tier: session.metadata?.tier,
+      sessionId: session.id,
+    })
   }
 
   // Audit trail (compliance + idempotency marker)
@@ -354,6 +555,121 @@ async function handleRefund(event: StripeEvent): Promise<{ processed: boolean }>
   })
 
   logger.info('Stripe refund logged', { firmId: consultingFirmId, chargeId: charge.id })
+  return { processed: true }
+}
+
+// -------------------------------------------------------------
+// Subscription lifecycle handlers
+// customer.subscription.created — subscription just created
+// customer.subscription.updated — plan change, period renewal, status change
+// -------------------------------------------------------------
+
+async function handleSubscriptionUpsert(event: StripeEvent): Promise<{ processed: boolean }> {
+  const sub = event.data.object as StripeSubscription
+  const consultingFirmId = sub.metadata?.consultingFirmId
+  if (!consultingFirmId) {
+    logger.warn('Stripe subscription event without firmId metadata', { eventId: event.id, subId: sub.id })
+    return { processed: false }
+  }
+
+  const firm = await prisma.consultingFirm.findUnique({
+    where: { id: consultingFirmId },
+    select: { id: true, stripeSubscriptionId: true },
+  })
+  if (!firm) {
+    logger.error('Stripe subscription for unknown firm', { firmId: consultingFirmId, subId: sub.id })
+    return { processed: false }
+  }
+
+  // Persist stripeSubscriptionId (idempotent — same value on updates)
+  if (firm.stripeSubscriptionId !== sub.id) {
+    await prisma.consultingFirm.update({
+      where: { id: consultingFirmId },
+      data: { stripeSubscriptionId: sub.id },
+    })
+  }
+
+  await prisma.complianceLog.create({
+    data: {
+      consultingFirmId,
+      entityType: 'OTHER',
+      entityId: event.id,
+      fromStatus: 'PENDING',
+      toStatus: sub.status.toUpperCase(),
+      reason: `Stripe subscription ${event.type.split('.').pop()}: tier=${sub.metadata?.tier ?? 'unknown'} status=${sub.status} cancelAtPeriodEnd=${sub.cancel_at_period_end ?? false}`,
+      triggeredBy: `stripe-webhook:${sub.id}`,
+    },
+  })
+
+  logger.info('Subscription event processed', {
+    firmId: consultingFirmId,
+    subId: sub.id,
+    status: sub.status,
+    tier: sub.metadata?.tier,
+    cancelAtPeriodEnd: sub.cancel_at_period_end,
+  })
+  return { processed: true }
+}
+
+async function handleSubscriptionDeleted(event: StripeEvent): Promise<{ processed: boolean }> {
+  const sub = event.data.object as StripeSubscription
+  const consultingFirmId = sub.metadata?.consultingFirmId
+  if (!consultingFirmId) {
+    logger.warn('Stripe subscription deleted without firmId metadata', { eventId: event.id, subId: sub.id })
+    return { processed: false }
+  }
+
+  // Clear stripeSubscriptionId so a new subscription can be created
+  await prisma.consultingFirm.update({
+    where: { id: consultingFirmId },
+    data: { stripeSubscriptionId: null },
+  }).catch(() => {})
+
+  await prisma.complianceLog.create({
+    data: {
+      consultingFirmId,
+      entityType: 'OTHER',
+      entityId: event.id,
+      fromStatus: 'ACTIVE',
+      toStatus: 'CANCELED',
+      reason: `Stripe subscription deleted: tier=${sub.metadata?.tier ?? 'unknown'}`,
+      triggeredBy: `stripe-webhook:${sub.id}`,
+    },
+  })
+
+  logger.info('Subscription deleted', { firmId: consultingFirmId, subId: sub.id })
+  return { processed: true }
+}
+
+async function handleInvoicePaymentFailed(event: StripeEvent): Promise<{ processed: boolean }> {
+  const invoice = event.data.object as { id: string; customer: string; subscription?: string; amount_due?: number }
+  // Look up firm via customer ID (invoice metadata not always present)
+  const firm = await prisma.consultingFirm.findFirst({
+    where: { stripeCustomerId: invoice.customer },
+    select: { id: true },
+  })
+  if (!firm) {
+    logger.warn('Invoice payment failed for unknown customer', { customerId: invoice.customer })
+    return { processed: false }
+  }
+
+  await prisma.complianceLog.create({
+    data: {
+      consultingFirmId: firm.id,
+      entityType: 'OTHER',
+      entityId: event.id,
+      fromStatus: 'ACTIVE',
+      toStatus: 'PAST_DUE',
+      reason: `Invoice payment failed — $${(invoice.amount_due ?? 0) / 100}`,
+      triggeredBy: `stripe-webhook:${invoice.id}`,
+    },
+  })
+
+  logger.warn('Subscription invoice payment failed', {
+    firmId: firm.id,
+    invoiceId: invoice.id,
+    amount: invoice.amount_due,
+  })
   return { processed: true }
 }
 
