@@ -149,3 +149,133 @@
 {"agency":"ALL","durationMs":360,"level":"info","message":"BQ ingestion complete","naicsCode":"561320","rowsInserted":100,"timestamp":"2026-03-22 02:44:26"}
 {"agency":"ALL","durationMs":458,"level":"info","message":"BQ ingestion complete","naicsCode":"484110","rowsInserted":100,"timestamp":"2026-03-22 02:44:27"}
 {"agency":"ALL","durationMs":460,"level":"info","message":"BQ ingestion complete","naicsCode":"541380","rowsInserted":100,"timestamp":"2026-03-22 02:44:29"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-22 21:51:34"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-22 21:51:54"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-22 21:51:54"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-22 21:51:54"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-22 21:51:54"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-22 21:51:54"}
+{"environment":"development","level":"info","message":"GovCon Platform server running","pid":5608,"port":3001,"timestamp":"2026-04-22 21:51:54"}
+{"level":"info","message":"Nightly recalibration started","timestamp":"2026-04-22 21:51:54"}
+{"count":740,"level":"info","message":"Refreshing NAICS density","timestamp":"2026-04-22 21:51:54"}
+{"count":1364,"level":"info","message":"Refreshing agency profiles","timestamp":"2026-04-22 21:56:14"}
+{"duration":816,"level":"warn","message":"Slow query detected","query":"UPDATE \"public\".\"opportunities\" SET \"isScored\" = $1, \"updatedAt\" = $2 WHERE (\"public\".\"opportunities\".\"consultingFirmId\" = $3 AND \"public\".\"opportunities\".\"status\" = CAST($4::text AS \"public\".\"OpportunityStatus\"))","timestamp":"2026-04-22 22:04:15"}
+{"agenciesRefreshed":1364,"level":"info","message":"Nightly recalibration complete","naicsRefreshed":740,"opportunitiesRequeued":37271,"timestamp":"2026-04-22 22:04:17"}
+{"jobId":"repeat:50a7cccb232a10e8977470bac6c302f9:1775268000000","level":"info","message":"Recalibration job completed","timestamp":"2026-04-22 22:04:17"}
+{"code":"UNAUTHORIZED","level":"warn","message":"Client error Invalid token","path":"/api/client-deliverables/list","statusCode":401,"timestamp":"2026-04-23 00:03:27"}
+{"code":"UNAUTHORIZED","level":"warn","message":"Client error Invalid token","path":"/api/client-deliverables/list","statusCode":401,"timestamp":"2026-04-23 00:04:13"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 00:04:48"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 00:04:48"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 00:04:48"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 00:04:48"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 00:04:48"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 00:04:48"}
+{"environment":"development","level":"info","message":"GovCon Platform server running","pid":32300,"port":3001,"timestamp":"2026-04-23 00:04:48"}
+{"code":"UNAUTHORIZED","level":"warn","message":"Client error Invalid token","path":"/api/client-deliverables/list","statusCode":401,"timestamp":"2026-04-23 00:05:15"}
+{"code":"UNAUTHORIZED","level":"warn","message":"Client error Invalid token","path":"/api/client-deliverables/list","statusCode":401,"timestamp":"2026-04-23 00:05:52"}
+{"level":"error","message":"Unhandled error [\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"firmName\"\n    ],\n    \"message\": \"Required\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"firstName\"\n    ],\n    \"message\": \"Required\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"lastName\"\n    ],\n    \"message\": \"Required\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"password\"\n    ],\n    \"message\": \"Required\"\n  }\n]","method":"POST","path":"/api/auth/register-firm","stack":"ZodError: [\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"firmName\"\n    ],\n    \"message\": \"Required\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"firstName\"\n    ],\n    \"message\": \"Required\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"lastName\"\n    ],\n    \"message\": \"Required\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"password\"\n    ],\n    \"message\": \"Required\"\n  }\n]\n    at Object.get error [as error] (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\zod\\v3\\types.cjs:45:31)\n    at ZodObject.parse (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\zod\\v3\\types.cjs:120:22)\n    at C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\src\\routes\\auth.ts:81:37\n    at Layer.handle [as handle_request] (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at next (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\express\\lib\\router\\route.js:149:13)\n    at Route.dispatch (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\express\\lib\\router\\route.js:119:3)\n    at Layer.handle [as handle_request] (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\express\\lib\\router\\index.js:284:15\n    at router.process_params (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\express\\lib\\router\\index.js:280:10)","timestamp":"2026-04-23 00:06:37"}
+{"code":"UNAUTHORIZED","level":"warn","message":"Client error Invalid credentials","path":"/api/client-portal/auth/login","statusCode":401,"timestamp":"2026-04-23 00:07:01"}
+{"level":"error","message":"Prisma error \nInvalid `prisma.complianceLog.create()` invocation in\nC:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\src\\routes\\clientDeliverables.ts:238:34\n\n  235 }\n  236 \n  237 // Log request for changes\n→ 238 await prisma.complianceLog.create(\nError converting field \"entityType\" of expected non-nullable type \"String\", found incompatible value of \"OTHER\".","timestamp":"2026-04-23 00:08:56"}
+{"level":"error","message":"Unhandled error \nInvalid `prisma.complianceLog.create()` invocation in\nC:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\src\\routes\\clientDeliverables.ts:238:34\n\n  235 }\n  236 \n  237 // Log request for changes\n→ 238 await prisma.complianceLog.create(\nError converting field \"entityType\" of expected non-nullable type \"String\", found incompatible value of \"OTHER\".","method":"POST","path":"/api/client-deliverables/cmoawcdrg00016m3uv455xf4f/request-changes","stack":"PrismaClientKnownRequestError: \nInvalid `prisma.complianceLog.create()` invocation in\nC:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\src\\routes\\clientDeliverables.ts:238:34\n\n  235 }\n  236 \n  237 // Log request for changes\n→ 238 await prisma.complianceLog.create(\nError converting field \"entityType\" of expected non-nullable type \"String\", found incompatible value of \"OTHER\".\n    at $n.handleRequestError (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\@prisma\\client\\runtime\\library.js:121:7315)\n    at $n.handleAndLogRequestError (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\@prisma\\client\\runtime\\library.js:121:6623)\n    at $n.request (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\@prisma\\client\\runtime\\library.js:121:6307)\n    at l (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\@prisma\\client\\runtime\\library.js:130:9633)\n    at C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\src\\routes\\clientDeliverables.ts:238:7","timestamp":"2026-04-23 00:08:56"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 00:09:07"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 00:09:07"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 00:09:07"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 00:09:07"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 00:09:07"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 00:09:07"}
+{"environment":"development","level":"info","message":"GovCon Platform server running","pid":23592,"port":3001,"timestamp":"2026-04-23 00:09:07"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 00:09:12"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 00:09:12"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 00:09:12"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 00:09:12"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 00:09:12"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 00:09:12"}
+{"environment":"development","level":"info","message":"GovCon Platform server running","pid":16244,"port":3001,"timestamp":"2026-04-23 00:09:12"}
+{"level":"error","message":"Prisma error \nInvalid `prisma.complianceLog.create()` invocation in\nC:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\src\\routes\\clientDeliverables.ts:238:34\n\n  235 }\n  236 \n  237 // Log request for changes\n→ 238 await prisma.complianceLog.create(\nError converting field \"entityType\" of expected non-nullable type \"String\", found incompatible value of \"DOCUMENT_REQUIREMENT\".","timestamp":"2026-04-23 00:09:55"}
+{"level":"error","message":"Unhandled error \nInvalid `prisma.complianceLog.create()` invocation in\nC:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\src\\routes\\clientDeliverables.ts:238:34\n\n  235 }\n  236 \n  237 // Log request for changes\n→ 238 await prisma.complianceLog.create(\nError converting field \"entityType\" of expected non-nullable type \"String\", found incompatible value of \"DOCUMENT_REQUIREMENT\".","method":"POST","path":"/api/client-deliverables/cmoawcdrg00016m3uv455xf4f/request-changes","stack":"PrismaClientKnownRequestError: \nInvalid `prisma.complianceLog.create()` invocation in\nC:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\src\\routes\\clientDeliverables.ts:238:34\n\n  235 }\n  236 \n  237 // Log request for changes\n→ 238 await prisma.complianceLog.create(\nError converting field \"entityType\" of expected non-nullable type \"String\", found incompatible value of \"DOCUMENT_REQUIREMENT\".\n    at $n.handleRequestError (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\@prisma\\client\\runtime\\library.js:121:7315)\n    at $n.handleAndLogRequestError (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\@prisma\\client\\runtime\\library.js:121:6623)\n    at $n.request (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\@prisma\\client\\runtime\\library.js:121:6307)\n    at l (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\@prisma\\client\\runtime\\library.js:130:9633)\n    at C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\src\\routes\\clientDeliverables.ts:238:7","timestamp":"2026-04-23 00:09:55"}
+{"level":"error","message":"Prisma error \nInvalid `prisma.complianceLog.create()` invocation in\nC:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\src\\routes\\clientDeliverables.ts:238:34\n\n  235 }\n  236 \n  237 // Log request for changes\n→ 238 await prisma.complianceLog.create(\nError converting field \"entityType\" of expected non-nullable type \"String\", found incompatible value of \"DOCUMENT_REQUIREMENT\".","timestamp":"2026-04-23 00:11:32"}
+{"level":"error","message":"Unhandled error \nInvalid `prisma.complianceLog.create()` invocation in\nC:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\src\\routes\\clientDeliverables.ts:238:34\n\n  235 }\n  236 \n  237 // Log request for changes\n→ 238 await prisma.complianceLog.create(\nError converting field \"entityType\" of expected non-nullable type \"String\", found incompatible value of \"DOCUMENT_REQUIREMENT\".","method":"POST","path":"/api/client-deliverables/cmoawcdrg00016m3uv455xf4f/request-changes","stack":"PrismaClientKnownRequestError: \nInvalid `prisma.complianceLog.create()` invocation in\nC:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\src\\routes\\clientDeliverables.ts:238:34\n\n  235 }\n  236 \n  237 // Log request for changes\n→ 238 await prisma.complianceLog.create(\nError converting field \"entityType\" of expected non-nullable type \"String\", found incompatible value of \"DOCUMENT_REQUIREMENT\".\n    at $n.handleRequestError (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\@prisma\\client\\runtime\\library.js:121:7315)\n    at $n.handleAndLogRequestError (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\@prisma\\client\\runtime\\library.js:121:6623)\n    at $n.request (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\@prisma\\client\\runtime\\library.js:121:6307)\n    at l (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\@prisma\\client\\runtime\\library.js:130:9633)\n    at C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\src\\routes\\clientDeliverables.ts:238:7","timestamp":"2026-04-23 00:11:32"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 00:13:36"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 00:14:00"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 00:14:00"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 00:15:14"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 00:15:14"}
+{"level":"warn","message":"Redis connection closed","timestamp":"2026-04-23 00:15:31"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 00:15:32"}
+{"level":"warn","message":"Redis connection closed","timestamp":"2026-04-23 00:15:32"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 00:15:32"}
+{"level":"warn","message":"Redis connection closed","timestamp":"2026-04-23 00:15:32"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 00:15:32"}
+{"level":"warn","message":"Redis connection closed","timestamp":"2026-04-23 00:15:32"}
+{"level":"error","message":"Prisma error Error in PostgreSQL connection: Error { kind: Db, cause: Some(DbError { severity: \"FATAL\", parsed_severity: Some(Fatal), code: SqlState(E57P01), message: \"terminating connection due to administrator command\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"postgres.c\"), line: Some(3286), routine: Some(\"ProcessInterrupts\") }) }","timestamp":"2026-04-23 00:15:32"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 00:15:32"}
+{"error":"read ECONNRESET","level":"error","message":"Enrichment worker error","timestamp":"2026-04-23 00:15:33"}
+{"error":"read ECONNRESET","level":"error","message":"Scoring worker error","timestamp":"2026-04-23 00:15:33"}
+{"error":"read ECONNRESET","level":"error","message":"Redis error","timestamp":"2026-04-23 00:15:33"}
+{"error":"read ECONNRESET","level":"error","message":"Scoring worker error","timestamp":"2026-04-23 00:15:33"}
+{"error":"read ECONNRESET","level":"error","message":"Enrichment worker error","timestamp":"2026-04-23 00:15:33"}
+{"error":"read ECONNRESET","level":"error","message":"Recalibration worker error","timestamp":"2026-04-23 00:15:33"}
+{"level":"warn","message":"Redis connection closed","timestamp":"2026-04-23 00:15:33"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 00:15:33"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 00:15:37"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 00:15:37"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 00:15:56"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 00:15:56"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 00:17:42"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 00:17:42"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 00:18:08"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 00:18:08"}
+{"level":"warn","message":"Redis connection closed","timestamp":"2026-04-23 00:19:55"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 00:19:55"}
+{"level":"warn","message":"Redis connection closed","timestamp":"2026-04-23 00:19:55"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 00:19:55"}
+{"level":"warn","message":"Redis connection closed","timestamp":"2026-04-23 00:19:55"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 00:19:55"}
+{"level":"warn","message":"Redis connection closed","timestamp":"2026-04-23 00:19:55"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 00:19:55"}
+{"error":"LOADING Redis is loading the dataset in memory","level":"error","message":"Enrichment worker error","timestamp":"2026-04-23 00:19:55"}
+{"error":"LOADING Redis is loading the dataset in memory","level":"error","message":"Recalibration worker error","timestamp":"2026-04-23 00:19:55"}
+{"error":"LOADING Redis is loading the dataset in memory","level":"error","message":"Enrichment worker error","timestamp":"2026-04-23 00:19:56"}
+{"error":"LOADING Redis is loading the dataset in memory","level":"error","message":"Recalibration worker error","timestamp":"2026-04-23 00:19:56"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 00:20:02"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 00:20:02"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 00:24:55"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 00:24:55"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 00:25:51"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 00:25:51"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 00:26:10"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 00:26:10"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 00:26:36"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 00:26:36"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 00:26:36"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 00:26:36"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 00:26:36"}
+{"environment":"development","level":"info","message":"GovCon Platform server running","pid":16668,"port":3001,"timestamp":"2026-04-23 00:26:36"}
+{"level":"error","message":"Unhandled error Cannot read properties of undefined (reading 'findUnique')","method":"POST","path":"/api/client-portal/auth/login","stack":"TypeError: Cannot read properties of undefined (reading 'findUnique')\n    at C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\src\\routes\\clientPortal.ts:93:48\n    at Layer.handle [as handle_request] (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at next (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\express\\lib\\router\\route.js:149:13)\n    at Route.dispatch (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\express\\lib\\router\\route.js:119:3)\n    at Layer.handle [as handle_request] (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\express\\lib\\router\\index.js:284:15\n    at router.process_params (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at router.handle (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\express\\lib\\router\\index.js:175:3)\n    at router (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\express\\lib\\router\\index.js:47:12)","timestamp":"2026-04-23 00:27:02"}
+{"level":"error","message":"Unhandled error Cannot read properties of undefined (reading 'findUnique')","method":"POST","path":"/api/client-portal/auth/login","stack":"TypeError: Cannot read properties of undefined (reading 'findUnique')\n    at C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\src\\routes\\clientPortal.ts:93:48\n    at Layer.handle [as handle_request] (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at next (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\express\\lib\\router\\route.js:149:13)\n    at Route.dispatch (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\express\\lib\\router\\route.js:119:3)\n    at Layer.handle [as handle_request] (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\express\\lib\\router\\index.js:284:15\n    at router.process_params (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at router.handle (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\express\\lib\\router\\index.js:175:3)\n    at router (C:\\Users\\gladm\\OneDrive\\Desktop\\Gov-ConV2\\backend\\node_modules\\express\\lib\\router\\index.js:47:12)","timestamp":"2026-04-23 00:27:14"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 00:29:54"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 00:29:54"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 00:29:54"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 00:29:54"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 00:29:54"}
+{"environment":"development","level":"info","message":"GovCon Platform server running","pid":29388,"port":3001,"timestamp":"2026-04-23 00:29:54"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 00:32:04"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 00:32:04"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 00:32:04"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 00:32:04"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 00:32:04"}
+{"environment":"development","level":"info","message":"GovCon Platform server running","pid":27800,"port":3001,"timestamp":"2026-04-23 00:32:04"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 00:32:24"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 00:32:24"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 00:32:24"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 00:32:24"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 00:32:24"}
+{"environment":"development","level":"info","message":"GovCon Platform server running","pid":27304,"port":3001,"timestamp":"2026-04-23 00:32:24"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 00:32:29"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 00:32:29"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 00:32:29"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 00:32:29"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 00:32:29"}
+{"environment":"development","level":"info","message":"GovCon Platform server running","pid":29968,"port":3001,"timestamp":"2026-04-23 00:32:29"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 00:33:34"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 00:33:34"}

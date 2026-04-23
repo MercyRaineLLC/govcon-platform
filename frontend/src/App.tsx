@@ -58,7 +58,9 @@ export default function App() {
 
           {/* Client portal (standalone, no consultant layout) */}
           <Route path="/client-login" element={<ClientPortalLogin />} />
-          <Route path="/client-portal" element={<ClientPortalDashboard />} />
+          <Route element={<ProtectedRoute />}>
+            <Route path="/client-portal" element={<ClientPortalDashboard />} />
+          </Route>
 
           {/* Consultant platform */}
           <Route element={<ProtectedRoute />}>

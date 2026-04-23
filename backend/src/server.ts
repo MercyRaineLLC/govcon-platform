@@ -31,6 +31,7 @@ import jobRoutes from './routes/jobs'
 import documentsRoutes from './routes/documents'
 import docRequirementsRoutes from './routes/docRequirements'
 import clientPortalRoutes from './routes/clientPortal'
+import clientDeliverablesRoutes from './routes/clientDeliverables'
 import rewardsRoutes from './routes/rewards'
 import templateRoutes from './routes/templates'
 import clientDocumentsRoutes from './routes/clientDocuments'
@@ -44,6 +45,7 @@ import stateMunicipalRoutes from './routes/stateMunicipal'
 import subcontractingRoutes from './routes/subcontracting'
 import contractsRoutes from './routes/contracts'
 import assistantRoutes from './routes/assistant'
+import brandingRoutes from './routes/branding'
 
 async function bootstrap(): Promise<void> {
   const app = express()
@@ -154,6 +156,7 @@ async function bootstrap(): Promise<void> {
   apiRouter.use('/documents', documentsRoutes)
   apiRouter.use('/doc-requirements', docRequirementsRoutes)
   apiRouter.use('/client-portal', clientPortalRoutes)
+  apiRouter.use('/client-deliverables', clientDeliverablesRoutes)
   apiRouter.use('/rewards', rewardsRoutes)
   apiRouter.use('/templates', templateRoutes)
   apiRouter.use('/client-documents', clientDocumentsRoutes)
@@ -167,6 +170,7 @@ async function bootstrap(): Promise<void> {
   apiRouter.use('/subcontracting', subcontractingRoutes)
   apiRouter.use('/contracts', contractsRoutes)
   apiRouter.use('/assistant', assistantRoutes)
+  apiRouter.use('/branding', brandingRoutes)
 
   app.use('/api', apiRouter)
 

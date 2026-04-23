@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import axios from 'axios'
 import { clientPortalApi } from '../services/api'
+import { ClientDeliverableReview } from '../components/ClientDeliverableReview'
 
 const API_BASE = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001'
 
@@ -164,7 +165,7 @@ export default function ClientPortalDashboard() {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [tab, setTab] = useState<'docs' | 'contracts' | 'uploads' | 'penalties' | 'rewards'>('docs')
+  const [tab, setTab] = useState<'docs' | 'deliverables' | 'contracts' | 'uploads' | 'penalties' | 'rewards'>('docs')
   const [contracts, setContracts] = useState<ContractOpp[]>([])
   const [contractsLoading, setContractsLoading] = useState(false)
   const [uploads, setUploads] = useState<any[]>([])
@@ -280,6 +281,7 @@ export default function ClientPortalDashboard() {
         <div className="flex gap-1 mb-6 border-b border-gray-800 overflow-x-auto">
           {([
             { key: 'docs', label: 'Documents', icon: FileText, count: summary.pending },
+            { key: 'deliverables', label: 'Proposals', icon: FileText, count: 0 },
             { key: 'contracts', label: 'My Contracts', icon: Briefcase, count: contracts.filter(c => !c.isDeclined).length },
             { key: 'uploads', label: 'My Uploads', icon: Upload, count: uploads.length },
             { key: 'penalties', label: 'Fees', icon: DollarSign, count: penalties?.filter((p: any) => !p.isPaid).length },
@@ -303,6 +305,11 @@ export default function ClientPortalDashboard() {
               <DocCard key={req.id} req={req} onMarkSubmitted={handleMarkSubmitted} />
             ))}
           </div>
+        )}
+
+        {/* Tab: Deliverables Review */}
+        {tab === 'deliverables' && (
+          <ClientDeliverableReview clientAuth={auth} onDeliverableUpdated={loadDashboard} />
         )}
 
         {/* Tab: Matched Contracts */}

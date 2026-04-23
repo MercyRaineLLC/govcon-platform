@@ -4,6 +4,7 @@ import { Outlet, Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useRecentlyViewed } from '../hooks/useRecentlyViewed'
 import { useFavorites } from '../hooks/useFavorites'
+import { useBranding } from '../hooks/useBranding'
 import {
   LayoutDashboard,
   Search,
@@ -95,6 +96,7 @@ export function Layout() {
   const { user, firm, logout } = useAuth()
   const { items: recentItems, clearHistory } = useRecentlyViewed()
   const { favorites, removeFavorite } = useFavorites()
+  const { branding } = useBranding(firm?.id)
 
   const [recentOpen, setRecentOpen] = useState(true)
   const [favOpen, setFavOpen] = useState(true)
@@ -161,16 +163,16 @@ export function Layout() {
               <p
                 className="text-sm font-black tracking-widest leading-none"
                 style={{
-                  background: 'linear-gradient(90deg, #fbbf24, #f59e0b)',
+                  background: `linear-gradient(90deg, ${branding.primaryColor}, ${branding.secondaryColor})`,
                   WebkitBackgroundClip: 'text',
                   WebkitTextFillColor: 'transparent',
                   letterSpacing: '0.08em',
                 }}
               >
-                MR GOVCON
+                {branding.displayName}
               </p>
               <p className="text-[9px] text-slate-600 tracking-[0.15em] uppercase mt-0.5">
-                GovCon Advisory Intelligence
+                {branding.tagline}
               </p>
             </div>
           </div>
@@ -197,9 +199,9 @@ export function Layout() {
               <span
                 className="text-[10px] px-2 py-0.5 rounded-full font-bold tracking-wide"
                 style={{
-                  background: 'rgba(245,158,11,0.1)',
-                  border: '1px solid rgba(245,158,11,0.22)',
-                  color: '#f59e0b',
+                  background: `${branding.secondaryColor}17`,
+                  border: `1px solid ${branding.secondaryColor}39`,
+                  color: branding.secondaryColor,
                   letterSpacing: '0.06em',
                 }}
               >
@@ -233,7 +235,7 @@ export function Layout() {
                       <span>{item.label}</span>
                       {item.badge && (
                         <span className="ml-auto text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
-                          style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.25)' }}>
+                          style={{ background: `${branding.secondaryColor}26`, color: branding.secondaryColor, border: `1px solid ${branding.secondaryColor}40` }}>
                           {item.badge}
                         </span>
                       )}

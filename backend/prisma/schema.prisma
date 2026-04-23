@@ -60,6 +60,53 @@ enum InvoiceStatus {
   UNCOLLECTIBLE
 }
 
+enum IngestionJobType {
+  INGEST
+  ENRICH
+  ANALYZE_DOCUMENT
+}
+
+enum IngestionJobStatus {
+  PENDING
+  RUNNING
+  COMPLETE
+  FAILED
+  PARTIAL
+}
+
+enum DocumentAnalysisStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETE
+  FAILED
+  SKIPPED
+}
+
+enum DocumentRequirementStatus {
+  PENDING
+  IN_PROGRESS
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum MatrixRequirementStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  PENDING_REVIEW
+  BLOCKED
+}
+
+enum ComplianceLogEntityType {
+  SUBMISSION
+  BID_DECISION
+  OPPORTUNITY
+  CLIENT_COMPANY
+  DOCUMENT_REQUIREMENT
+  OTHER
+}
+
 //////////////////////////////////////////////////////////////
 // TENANT LAYER
 //////////////////////////////////////////////////////////////
@@ -84,6 +131,12 @@ model ConsultingFirm {
   isVeteranOwned      Boolean  @default(false)
   proposalTokens      Int      @default(0)
   lastTokenRefreshAt  DateTime?
+  brandingLogoUrl     String?
+  brandingPrimaryColor String? @default("#fbbf24")
+  brandingSecondaryColor String? @default("#f59e0b")
+  brandingDisplayName String?
+  brandingTagline     String?
+  brandingFaviconUrl  String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
@@ -420,7 +473,7 @@ model OpportunityDocument {
   isAmendment   Boolean  @default(false)
   uploadedAt    DateTime @default(now())
 
-  analysisStatus   String    @default("PENDING")
+  analysisStatus   DocumentAnalysisStatus @default(PENDING)
   analysisError    String?
   scopeKeywords    String[]
   complexityScore  Float?
@@ -443,10 +496,10 @@ model OpportunityDocument {
 //////////////////////////////////////////////////////////////
 
 model IngestionJob {
-  id               String @id @default(cuid())
+  id               String                @id @default(cuid())
   consultingFirmId String
-  type             String
-  status           String @default("PENDING")
+  type             IngestionJobType
+  status           IngestionJobStatus    @default(PENDING)
 
   opportunitiesFound Int?
   opportunitiesNew   Int?
@@ -614,10 +667,10 @@ model DocumentRequirement {
   title            String
   description      String?
   dueDate          DateTime
-  isPenaltyEnabled Boolean   @default(true)
-  penaltyAmount    Decimal?  @db.Decimal(12, 2)
-  penaltyPercent   Decimal?  @db.Decimal(5, 2)
-  status           String    @default("PENDING")
+  isPenaltyEnabled Boolean                   @default(true)
+  penaltyAmount    Decimal?                  @db.Decimal(12, 2)
+  penaltyPercent   Decimal?                  @db.Decimal(5, 2)
+  status           DocumentRequirementStatus @default(PENDING)
   submittedAt      DateTime?
   notes            String?
   createdAt        DateTime  @default(now())
@@ -691,9 +744,9 @@ model ComplianceReward {
 //////////////////////////////////////////////////////////////
 
 model ComplianceLog {
-  id               String   @id @default(uuid())
+  id               String                    @id @default(uuid())
   consultingFirmId String
-  entityType       String   // "SUBMISSION" | "BID_DECISION"
+  entityType       ComplianceLogEntityType
   entityId         String
   fromStatus       String?
   toStatus         String
@@ -805,10 +858,10 @@ model MatrixRequirement {
   id              String  @id @default(cuid())
   matrixId        String
   section         String
-  sectionType     String  @default("INSTRUCTION")
+  sectionType     String                    @default("INSTRUCTION")
   requirementText String
   proposalSection String?
-  status          String  @default("NOT_STARTED")
+  status          MatrixRequirementStatus   @default(NOT_STARTED)
   notes           String?
   isMandatory     Boolean @default(true)
   farReference    String?
