@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import { billingApi, addonsApi } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
+import { StripeCheckout } from '../components/StripeCheckout'
 import {
   CreditCard,
   CheckCircle2,
@@ -126,11 +128,27 @@ export default function BillingPage() {
   const veteranDiscount = subData?.veteranDiscount ?? 0
   const effectivePrice  = subData?.effectivePrice ?? Number(plan?.monthlyPriceUsd ?? 0)
   const isVeteranOwned  = subData?.isVeteranOwned ?? false
+  const hasLifetimeAccess = subData?.hasLifetimeAccess ?? false
   const plans        = (plansData?.plans ?? []) as any[]
   const invoices     = (invoicesData?.invoices ?? []) as any[]
   const addons       = (addonsData?.data ?? []) as any[]
   const tokenPacks   = (addonsData?.tokenPacks ?? []) as any[]
   const proposalTokenBalance = (addonsData?.proposalTokenBalance ?? 0) as number
+  const purchasedAddons = (subData?.subscription?.consultingFirm?.purchasedAddons ?? []) as string[]
+
+  // Stripe checkout return banner (?checkout=success|canceled)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const checkoutResult = searchParams.get('checkout')
+  useEffect(() => {
+    if (checkoutResult === 'success') {
+      flash('ok', 'Payment received — your access has been activated.')
+      qc.invalidateQueries({ queryKey: ['billing-subscription'] })
+      setSearchParams({}, { replace: true })
+    } else if (checkoutResult === 'canceled') {
+      flash('err', 'Checkout canceled — no charge was made.')
+      setSearchParams({}, { replace: true })
+    }
+  }, [checkoutResult])
 
   const flash = (type: 'ok' | 'err', text: string) => {
     setMsg({ type, text })
@@ -247,6 +265,14 @@ export default function BillingPage() {
           {msg.type === 'ok' ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
           {msg.text}
         </div>
+      )}
+
+      {/* Stripe Checkout (Lifetime + Add-ons) */}
+      {isAdmin && (
+        <StripeCheckout
+          hasLifetimeAccess={hasLifetimeAccess}
+          purchasedAddons={purchasedAddons}
+        />
       )}
 
       {/* Top row */}

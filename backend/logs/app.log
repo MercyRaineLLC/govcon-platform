@@ -451,3 +451,15 @@
 {"count":740,"level":"info","message":"Refreshing NAICS density","timestamp":"2026-04-23 02:04:17"}
 {"level":"info","message":"Redis connected","timestamp":"2026-04-23 02:07:34"}
 {"level":"info","message":"Database connected","timestamp":"2026-04-23 02:07:34"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 02:08:32"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 02:08:32"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 02:08:32"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 02:08:32"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 02:08:32"}
+{"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":32244,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 02:08:32"}
+{"level":"info","message":"Deadline notification worker started (daily at 09:00 UTC)","timestamp":"2026-04-23 02:08:32"}
+{"error":"job stalled more than allowable limit","jobId":"repeat:50a7cccb232a10e8977470bac6c302f9:1776927600000","level":"error","message":"Recalibration job failed","timestamp":"2026-04-23 02:09:02"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 02:24:06"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 02:24:06"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 02:25:00"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 02:25:00"}

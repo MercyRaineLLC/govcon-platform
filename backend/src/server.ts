@@ -47,6 +47,7 @@ import subcontractingRoutes from './routes/subcontracting'
 import contractsRoutes from './routes/contracts'
 import assistantRoutes from './routes/assistant'
 import brandingRoutes from './routes/branding'
+import stripeWebhookRoutes from './routes/stripeWebhook'
 
 async function bootstrap(): Promise<void> {
   const app = express()
@@ -102,6 +103,11 @@ async function bootstrap(): Promise<void> {
       },
     })
   )
+
+  // -------------------------------------------------------------
+  // Stripe Webhook (BEFORE express.json — needs raw body for signature)
+  // -------------------------------------------------------------
+  app.use('/api/webhooks', stripeWebhookRoutes)
 
   // -------------------------------------------------------------
   // Parsing Middleware

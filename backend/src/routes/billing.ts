@@ -1,17 +1,27 @@
 // =============================================================
-// Billing Routes — Subscription plans, invoices, usage
+// Billing Routes — Subscription plans, invoices, usage, Stripe checkout
 // =============================================================
 import { Router, Response, NextFunction } from 'express'
 import { prisma } from '../config/database'
 import { AuthenticatedRequest } from '../types'
 import { authenticateJWT, requireRole } from '../middleware/auth'
 import { enforceTenantScope, getTenantId } from '../middleware/tenant'
+import { ValidationError, NotFoundError } from '../utils/errors'
 import {
   getOrSeedPlans,
   getOrCreateSubscription,
   getUsage,
   createInvoice,
 } from '../services/billingService'
+import {
+  createLifetimeCheckoutSession,
+  createAddOnCheckoutSession,
+  isStripeConfigured,
+  hasLifetimeAccess,
+  ADDON_CATALOG,
+  LIFETIME_PRICE_CENTS,
+  LIFETIME_PRODUCT_NAME,
+} from '../services/stripeService'
 
 const router = Router()
 router.use(authenticateJWT, enforceTenantScope)
@@ -22,6 +32,7 @@ router.use(authenticateJWT, enforceTenantScope)
 router.get('/plans', async (_req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const plans = await getOrSeedPlans()
+    // Legacy contract preserved (frontend Billing.tsx depends on top-level shape)
     res.json({ plans })
   } catch (err) { next(err) }
 })
@@ -40,7 +51,16 @@ router.get('/subscription', async (req: AuthenticatedRequest, res: Response, nex
     const basePrice = Number(subscription.plan.monthlyPriceUsd)
     const veteranDiscount = firm?.isVeteranOwned ? Math.round(basePrice * 0.10 * 100) / 100 : 0
     const effectivePrice = Math.round((basePrice - veteranDiscount) * 100) / 100
-    res.json({ subscription, usage, veteranDiscount, effectivePrice, isVeteranOwned: firm?.isVeteranOwned ?? false })
+    const lifetimeAccess = await hasLifetimeAccess(consultingFirmId)
+    // Legacy top-level shape preserved + new field appended
+    res.json({
+      subscription,
+      usage,
+      veteranDiscount,
+      effectivePrice,
+      isVeteranOwned: firm?.isVeteranOwned ?? false,
+      hasLifetimeAccess: lifetimeAccess,
+    })
   } catch (err) { next(err) }
 })
 
@@ -53,7 +73,7 @@ router.post('/subscribe', requireRole('ADMIN'), async (req: AuthenticatedRequest
     const { planId, billingCycle } = req.body
 
     const plan = await prisma.subscriptionPlan.findUnique({ where: { id: planId } })
-    if (!plan) return res.status(404).json({ error: 'Plan not found' })
+    if (!plan) throw new NotFoundError('Plan not found')
 
     const cycle: 'MONTHLY' | 'ANNUAL' = billingCycle === 'ANNUAL' ? 'ANNUAL' : 'MONTHLY'
     const now = new Date()
@@ -137,7 +157,7 @@ router.get('/invoices/:id', async (req: AuthenticatedRequest, res: Response, nex
       where: { id: req.params.id, consultingFirmId: getTenantId(req) },
       include: { lineItems: true, subscription: { include: { plan: true } } },
     })
-    if (!invoice) return res.status(404).json({ error: 'Invoice not found' })
+    if (!invoice) throw new NotFoundError('Invoice not found')
     res.json({ invoice })
   } catch (err) { next(err) }
 })
@@ -152,7 +172,7 @@ router.post('/invoices/generate', requireRole('ADMIN'), async (req: Authenticate
       where: { consultingFirmId },
       include: { plan: true },
     })
-    if (!sub) return res.status(400).json({ error: 'No active subscription found' })
+    if (!sub) throw new ValidationError('No active subscription found')
 
     const pricePerMonth = sub.billingCycle === 'ANNUAL'
       ? Number(sub.plan.annualPriceUsd)
@@ -184,13 +204,107 @@ router.put('/invoices/:id/status', requireRole('ADMIN'), async (req: Authenticat
   try {
     const { status } = req.body
     const allowed = ['PAID', 'VOID', 'OPEN', 'UNCOLLECTIBLE']
-    if (!allowed.includes(status)) return res.status(400).json({ error: `Status must be one of: ${allowed.join(', ')}` })
+    if (!allowed.includes(status)) throw new ValidationError(`Status must be one of: ${allowed.join(', ')}`)
 
     await prisma.invoice.updateMany({
       where: { id: req.params.id, consultingFirmId: getTenantId(req) },
       data: { status, paidAt: status === 'PAID' ? new Date() : null },
     })
     res.json({ success: true })
+  } catch (err) { next(err) }
+})
+
+// =============================================================
+// STRIPE CHECKOUT — Lifetime access + add-ons
+// New endpoints follow standard contract: { success, data, error?, code? }
+// =============================================================
+
+// -------------------------------------------------------------
+// GET /api/billing/stripe/catalog — public catalog (no Stripe call)
+// -------------------------------------------------------------
+router.get('/stripe/catalog', async (_req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    res.json({
+      success: true,
+      data: {
+        configured: isStripeConfigured(),
+        lifetime: {
+          name: LIFETIME_PRODUCT_NAME,
+          priceCents: LIFETIME_PRICE_CENTS,
+          priceUsd: LIFETIME_PRICE_CENTS / 100,
+        },
+        addons: ADDON_CATALOG.map(a => ({
+          slug: a.slug,
+          name: a.name,
+          priceCents: a.priceCents,
+          priceUsd: a.priceCents / 100,
+          description: a.description,
+        })),
+      },
+    })
+  } catch (err) { next(err) }
+})
+
+// -------------------------------------------------------------
+// POST /api/billing/stripe/checkout/lifetime — start lifetime purchase
+// Body: { successUrl, cancelUrl }
+// -------------------------------------------------------------
+router.post('/stripe/checkout/lifetime', requireRole('ADMIN'), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!isStripeConfigured()) throw new ValidationError('Stripe is not configured on this server')
+
+    const { successUrl, cancelUrl } = req.body
+    if (!successUrl || !cancelUrl) throw new ValidationError('successUrl and cancelUrl are required')
+
+    const consultingFirmId = getTenantId(req)
+
+    // Idempotency: skip if firm already has lifetime access
+    if (await hasLifetimeAccess(consultingFirmId)) {
+      throw new ValidationError('Firm already has lifetime access')
+    }
+
+    const session = await createLifetimeCheckoutSession({
+      consultingFirmId,
+      successUrl,
+      cancelUrl,
+    })
+
+    res.json({ success: true, data: session })
+  } catch (err) { next(err) }
+})
+
+// -------------------------------------------------------------
+// POST /api/billing/stripe/checkout/addon — start add-on purchase
+// Body: { addonSlug, successUrl, cancelUrl }
+// -------------------------------------------------------------
+router.post('/stripe/checkout/addon', requireRole('ADMIN'), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!isStripeConfigured()) throw new ValidationError('Stripe is not configured on this server')
+
+    const { addonSlug, successUrl, cancelUrl } = req.body
+    if (!addonSlug || !successUrl || !cancelUrl) {
+      throw new ValidationError('addonSlug, successUrl, and cancelUrl are required')
+    }
+
+    const consultingFirmId = getTenantId(req)
+
+    // Idempotency: skip if firm already owns this addon
+    const firm = await prisma.consultingFirm.findUnique({
+      where: { id: consultingFirmId },
+      select: { purchasedAddons: true },
+    })
+    if (firm?.purchasedAddons.includes(addonSlug)) {
+      throw new ValidationError('Firm already owns this add-on')
+    }
+
+    const session = await createAddOnCheckoutSession({
+      consultingFirmId,
+      addonSlug,
+      successUrl,
+      cancelUrl,
+    })
+
+    res.json({ success: true, data: session })
   } catch (err) { next(err) }
 })
 

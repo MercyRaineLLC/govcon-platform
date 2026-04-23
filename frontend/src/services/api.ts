@@ -373,6 +373,16 @@ export const billingApi = {
     api.post('/billing/invoices/generate', { notes }).then((r) => r.data),
   updateInvoiceStatus: (id: string, status: string) =>
     api.put(`/billing/invoices/${id}/status`, { status }).then((r) => r.data),
+
+  // Stripe checkout (new endpoints — return { success, data: {...} })
+  getStripeCatalog: () =>
+    api.get('/billing/stripe/catalog').then((r) => r.data?.data ?? r.data),
+  startLifetimeCheckout: (successUrl: string, cancelUrl: string) =>
+    api.post('/billing/stripe/checkout/lifetime', { successUrl, cancelUrl })
+      .then((r) => r.data?.data ?? r.data),
+  startAddonCheckout: (addonSlug: string, successUrl: string, cancelUrl: string) =>
+    api.post('/billing/stripe/checkout/addon', { addonSlug, successUrl, cancelUrl })
+      .then((r) => r.data?.data ?? r.data),
 }
 
 // ---- Add-ons ----

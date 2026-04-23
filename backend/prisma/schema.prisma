@@ -137,6 +137,9 @@ model ConsultingFirm {
   brandingDisplayName String?
   brandingTagline     String?
   brandingFaviconUrl  String?
+  stripeCustomerId    String?  @unique
+  stripeSubscriptionId String? @unique
+  lifetimeAccessAt    DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
