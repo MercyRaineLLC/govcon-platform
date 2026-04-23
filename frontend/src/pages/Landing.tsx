@@ -1,10 +1,34 @@
 import { Link } from 'react-router-dom'
+import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { authApi } from '../services/api'
 import {
   Search, BarChart3, Shield, Users, FileText, Zap,
   CheckCircle, ArrowRight, Star, Activity,
 } from 'lucide-react'
+
+// Pricing table config (env-driven so test/live mode can be toggled per build)
+const STRIPE_PRICING_TABLE_ID =
+  (import.meta as any).env?.VITE_STRIPE_PRICING_TABLE_ID ||
+  'prctbl_1TPKQmRzS6zmMIjgLGxlHJpv'
+const STRIPE_PUBLISHABLE_KEY =
+  (import.meta as any).env?.VITE_STRIPE_PUBLISHABLE_KEY ||
+  'pk_live_51TPHrxRzS6zmMIjg7yzDaRIq4ceMb5jhmL0XX0B4rsBfSABNVKz4bSkJvl4llaVFsaxMjzzFchXbVlGHTtCYYKWu00xUGF7MPR'
+
+// stripe-pricing-table is a custom element — extend JSX intrinsic types
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      'stripe-pricing-table': React.DetailedHTMLProps<
+        React.HTMLAttributes<HTMLElement> & {
+          'pricing-table-id': string
+          'publishable-key': string
+        },
+        HTMLElement
+      >
+    }
+  }
+}
 
 function UmbrellaLogo({ size = 48 }: { size?: number }) {
   return (
@@ -49,6 +73,16 @@ export function LandingPage() {
   })
   const slots = betaData?.data
   const slotsRemaining = slots?.slotsRemaining ?? null
+
+  // Load Stripe Pricing Table script once on mount (idempotent — checks for existing tag)
+  useEffect(() => {
+    const SRC = 'https://js.stripe.com/v3/pricing-table.js'
+    if (document.querySelector(`script[src="${SRC}"]`)) return
+    const script = document.createElement('script')
+    script.src = SRC
+    script.async = true
+    document.body.appendChild(script)
+  }, [])
 
   return (
     <div className="min-h-screen" style={{ background: '#040d1a' }}>
@@ -211,6 +245,25 @@ export function LandingPage() {
             </div>
           </div>
         </div>
+      </section>
+
+      {/* ---- Recurring Subscription Tiers (Stripe Pricing Table) ---- */}
+      <section className="px-6 py-16 max-w-6xl mx-auto">
+        <div className="text-center mb-10">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-400 mb-3">
+            Or Choose a Monthly Plan
+          </p>
+          <h2 className="text-3xl font-black text-slate-100 mb-2" style={{ letterSpacing: '-0.02em' }}>
+            Recurring Subscription Plans
+          </h2>
+          <p className="text-sm text-slate-500 max-w-xl mx-auto">
+            Prefer to pay as you grow? Choose a monthly plan and scale up as your firm scales.
+          </p>
+        </div>
+        <stripe-pricing-table
+          pricing-table-id={STRIPE_PRICING_TABLE_ID}
+          publishable-key={STRIPE_PUBLISHABLE_KEY}
+        />
       </section>
 
       {/* ---- Trust Footer ---- */}

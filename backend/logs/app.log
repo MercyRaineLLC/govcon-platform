@@ -750,3 +750,41 @@
 {"error":"Unexpected token 'o', \"not json\" is not valid JSON","level":"warn","message":"AI clause extractor: JSON parse failed","preview":"not json","timestamp":"2026-04-23 05:07:22"}
 {"error":"Unexpected end of JSON input","level":"warn","message":"AI clause extractor: JSON parse failed","preview":"{\"clauses\":","timestamp":"2026-04-23 05:07:22"}
 {"error":"Unexpected end of JSON input","level":"warn","message":"AI clause extractor: JSON parse failed","preview":"","timestamp":"2026-04-23 05:07:22"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 05:18:13"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 05:18:13"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 05:18:13"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 05:18:13"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 05:18:13"}
+{"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":22600,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 05:18:13"}
+{"level":"info","message":"Deadline notification worker started (daily at 09:00 UTC)","timestamp":"2026-04-23 05:18:13"}
+{"code":"VALIDATION_ERROR","level":"warn","message":"Client error Subscription tier 'starter' is not configured (set STRIPE_PRICE_STARTER in env)","path":"/api/billing/stripe/checkout/subscription","statusCode":422,"timestamp":"2026-04-23 05:21:23"}
+{"firmId":"633962dd-94a0-4ca5-aa27-8e980861021c","level":"info","message":"Stripe customer portal session created","sessionId":"bps_1TPKNsRzyNJh46IB55Sn2Vzw","timestamp":"2026-04-23 05:21:24"}
+{"eventId":"evt_1TPKNsRzyNJh46IBJ62nU4Oh","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 05:21:24","type":"billing_portal.session.created"}
+{"eventId":"evt_1TPKNsRzyNJh46IBweWot1hh","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 05:21:25","type":"billing_portal.configuration.created"}
+{"eventId":"evt_1TPKZQRzyNJh46IBMfOgsSFv","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 05:33:20","type":"product.created"}
+{"eventId":"evt_1TPKZQRzyNJh46IBIWLsh3BI","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 05:33:20","type":"plan.created"}
+{"eventId":"evt_1TPKZQRzyNJh46IBWIhFXXVB","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 05:33:20","type":"price.created"}
+{"eventId":"evt_1TPKZQRzyNJh46IBqq0jVOcD","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 05:33:20","type":"product.created"}
+{"eventId":"evt_1TPKZRRzyNJh46IBCB7xSZMd","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 05:33:21","type":"product.created"}
+{"eventId":"evt_1TPKZRRzyNJh46IBwfS76UcN","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 05:33:21","type":"plan.created"}
+{"eventId":"evt_1TPKZRRzyNJh46IBQL4Aqaok","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 05:33:21","type":"price.created"}
+{"eventId":"evt_1TPKZRRzyNJh46IBcD0kQX0j","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 05:33:23","type":"plan.created"}
+{"eventId":"evt_1TPKZRRzyNJh46IB2RdVpRJ2","level":"info","message":"Stripe webhook received (no handler)","timestamp":"2026-04-23 05:33:23","type":"price.created"}
+{"level":"info","message":"Redis connected","timestamp":"2026-04-23 05:54:45"}
+{"level":"info","message":"Database connected","timestamp":"2026-04-23 05:54:45"}
+{"level":"info","message":"Scoring worker started","timestamp":"2026-04-23 05:54:45"}
+{"level":"info","message":"Enrichment worker started","timestamp":"2026-04-23 05:54:45"}
+{"level":"info","message":"Recalibration worker started (nightly at 02:00 UTC)","timestamp":"2026-04-23 05:54:45"}
+{"environment":"development","level":"info","message":"MrGovCon Platform running - BANKV Engine Active","pid":24136,"port":3001,"tagline":"Transporting Goods, Transforming Lives","timestamp":"2026-04-23 05:54:45"}
+{"level":"info","message":"Deadline notification worker started (daily at 09:00 UTC)","timestamp":"2026-04-23 05:54:45"}
+{"firmId":"633962dd-94a0-4ca5-aa27-8e980861021c","level":"info","message":"Stripe subscription checkout created","sessionId":"cs_test_a1GDvg9OXTmTPApWs2PQtfg2AZtr9LV3udz6YeHinAd2BtKgAUE8T1nsFf","tier":"starter","timestamp":"2026-04-23 05:55:13"}
+{"level":"warn","message":"SMS rejected — invalid E.164 phone","phone":"***-1234","timestamp":"2026-04-23 05:55:22"}
+{"level":"warn","message":"SMS rejected — invalid E.164 phone","phone":"****","timestamp":"2026-04-23 05:55:22"}
+{"level":"warn","message":"SMS rejected — invalid E.164 phone","phone":"****","timestamp":"2026-04-23 05:55:22"}
+{"bodyLength":2,"level":"info","message":"SMS (dev mode, not sent)","timestamp":"2026-04-23 05:55:22","to":"***-1234"}
+{"bodyLength":2,"level":"info","message":"SMS (dev mode, not sent)","timestamp":"2026-04-23 05:55:22","to":"***-1234"}
+{"bodyLength":320,"level":"info","message":"SMS (dev mode, not sent)","timestamp":"2026-04-23 05:55:22","to":"***-1234"}
+{"code":"SUPERFAKE 99.9-99","level":"warn","message":"AI clause extractor: rejected implausible code","timestamp":"2026-04-23 05:55:22"}
+{"error":"Unexpected token 'o', \"not json\" is not valid JSON","level":"warn","message":"AI clause extractor: JSON parse failed","preview":"not json","timestamp":"2026-04-23 05:55:22"}
+{"error":"Unexpected end of JSON input","level":"warn","message":"AI clause extractor: JSON parse failed","preview":"{\"clauses\":","timestamp":"2026-04-23 05:55:22"}
+{"error":"Unexpected end of JSON input","level":"warn","message":"AI clause extractor: JSON parse failed","preview":"","timestamp":"2026-04-23 05:55:22"}
