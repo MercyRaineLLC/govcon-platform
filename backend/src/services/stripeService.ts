@@ -73,8 +73,9 @@ export function isStripeConfigured(): boolean {
 // Lifetime Access Pricing (cents)
 // -------------------------------------------------------------
 
-export const LIFETIME_PRICE_CENTS = 124900 // $1,249.00
-export const LIFETIME_PRODUCT_NAME = 'MrGovCon BANKV Engine — Lifetime Access'
+export const LIFETIME_PRICE_CENTS = 250000 // $2,500.00
+export const LIFETIME_PRODUCT_NAME = 'MrGovCon BANKV Engine — Founders Lifetime Access'
+export const LIFETIME_MAX_SLOTS = 10
 
 export interface AddOnDefinition {
   slug: string
@@ -231,6 +232,11 @@ export async function createLifetimeCheckoutSession(opts: {
   successUrl: string
   cancelUrl: string
 }): Promise<{ sessionId: string; url: string }> {
+  const claimed = await prisma.consultingFirm.count({ where: { lifetimeAccessAt: { not: null } } })
+  if (claimed >= LIFETIME_MAX_SLOTS) {
+    throw new Error(`All ${LIFETIME_MAX_SLOTS} founders lifetime slots have been claimed`)
+  }
+
   const stripe = getStripe()
   const customerId = await getOrCreateCustomer(opts.consultingFirmId)
 

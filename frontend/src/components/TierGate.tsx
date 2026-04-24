@@ -12,9 +12,9 @@ const TIER_NAMES: Record<TierSlug, string> = {
 
 const TIER_PRICES: Record<TierSlug, string> = {
   starter: '$299/mo',
-  beta_lifetime: '$1,249 one-time',
+  beta_lifetime: '$2,500 one-time',
   professional: '$699/mo',
-  enterprise: '$1,800/mo',
+  enterprise: '$1,000/mo',
   elite: '$4,500/mo',
 }
 

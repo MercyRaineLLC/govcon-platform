@@ -7,14 +7,14 @@ import { prisma } from '../config/database'
 const DEFAULT_PLANS = [
   {
     slug: 'beta_lifetime',
-    name: 'Beta Lifetime Access',
-    monthlyPriceUsd: 1249,
-    annualPriceUsd: 1249,
+    name: 'Founders Lifetime Access',
+    monthlyPriceUsd: 2500,
+    annualPriceUsd: 2500,
     maxUsers: 8,
     maxClients: 30,
     aiCallsPerMonth: 500,
     features: [
-      'LIFETIME ACCESS — one-time $1,249 payment, never expires',
+      'LIFETIME ACCESS — one-time $2,500 payment, never expires (limited to 10 founders)',
       'Professional tier base features included',
       'AI bid strategy & win guidance',
       'Full analytics suite — market intel, revenue forecast, portfolio health',
@@ -71,8 +71,8 @@ const DEFAULT_PLANS = [
   {
     slug: 'enterprise',
     name: 'Enterprise',
-    monthlyPriceUsd: 1800,
-    annualPriceUsd: 1530,
+    monthlyPriceUsd: 1000,
+    annualPriceUsd: 850,
     maxUsers: -1,
     maxClients: -1,
     aiCallsPerMonth: -1,

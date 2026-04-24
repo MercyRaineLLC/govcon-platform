@@ -23,6 +23,7 @@ import {
   ADDON_CATALOG,
   LIFETIME_PRICE_CENTS,
   LIFETIME_PRODUCT_NAME,
+  LIFETIME_MAX_SLOTS,
   TIER_CATALOG,
   isTierConfigured,
   SubscriptionTier,
@@ -274,6 +275,12 @@ router.post('/stripe/checkout/lifetime', requireRole('ADMIN'), async (req: Authe
     // Idempotency: skip if firm already has lifetime access
     if (await hasLifetimeAccess(consultingFirmId)) {
       throw new ValidationError('Firm already has lifetime access')
+    }
+
+    // Cap: only 10 founders lifetime slots total
+    const claimed = await prisma.consultingFirm.count({ where: { lifetimeAccessAt: { not: null } } })
+    if (claimed >= LIFETIME_MAX_SLOTS) {
+      throw new ValidationError(`All ${LIFETIME_MAX_SLOTS} founders lifetime slots have been claimed`)
     }
 
     const session = await createLifetimeCheckoutSession({

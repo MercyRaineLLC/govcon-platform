@@ -223,15 +223,15 @@ export function LandingPage() {
                 WebkitTextFillColor: 'transparent',
               }}
             >
-              $1,249
+              $2,500
             </span>
           </h2>
           <p className="text-sm text-slate-500 mb-1">
-            <span className="line-through text-slate-600">$8,388/yr</span>
+            <span className="line-through text-slate-600">$12,000/yr</span>
             {' '}— One-time payment. Professional tier base features forever.
           </p>
           <p className="text-xs text-slate-600 mb-8">
-            Founding Member badge · Priority support · Marketplace add-ons available separately
+            Limited to 10 founders · Founding Member badge · Priority support · Add-ons available separately
           </p>
 
           <div className="flex flex-col items-center gap-4">

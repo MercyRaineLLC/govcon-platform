@@ -159,10 +159,24 @@ export default function BillingPage() {
   const invalidateInv = () => qc.invalidateQueries({ queryKey: ['billing-invoices'] })
 
   const subscribeMut = useMutation({
-    mutationFn: ({ planId, cycle }: { planId: string; cycle: 'MONTHLY' | 'ANNUAL' }) =>
-      billingApi.subscribe(planId, cycle),
-    onSuccess: () => { invalidateSub(); flash('ok', 'Subscription updated') },
-    onError: () => flash('err', 'Failed to update subscription'),
+    mutationFn: async ({ slug }: { slug: string }) => {
+      const stripeTiers = ['starter', 'professional', 'enterprise'] as const
+      if (!stripeTiers.includes(slug as any)) {
+        throw new Error(`Tier '${slug}' is not available for self-service checkout`)
+      }
+      const origin = window.location.origin
+      const session = await billingApi.startSubscriptionCheckout(
+        slug as 'starter' | 'professional' | 'enterprise',
+        `${origin}/billing?checkout=success&tier=${slug}`,
+        `${origin}/billing?checkout=canceled`,
+      )
+      if (session?.url) {
+        window.location.href = session.url
+      } else {
+        throw new Error('No checkout URL returned')
+      }
+    },
+    onError: (err: any) => flash('err', err?.response?.data?.error ?? err?.message ?? 'Failed to start checkout'),
   })
   const cancelMut = useMutation({
     mutationFn: () => billingApi.cancel(),
@@ -472,7 +486,7 @@ export default function BillingPage() {
                     }
                     return (
                       <button
-                        onClick={() => subscribeMut.mutate({ planId: p.id, cycle: selectedCycle })}
+                        onClick={() => subscribeMut.mutate({ slug: p.slug })}
                         disabled={subscribeMut.isPending}
                         className="w-full py-2 rounded-lg text-sm font-semibold transition-all disabled:opacity-50"
                         style={{
@@ -481,7 +495,7 @@ export default function BillingPage() {
                           color: isUpgrade ? '#f59e0b' : '#64748b',
                         }}
                       >
-                        {subscribeMut.isPending ? 'Updating…' : isUpgrade ? `Upgrade to ${p.name} →` : `Downgrade to ${p.name}`}
+                        {subscribeMut.isPending ? 'Redirecting to Stripe…' : isUpgrade ? `Upgrade to ${p.name} →` : `Switch to ${p.name}`}
                       </button>
                     )
                   })()
