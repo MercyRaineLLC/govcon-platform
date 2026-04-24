@@ -423,58 +423,75 @@ export default function OpportunityDetail() {
     if (!files || files.length === 0 || !id) return
     setUploading(true)
     setUploadError('')
-    try {
-      for (let fi = 0; fi < files.length; fi++) {
-        const file = files[fi]
-        // ZIP: extract all files, then trigger analysis on each
+
+    const failures: string[] = []
+    let lastAnalysisJobId: string | null = null
+    let anyAnalysisStarted = false
+
+    for (let fi = 0; fi < files.length; fi++) {
+      const file = files[fi]
+      try {
         if (file.name.toLowerCase().endsWith('.zip')) {
           const zipRes = await documentsApi.uploadZip(id, file)
           const extracted: any[] = zipRes.data ?? []
-          fetchOpportunity()
           for (const doc of extracted) {
-            try { await jobsApi.triggerDocumentAnalysis(doc.id) } catch {}
+            try {
+              const jobRes = await jobsApi.triggerDocumentAnalysis(doc.id)
+              lastAnalysisJobId = jobRes.data?.jobId ?? jobRes.jobId ?? lastAnalysisJobId
+              anyAnalysisStarted = true
+            } catch (err: any) {
+              failures.push(`${doc.fileName}: analysis trigger failed`)
+            }
           }
-          setAnalyzeStatus(extracted.length > 0 ? 'running' : 'error')
           continue
         }
         const uploadRes = await documentsApi.upload(id, file)
         const documentId = uploadRes.data?.id ?? uploadRes.id
         const jobRes = await jobsApi.triggerDocumentAnalysis(documentId)
-        const jobId = jobRes.data?.jobId ?? jobRes.jobId
-        setAnalyzeStatus('running')
-        // Only poll the last file's analysis (earlier ones run in background)
-        if (fi === files.length - 1) {
-          let pollAttempts = 0
-          const pollAnalysis = async () => {
-            pollAttempts++
-            if (pollAttempts > 40) { setAnalyzeStatus('error'); pollRef.current = null; return }
-            try {
-              const jobCheck = await jobsApi.getJob(jobId)
-              const status: string = jobCheck.data?.status ?? jobCheck.status ?? ''
-              if (status === 'COMPLETE') {
-                pollRef.current = null
-                setAnalyzeStatus('complete')
-                fetchOpportunity()
-              } else if (status === 'FAILED') {
-                pollRef.current = null
-                setAnalyzeStatus('error')
-              } else {
-                pollRef.current = setTimeout(pollAnalysis, 3000) as any
-              }
-            } catch {
-              pollRef.current = setTimeout(pollAnalysis, 3000) as any
-            }
+        lastAnalysisJobId = jobRes.data?.jobId ?? jobRes.jobId ?? lastAnalysisJobId
+        anyAnalysisStarted = true
+      } catch (err: any) {
+        const reason = err?.response?.data?.error || err?.message || 'upload failed'
+        failures.push(`${file.name}: ${reason}`)
+      }
+    }
+
+    fetchOpportunity()
+
+    if (anyAnalysisStarted && lastAnalysisJobId) {
+      setAnalyzeStatus('running')
+      let pollAttempts = 0
+      const pollAnalysis = async () => {
+        pollAttempts++
+        if (pollAttempts > 40) { setAnalyzeStatus('error'); pollRef.current = null; return }
+        try {
+          const jobCheck = await jobsApi.getJob(lastAnalysisJobId!)
+          const status: string = jobCheck.data?.status ?? jobCheck.status ?? ''
+          if (status === 'COMPLETE') {
+            pollRef.current = null
+            setAnalyzeStatus('complete')
+            fetchOpportunity()
+          } else if (status === 'FAILED') {
+            pollRef.current = null
+            setAnalyzeStatus('error')
+          } else {
+            pollRef.current = setTimeout(pollAnalysis, 3000) as any
           }
-          pollAnalysis()
+        } catch {
+          pollRef.current = setTimeout(pollAnalysis, 3000) as any
         }
       }
-      if (files.length > 1) fetchOpportunity()
-    } catch (err: any) {
-      setUploadError(err?.response?.data?.error || 'Upload failed')
-    } finally {
-      setUploading(false)
-      if (fileInputRef.current) fileInputRef.current.value = ''
+      pollAnalysis()
     }
+
+    if (failures.length > 0) {
+      const succeeded = files.length - failures.length
+      const prefix = succeeded > 0 ? `${succeeded} of ${files.length} uploaded. Failed: ` : 'Upload failed: '
+      setUploadError(prefix + failures.join(' · '))
+    }
+
+    setUploading(false)
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   const handleDeleteDocument = async (documentId: string) => {
@@ -1358,7 +1375,7 @@ ${data.amendments.map(a => `
             {uploading
               ? <Loader className="w-4 h-4 animate-spin" />
               : <Upload className="w-4 h-4" />}
-            {uploading ? 'Uploading...' : 'Upload Document / ZIP'}
+            {uploading ? 'Uploading...' : 'Upload Documents (multiple OK) / ZIP'}
           </button>
 
           {analyzeStatus === 'running' && (
