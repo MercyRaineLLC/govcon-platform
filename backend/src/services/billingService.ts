@@ -71,8 +71,8 @@ const DEFAULT_PLANS = [
   {
     slug: 'enterprise',
     name: 'Enterprise',
-    monthlyPriceUsd: 1000,
-    annualPriceUsd: 850,
+    monthlyPriceUsd: 1800,
+    annualPriceUsd: 1530,
     maxUsers: -1,
     maxClients: -1,
     aiCallsPerMonth: -1,
