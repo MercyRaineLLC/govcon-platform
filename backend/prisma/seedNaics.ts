@@ -1,7 +1,5 @@
 import { PrismaClient } from '@prisma/client'
 
-const prisma = new PrismaClient()
-
 interface NaicsEntry {
   code: string
   description: string
@@ -330,33 +328,28 @@ const NAICS: NaicsEntry[] = [
   { code: '928120', description: 'International Affairs', sector: '92' },
 ]
 
-async function main() {
+export async function seedNaicsCodes(prisma: PrismaClient) {
   console.log(`Seeding ${NAICS.length} NAICS codes...`)
-  let created = 0
-  let updated = 0
-
   for (const entry of NAICS) {
-    const result = await prisma.naicsCode.upsert({
+    await prisma.naicsCode.upsert({
       where: { code: entry.code },
       create: { code: entry.code, description: entry.description, sector: entry.sector },
       update: { description: entry.description, sector: entry.sector },
     })
-    if (result.id) {
-      const existing = await prisma.naicsCode.findUnique({ where: { code: entry.code }, select: { description: true } })
-      if (existing?.description === entry.description) updated++
-      else created++
-    }
   }
-
   const total = await prisma.naicsCode.count()
-  console.log(`Done. Total NAICS codes in DB: ${total}`)
+  console.log(`NAICS seed complete. Total in DB: ${total}`)
 }
 
-main()
-  .catch((e) => {
-    console.error(e)
-    process.exit(1)
-  })
-  .finally(async () => {
-    await prisma.$disconnect()
-  })
+// Standalone runner — `npm run db:seed:naics`
+if (require.main === module) {
+  const prisma = new PrismaClient()
+  seedNaicsCodes(prisma)
+    .catch((e) => {
+      console.error(e)
+      process.exit(1)
+    })
+    .finally(async () => {
+      await prisma.$disconnect()
+    })
+}

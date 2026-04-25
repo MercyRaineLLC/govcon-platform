@@ -1,10 +1,13 @@
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
+import { seedNaicsCodes } from './seedNaics'
 
 const prisma = new PrismaClient()
 
 async function main() {
   console.log("Seeding database...")
+
+  await seedNaicsCodes(prisma)
 
   const firm = await prisma.consultingFirm.create({
     data: {
