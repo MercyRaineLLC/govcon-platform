@@ -4,6 +4,7 @@
 // =============================================================
 import { Router, Response } from 'express'
 import { authenticateJWT } from '../middleware/auth'
+import { enforceTenantScope } from '../middleware/tenant'
 import { AuthenticatedRequest } from '../types'
 import { prisma } from '../config/database'
 import { ensureBigQueryDataset } from '../config/bigquery'
@@ -18,7 +19,7 @@ import { ingestAwardsForNaics, ingestBulkNaics } from '../services/bigquery/inge
 import { logger } from '../utils/logger'
 
 const router = Router()
-router.use(authenticateJWT)
+router.use(authenticateJWT, enforceTenantScope)
 
 // ── Status ────────────────────────────────────────────────────
 

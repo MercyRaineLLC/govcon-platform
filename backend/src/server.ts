@@ -281,6 +281,11 @@ async function bootstrap(): Promise<void> {
 }
 
 bootstrap().catch((err) => {
-  console.error('Bootstrap failed:', err)
+  try {
+    logger.error('Bootstrap failed', { error: err?.message, stack: err?.stack })
+  } catch {
+    // Fall back to stderr only if Winston itself failed during bootstrap
+    process.stderr.write(`Bootstrap failed: ${err?.message ?? err}\n`)
+  }
   process.exit(1)
 })
