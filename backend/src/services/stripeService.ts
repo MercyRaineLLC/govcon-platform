@@ -284,6 +284,69 @@ export async function createLifetimeCheckoutSession(opts: {
 }
 
 // -------------------------------------------------------------
+// Token pack checkout session — uses inline price_data, credited
+// via webhook on checkout.session.completed
+// -------------------------------------------------------------
+
+export async function createTokenPackCheckoutSession(opts: {
+  consultingFirmId: string
+  packSlug: string
+  packName: string
+  tokenAmount: number
+  priceCents: number
+  successUrl: string
+  cancelUrl: string
+}): Promise<{ sessionId: string; url: string }> {
+  const stripe = getStripe()
+  const customerId = await getOrCreateCustomer(opts.consultingFirmId)
+
+  const session = await stripe.checkout.sessions.create({
+    mode: 'payment',
+    customer: customerId,
+    line_items: [
+      {
+        price_data: {
+          currency: 'usd',
+          unit_amount: opts.priceCents,
+          product_data: {
+            name: opts.packName,
+            description: `${opts.tokenAmount} proposal tokens — never expire.`,
+          },
+        },
+        quantity: 1,
+      },
+    ],
+    success_url: opts.successUrl,
+    cancel_url: opts.cancelUrl,
+    metadata: {
+      consultingFirmId: opts.consultingFirmId,
+      productType: 'token_pack',
+      packSlug: opts.packSlug,
+      tokenAmount: String(opts.tokenAmount),
+    },
+    payment_intent_data: {
+      metadata: {
+        consultingFirmId: opts.consultingFirmId,
+        productType: 'token_pack',
+        packSlug: opts.packSlug,
+        tokenAmount: String(opts.tokenAmount),
+      },
+    },
+  })
+
+  if (!session.url) throw new Error('Stripe checkout session has no URL')
+
+  logger.info('Stripe token pack checkout session created', {
+    firmId: opts.consultingFirmId,
+    sessionId: session.id,
+    packSlug: opts.packSlug,
+    tokenAmount: opts.tokenAmount,
+  })
+
+  return { sessionId: session.id, url: session.url }
+}
+
+// -------------------------------------------------------------
 // Add-on checkout session
 // -------------------------------------------------------------
 
@@ -515,6 +578,24 @@ async function handleCheckoutCompleted(event: StripeEvent): Promise<{ processed:
       tier: session.metadata?.tier,
       sessionId: session.id,
     })
+  } else if (productType === 'token_pack') {
+    const tokenAmount = parseInt(session.metadata?.tokenAmount ?? '0', 10)
+    if (tokenAmount > 0) {
+      await prisma.consultingFirm.update({
+        where: { id: consultingFirmId },
+        data: { proposalTokens: { increment: tokenAmount } },
+      })
+      logger.info('Token pack credited', {
+        firmId: consultingFirmId,
+        packSlug: session.metadata?.packSlug,
+        tokenAmount,
+      })
+    } else {
+      logger.error('Token pack checkout without tokenAmount metadata', {
+        firmId: consultingFirmId,
+        sessionId: session.id,
+      })
+    }
   }
 
   // Audit trail (compliance + idempotency marker)

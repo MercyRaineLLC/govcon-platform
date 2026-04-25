@@ -44,18 +44,14 @@ router.post('/:slug/purchase', requireRole('ADMIN'), async (req: AuthenticatedRe
     const consultingFirmId = getTenantId(req)
     const { slug } = req.params
 
-    // Handle token pack purchases separately — increment balance, don't add to purchasedAddons
+    // Token pack purchases must flow through Stripe Checkout — see
+    // POST /api/billing/stripe/checkout/token-pack. Direct credit was a
+    // billing-bypass bug.
     if (TOKEN_PACK_SLUGS[slug] !== undefined) {
-      const tokenAmount = TOKEN_PACK_SLUGS[slug]
-      const updated = await prisma.consultingFirm.update({
-        where: { id: consultingFirmId },
-        data: { proposalTokens: { increment: tokenAmount } },
-        select: { proposalTokens: true },
-      })
-      return res.json({
-        success: true,
-        message: `${tokenAmount} proposal tokens added to your account.`,
-        proposalTokenBalance: updated.proposalTokens,
+      return res.status(400).json({
+        success: false,
+        error: 'Token packs must be purchased via Stripe Checkout. Use POST /api/billing/stripe/checkout/token-pack.',
+        code: 'USE_STRIPE_CHECKOUT',
       })
     }
 

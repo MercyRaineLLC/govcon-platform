@@ -386,6 +386,9 @@ export const billingApi = {
   startSubscriptionCheckout: (tier: 'starter' | 'professional' | 'enterprise', successUrl: string, cancelUrl: string) =>
     api.post('/billing/stripe/checkout/subscription', { tier, successUrl, cancelUrl })
       .then((r) => r.data?.data ?? r.data),
+  startTokenPackCheckout: (slug: string, successUrl: string, cancelUrl: string) =>
+    api.post('/billing/stripe/checkout/token-pack', { slug, successUrl, cancelUrl })
+      .then((r) => r.data?.data ?? r.data),
 }
 
 // ---- Add-ons ----

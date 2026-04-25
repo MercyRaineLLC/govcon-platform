@@ -17,6 +17,7 @@ import {
   createLifetimeCheckoutSession,
   createAddOnCheckoutSession,
   createSubscriptionCheckoutSession,
+  createTokenPackCheckoutSession,
   createCustomerPortalSession,
   isStripeConfigured,
   hasLifetimeAccess,
@@ -28,6 +29,7 @@ import {
   isTierConfigured,
   SubscriptionTier,
 } from '../services/stripeService'
+import { TOKEN_PACK_SLUGS, TOKEN_PACK_PRICE_CENTS, TOKEN_PACK_ADDONS } from '../config/addons'
 
 const router = Router()
 router.use(authenticateJWT, enforceTenantScope)
@@ -353,6 +355,42 @@ router.post('/stripe/checkout/subscription', requireRole('ADMIN'), async (req: A
       consultingFirmId,
       tier,
       successUrl: successUrl || `${appUrl}/billing?checkout=success&tier=${tier}`,
+      cancelUrl: cancelUrl || `${appUrl}/billing?checkout=canceled`,
+    })
+
+    res.json({ success: true, data: session })
+  } catch (err) { next(err) }
+})
+
+// -------------------------------------------------------------
+// POST /api/billing/stripe/checkout/token-pack — buy a token pack
+// Body: { slug: 'proposal_tokens_15' | 'proposal_tokens_40' | 'proposal_tokens_120' }
+// successUrl/cancelUrl optional — defaults to APP_URL/billing
+// -------------------------------------------------------------
+router.post('/stripe/checkout/token-pack', requireRole('ADMIN'), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!isStripeConfigured()) throw new ValidationError('Stripe is not configured on this server')
+
+    const { slug, successUrl, cancelUrl } = req.body
+    if (typeof slug !== 'string' || !TOKEN_PACK_SLUGS[slug]) {
+      throw new ValidationError(`slug must be one of: ${Object.keys(TOKEN_PACK_SLUGS).join(', ')}`)
+    }
+
+    const tokenAmount = TOKEN_PACK_SLUGS[slug]
+    const priceCents = TOKEN_PACK_PRICE_CENTS[slug]
+    const pack = TOKEN_PACK_ADDONS.find(p => p.slug === slug)
+    if (!priceCents || !pack) throw new ValidationError(`Token pack '${slug}' has no price configured`)
+
+    const consultingFirmId = getTenantId(req)
+    const appUrl = process.env.APP_URL || 'http://localhost:3000'
+
+    const session = await createTokenPackCheckoutSession({
+      consultingFirmId,
+      packSlug: slug,
+      packName: pack.name,
+      tokenAmount,
+      priceCents,
+      successUrl: successUrl || `${appUrl}/billing?checkout=success&pack=${slug}`,
       cancelUrl: cancelUrl || `${appUrl}/billing?checkout=canceled`,
     })
 

@@ -221,13 +221,20 @@ export default function BillingPage() {
     onError: () => flash('err', 'Failed to cancel add-on'),
   })
   const tokenPackMut = useMutation({
-    mutationFn: (slug: string) => addonsApi.purchase(slug),
-    onSuccess: (data: any, slug) => {
-      invalidateAddons()
-      const pack = tokenPacks.find((p: any) => p.slug === slug)
-      flash('ok', data?.message ?? `${pack?.tokenAmount ?? ''} proposal tokens added to your account`)
+    mutationFn: async (slug: string) => {
+      const origin = window.location.origin
+      const session = await billingApi.startTokenPackCheckout(
+        slug,
+        `${origin}/billing?checkout=success&pack=${slug}`,
+        `${origin}/billing?checkout=canceled`,
+      )
+      if (session?.url) {
+        window.location.href = session.url
+      } else {
+        throw new Error('No checkout URL returned')
+      }
     },
-    onError: () => flash('err', 'Failed to purchase token pack'),
+    onError: (err: any) => flash('err', err?.response?.data?.error ?? err?.message ?? 'Failed to start checkout'),
   })
 
   // ── plan card styles ─────────────────────────────────────
@@ -710,7 +717,7 @@ export default function BillingPage() {
                     className="w-full py-1.5 rounded-lg text-xs font-semibold transition-all disabled:opacity-50"
                     style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', color: '#f59e0b' }}
                   >
-                    {tokenPackMut.isPending ? 'Processing…' : `Buy ${pack.tokenAmount} Tokens — $${pack.priceMonthly}`}
+                    {tokenPackMut.isPending ? 'Redirecting to Stripe…' : `Buy ${pack.tokenAmount} Tokens — $${pack.priceMonthly}`}
                   </button>
                 ) : (
                   <div className="w-full py-1.5 rounded-lg text-xs text-center text-slate-600"
