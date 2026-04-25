@@ -196,7 +196,7 @@ export default function BillingPage() {
       setInvoiceNotes('')
       flash('ok', 'Invoice generated')
     },
-    onError: () => flash('err', 'Failed to generate invoice'),
+    onError: (err: any) => flash('err', err?.response?.data?.error ?? err?.message ?? 'Failed to generate invoice'),
   })
   const markStatusMut = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
