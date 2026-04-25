@@ -172,6 +172,7 @@ router.get('/invoices/:id', async (req: AuthenticatedRequest, res: Response, nex
 
 // -------------------------------------------------------------
 // POST /api/billing/invoices/generate — create invoice for current period (ADMIN)
+// Body: { notes?: string, force?: boolean }  // force=true bypasses duplicate guard
 // -------------------------------------------------------------
 router.post('/invoices/generate', requireRole('ADMIN'), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
@@ -181,6 +182,28 @@ router.post('/invoices/generate', requireRole('ADMIN'), async (req: Authenticate
       include: { plan: true },
     })
     if (!sub) throw new ValidationError('No active subscription found')
+
+    // Duplicate guard — refuse if a non-VOID invoice already covers this period
+    // unless caller explicitly passes force: true.
+    if (!req.body?.force) {
+      const existing = await prisma.invoice.findFirst({
+        where: {
+          consultingFirmId,
+          periodStart: sub.currentPeriodStart,
+          periodEnd: sub.currentPeriodEnd,
+          status: { not: 'VOID' },
+        },
+        select: { id: true, invoiceNumber: true, status: true },
+      })
+      if (existing) {
+        return res.status(409).json({
+          success: false,
+          code: 'INVOICE_PERIOD_DUPLICATE',
+          error: `An invoice (${existing.invoiceNumber}, ${existing.status}) already exists for this billing period. Pass force: true to create another.`,
+          existing,
+        })
+      }
+    }
 
     const pricePerMonth = sub.billingCycle === 'ANNUAL'
       ? Number(sub.plan.annualPriceUsd)
@@ -201,7 +224,66 @@ router.post('/invoices/generate', requireRole('ADMIN'), async (req: Authenticate
       ],
     })
 
-    res.json({ invoice })
+    res.json({ success: true, invoice })
+  } catch (err) { next(err) }
+})
+
+// -------------------------------------------------------------
+// GET /api/billing/invoices/:id/pdf — download invoice as PDF
+// -------------------------------------------------------------
+router.get('/invoices/:id/pdf', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const consultingFirmId = getTenantId(req)
+    const invoice = await prisma.invoice.findFirst({
+      where: { id: req.params.id, consultingFirmId },
+      include: { lineItems: true },
+    })
+    if (!invoice) throw new NotFoundError('Invoice not found')
+
+    const firm = await prisma.consultingFirm.findUnique({
+      where: { id: consultingFirmId },
+      select: {
+        name: true,
+        contactEmail: true,
+        brandingDisplayName: true,
+        brandingPrimaryColor: true,
+        brandingSecondaryColor: true,
+      },
+    })
+    if (!firm) throw new NotFoundError('Firm not found')
+
+    const { buildInvoicePdf } = await import('../services/invoicePdfBuilder')
+    const pdfBuffer = await buildInvoicePdf({
+      invoiceNumber: invoice.invoiceNumber,
+      status: invoice.status,
+      periodStart: invoice.periodStart,
+      periodEnd: invoice.periodEnd,
+      dueAt: invoice.dueAt,
+      createdAt: invoice.createdAt,
+      paidAt: invoice.paidAt,
+      subtotalUsd: Number(invoice.subtotalUsd),
+      taxUsd: Number(invoice.taxUsd),
+      totalUsd: Number(invoice.totalUsd),
+      notes: invoice.notes,
+      lineItems: invoice.lineItems.map(li => ({
+        description: li.description,
+        quantity: li.quantity,
+        unitPriceUsd: Number(li.unitPriceUsd),
+        totalUsd: Number(li.totalUsd),
+      })),
+      firm: {
+        name: firm.name,
+        displayName: firm.brandingDisplayName,
+        contactEmail: firm.contactEmail,
+        primaryColor: firm.brandingPrimaryColor,
+        secondaryColor: firm.brandingSecondaryColor,
+      },
+    })
+
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `attachment; filename="${invoice.invoiceNumber}.pdf"`)
+    res.setHeader('Content-Length', pdfBuffer.length)
+    res.send(pdfBuffer)
   } catch (err) { next(err) }
 })
 

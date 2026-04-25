@@ -189,15 +189,43 @@ export default function BillingPage() {
     onError: () => flash('err', 'Failed to reactivate'),
   })
   const generateMut = useMutation({
-    mutationFn: (notes: string) => billingApi.generateInvoice(notes),
+    mutationFn: ({ notes, force }: { notes: string; force?: boolean }) => billingApi.generateInvoice(notes, force),
     onSuccess: () => {
       invalidateInv()
       setShowGenerateModal(false)
       setInvoiceNotes('')
       flash('ok', 'Invoice generated')
     },
-    onError: (err: any) => flash('err', err?.response?.data?.error ?? err?.message ?? 'Failed to generate invoice'),
+    onError: (err: any) => {
+      const code = err?.response?.data?.code
+      const errorMsg = err?.response?.data?.error ?? err?.message ?? 'Failed to generate invoice'
+      if (code === 'INVOICE_PERIOD_DUPLICATE') {
+        if (window.confirm(errorMsg + '\n\nCreate another anyway?')) {
+          generateMut.mutate({ notes: invoiceNotes, force: true })
+          return
+        }
+        flash('err', 'Generation cancelled')
+        return
+      }
+      flash('err', errorMsg)
+    },
   })
+
+  const downloadInvoicePdf = async (invoice: { id: string; invoiceNumber: string }) => {
+    try {
+      const blob = await billingApi.downloadInvoicePdf(invoice.id)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${invoice.invoiceNumber}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err: any) {
+      flash('err', err?.response?.data?.error ?? 'Failed to download PDF')
+    }
+  }
   const markStatusMut = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
       billingApi.updateInvoiceStatus(id, status),
@@ -773,6 +801,13 @@ export default function BillingPage() {
                     {isAdmin && (
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => downloadInvoicePdf(inv)}
+                            className="text-[11px] px-2 py-1 rounded bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 transition-all"
+                            title="Download PDF"
+                          >
+                            PDF
+                          </button>
                           {inv.status === 'OPEN' && (
                             <>
                               <button
@@ -840,7 +875,7 @@ export default function BillingPage() {
                 Cancel
               </button>
               <button
-                onClick={() => generateMut.mutate(invoiceNotes)}
+                onClick={() => generateMut.mutate({ notes: invoiceNotes })}
                 disabled={generateMut.isPending}
                 className="px-4 py-2 rounded-lg text-sm font-semibold transition-all disabled:opacity-50"
                 style={{ background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)', color: '#f59e0b' }}

@@ -369,8 +369,10 @@ export const billingApi = {
   getInvoices: (params?: { page?: number; limit?: number }) =>
     api.get('/billing/invoices', { params }).then((r) => r.data),
   getInvoice: (id: string) => api.get(`/billing/invoices/${id}`).then((r) => r.data),
-  generateInvoice: (notes?: string) =>
-    api.post('/billing/invoices/generate', { notes }).then((r) => r.data),
+  generateInvoice: (notes?: string, force?: boolean) =>
+    api.post('/billing/invoices/generate', { notes, force }).then((r) => r.data),
+  downloadInvoicePdf: (id: string) =>
+    api.get(`/billing/invoices/${id}/pdf`, { responseType: 'blob' }).then((r) => r.data),
   updateInvoiceStatus: (id: string, status: string) =>
     api.put(`/billing/invoices/${id}/status`, { status }).then((r) => r.data),
 
