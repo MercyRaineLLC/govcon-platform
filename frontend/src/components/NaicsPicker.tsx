@@ -120,7 +120,20 @@ export function NaicsPicker({ selected, onChange, label }: NaicsPickerProps) {
             {loading ? (
               <p className="px-3 py-2 text-xs text-gray-500">Searching...</p>
             ) : results.length === 0 ? (
-              <p className="px-3 py-2 text-xs text-gray-500">No NAICS codes found for "{query}"</p>
+              <>
+                <p className="px-3 py-2 text-xs text-gray-500">No match for "{query}" in lookup database</p>
+                {/^\d{2,6}$/.test(query.trim()) && !selected.includes(query.trim()) && (
+                  <button
+                    type="button"
+                    onClick={() => addCode(query.trim())}
+                    className="w-full text-left px-3 py-2 flex items-center gap-2 text-sm hover:bg-gray-800 transition-colors border-t border-gray-800"
+                  >
+                    <span className="font-mono text-amber-400 text-xs w-16 flex-shrink-0">{query.trim()}</span>
+                    <span className="text-gray-400 text-xs flex-1">Add this code anyway</span>
+                    <Plus className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                  </button>
+                )}
+              </>
             ) : (
               results.map(r => {
                 const isSelected = selected.includes(r.code)
