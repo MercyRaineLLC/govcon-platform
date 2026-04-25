@@ -13,6 +13,7 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:reset": "prisma migrate reset",
     "db:seed": "ts-node prisma/seed.ts",
+    "db:seed:naics": "ts-node prisma/seedNaics.ts",
     "db:studio": "prisma studio",
     "test": "vitest run",
     "test:watch": "vitest",
