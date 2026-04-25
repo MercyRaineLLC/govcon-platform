@@ -119,6 +119,8 @@ export default function OpportunityDetail() {
   const [draftGenerating, setDraftGenerating] = useState(false)
   const [draftDownloadUrl, setDraftDownloadUrl] = useState<string | null>(null)
   const [draftFileName, setDraftFileName] = useState('')
+  const [hasSavedDraft, setHasSavedDraft] = useState(false)
+  const [savedDraftAt, setSavedDraftAt] = useState<string | null>(null)
   const [tokenBalance, setTokenBalance] = useState<number | null>(null)
 
   // Q&A interview state
@@ -339,6 +341,9 @@ export default function OpportunityDetail() {
       // often block programmatic a.click() from async callbacks)
       setDraftDownloadUrl(url)
       setDraftFileName(fileName)
+      // Server now persists the draft — record metadata so reopen doesn't re-bill
+      setHasSavedDraft(true)
+      setSavedDraftAt(new Date().toISOString())
       // Also attempt auto-download as a convenience
       const a = document.createElement('a')
       a.href = url
@@ -382,6 +387,8 @@ export default function OpportunityDetail() {
     fetchMatrix()
 
     // Restore saved proposal outline/answers if they exist
+    setHasSavedDraft(false)
+    setSavedDraftAt(null)
     if (id) {
       proposalAssistApi.getSaved(id).then((res: any) => {
         const saved = res?.data
@@ -391,6 +398,10 @@ export default function OpportunityDetail() {
         }
         if (saved?.answers) {
           setProposalAnswers(saved.answers)
+        }
+        if (saved?.hasDraftPdf) {
+          setHasSavedDraft(true)
+          setSavedDraftAt(saved.draftGeneratedAt ?? null)
         }
       }).catch(() => {}) // ignore — just means no saved state
     }
@@ -2229,6 +2240,40 @@ ${data.amendments.map(a => `
                   )}
                 </div>
 
+                {/* Saved draft banner — appears when a draft has already been generated for this opportunity */}
+                {hasSavedDraft && !draftDownloadUrl && (
+                  <div className="flex items-center gap-3 p-3 rounded-lg border-t border-gray-800/60"
+                    style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)' }}>
+                    <CheckCircle className="w-4 h-4 text-blue-400 flex-shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-sm text-blue-200">A previously generated draft is on file{savedDraftAt ? ` from ${new Date(savedDraftAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}` : ''}.</p>
+                      <p className="text-[11px] text-gray-500 mt-0.5">Re-download is free. Regenerating will charge 5 tokens.</p>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        if (!id) return
+                        try {
+                          const blob = await proposalAssistApi.downloadSavedDraftPdf(id)
+                          const url = URL.createObjectURL(blob)
+                          const a = document.createElement('a')
+                          a.href = url
+                          a.download = `Proposal_Draft_${id.slice(0, 8)}.pdf`
+                          document.body.appendChild(a)
+                          a.click()
+                          document.body.removeChild(a)
+                          URL.revokeObjectURL(url)
+                        } catch (err: any) {
+                          setProposalError(err?.response?.data?.error || 'Could not download saved draft')
+                        }
+                      }}
+                      className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg font-medium flex-shrink-0"
+                      style={{ background: 'rgba(59,130,246,0.18)', border: '1px solid rgba(59,130,246,0.4)', color: '#60a5fa' }}
+                    >
+                      <FileDown className="w-3.5 h-3.5" /> Download Saved Draft
+                    </button>
+                  </div>
+                )}
+
                 {/* Generate Draft */}
                 <div className="flex items-center justify-between border-t border-gray-800/60 pt-3">
                   <p className="text-xs text-gray-500">
@@ -2236,7 +2281,9 @@ ${data.amendments.map(a => `
                       ? 'Writing full proposal draft — this takes 15–30 seconds...'
                       : draftDownloadUrl
                         ? 'Draft ready! Click Download if it did not save automatically.'
-                        : 'Ready to generate your full draft PDF. This will cost 5 proposal tokens.'}
+                        : hasSavedDraft
+                          ? 'A draft is already saved (above). Regenerating will charge 5 tokens again.'
+                          : 'Ready to generate your full draft PDF. This will cost 5 proposal tokens.'}
                   </p>
                   <button
                     onClick={handleGenerateDraftPdf}
@@ -2246,7 +2293,9 @@ ${data.amendments.map(a => `
                   >
                     {draftGenerating
                       ? <><Loader className="w-3.5 h-3.5 animate-spin" /> Writing Draft...</>
-                      : <><FileDown className="w-3.5 h-3.5" /> Generate Full Draft PDF (5 tokens)</>}
+                      : hasSavedDraft
+                        ? <><FileDown className="w-3.5 h-3.5" /> Regenerate Draft (5 tokens)</>
+                        : <><FileDown className="w-3.5 h-3.5" /> Generate Full Draft PDF (5 tokens)</>}
                   </button>
                 </div>
                 {draftDownloadUrl && (

@@ -963,12 +963,12 @@ function MatchedContractsSection({ clientId }: { clientId: string }) {
         <div className="space-y-2">
           {opps.map((opp: any) => (
             <div key={opp.id} className={`flex items-center gap-3 border rounded-lg px-4 py-3 transition-colors ${opp.isDeclined ? 'border-gray-800 opacity-50' : 'border-gray-800 hover:border-gray-600'}`}>
-              <div className="flex-1 min-w-0">
-                <p className={`text-sm font-medium truncate ${opp.isDeclined ? 'text-gray-600 line-through' : 'text-gray-200'}`}>{opp.title}</p>
-                <p className="text-xs text-gray-500 mt-0.5">
+              <Link to={`/opportunities/${opp.id}`} className="flex-1 min-w-0 group">
+                <p className={`text-sm font-medium truncate ${opp.isDeclined ? 'text-gray-600 line-through' : 'text-gray-200 group-hover:text-white'}`}>{opp.title}</p>
+                <p className="text-xs text-gray-500 mt-0.5 group-hover:text-gray-400">
                   {opp.agency} · NAICS {opp.naicsCode} · {SET_ASIDE_LABELS[opp.setAsideType] || opp.setAsideType}
                 </p>
-              </div>
+              </Link>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <span className="text-xs text-gray-500">
                   {Math.round(opp.probabilityScore * 100)}% win

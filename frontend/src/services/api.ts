@@ -406,6 +406,8 @@ export const proposalAssistApi = {
     api.get(`/proposal-assist/${opportunityId}/saved`).then(r => r.data),
   saveDraft: (opportunityId: string, data: { outline?: any; answers?: any; step?: string }) =>
     api.put(`/proposal-assist/${opportunityId}/saved`, data).then(r => r.data),
+  downloadSavedDraftPdf: (opportunityId: string) =>
+    api.get(`/proposal-assist/${opportunityId}/saved-draft/pdf`, { responseType: 'blob' }).then(r => r.data),
 }
 
 // ---- Compliance Matrix ----

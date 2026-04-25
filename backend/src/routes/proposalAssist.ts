@@ -258,6 +258,23 @@ router.post('/:opportunityId/draft', async (req: AuthenticatedRequest, res: Resp
     const pdfBuffer = await buildProposalPdf(draft)
     await deductProposalTokens(consultingFirmId, 5)
 
+    // Persist draft + PDF so reopening doesn't re-bill the firm
+    const pdfKey = `proposal_${opportunityId}.pdf`
+    const pdfPath = path.join(process.cwd(), 'uploads', pdfKey)
+    try {
+      fs.writeFileSync(pdfPath, pdfBuffer)
+      await prisma.opportunity.update({
+        where: { id: opportunityId },
+        data: {
+          savedProposalDraft: draft as any,
+          savedProposalPdfKey: pdfKey,
+          savedProposalDraftAt: new Date(),
+        },
+      })
+    } catch (persistErr) {
+      logger.warn('Failed to persist proposal draft (non-fatal)', { opportunityId, error: (persistErr as Error).message })
+    }
+
     const safeName = opp.title.replace(/[^a-z0-9]/gi, '_').slice(0, 60)
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', `attachment; filename="Proposal_Draft_${safeName}.pdf"`)
@@ -335,24 +352,73 @@ router.post('/:opportunityId/extract-form', upload.single('file'), async (req: A
 
 // ---------------------------------------------------------------
 // GET /api/proposal-assist/:opportunityId/saved
-// Returns saved outline, answers, and step so the user doesn't lose work
+// Returns saved outline, answers, step, and draft metadata so the
+// user doesn't lose work or get re-billed on reopen.
 // ---------------------------------------------------------------
 router.get('/:opportunityId/saved', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const consultingFirmId = getTenantId(req)
     const opp = await prisma.opportunity.findFirst({
       where: { id: req.params.opportunityId, consultingFirmId },
-      select: { savedProposalOutline: true, savedProposalAnswers: true, savedProposalStep: true },
+      select: {
+        savedProposalOutline: true,
+        savedProposalAnswers: true,
+        savedProposalStep: true,
+        savedProposalDraft: true,
+        savedProposalPdfKey: true,
+        savedProposalDraftAt: true,
+      },
     })
     if (!opp) throw new NotFoundError('Opportunity')
+
+    // Verify the cached PDF still exists on disk before reporting it
+    let hasDraftPdf = false
+    if (opp.savedProposalPdfKey) {
+      const pdfPath = path.join(process.cwd(), 'uploads', opp.savedProposalPdfKey)
+      hasDraftPdf = fs.existsSync(pdfPath)
+    }
+
     res.json({
       success: true,
       data: {
         outline: opp.savedProposalOutline,
         answers: opp.savedProposalAnswers,
         step: opp.savedProposalStep,
+        draft: opp.savedProposalDraft,
+        draftGeneratedAt: opp.savedProposalDraftAt,
+        hasDraftPdf,
       },
     })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ---------------------------------------------------------------
+// GET /api/proposal-assist/:opportunityId/saved-draft/pdf
+// Streams the most recently generated PDF without charging tokens.
+// ---------------------------------------------------------------
+router.get('/:opportunityId/saved-draft/pdf', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const consultingFirmId = getTenantId(req)
+    const opp = await prisma.opportunity.findFirst({
+      where: { id: req.params.opportunityId, consultingFirmId },
+      select: { id: true, title: true, savedProposalPdfKey: true },
+    })
+    if (!opp) throw new NotFoundError('Opportunity')
+    if (!opp.savedProposalPdfKey) {
+      return res.status(404).json({ success: false, error: 'No saved draft', code: 'NO_SAVED_DRAFT' })
+    }
+
+    const pdfPath = path.join(process.cwd(), 'uploads', opp.savedProposalPdfKey)
+    if (!fs.existsSync(pdfPath)) {
+      return res.status(404).json({ success: false, error: 'Saved draft file is missing', code: 'NO_SAVED_DRAFT_FILE' })
+    }
+
+    const safeName = opp.title.replace(/[^a-z0-9]/gi, '_').slice(0, 60)
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `attachment; filename="Proposal_Draft_${safeName}.pdf"`)
+    fs.createReadStream(pdfPath).pipe(res)
   } catch (err) {
     next(err)
   }

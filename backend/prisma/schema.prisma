@@ -394,6 +394,9 @@ model Opportunity {
   savedProposalOutline  Json?   // The AI-generated outline object
   savedProposalAnswers  Json?   // User's Q&A answers { questionId → answer }
   savedProposalStep     String? // 'outlined' | 'answering' etc.
+  savedProposalDraft    Json?   // Generated draft sections (cached to avoid re-billing)
+  savedProposalPdfKey   String? // Filename in /app/uploads for the cached PDF
+  savedProposalDraftAt  DateTime? // When the cached draft was generated
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
