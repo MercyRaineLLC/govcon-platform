@@ -59,6 +59,11 @@ services:
         condition: service_healthy
     volumes:
       - uploads_data:/app/uploads
+      # Mount BigQuery service-account credentials read-only.
+      # The host file lives at /opt/govcon/app/adc.json and must contain a
+      # JSON key for a service account with BigQuery Data Editor +
+      # BigQuery Job User roles on project ${GCP_PROJECT_ID}.
+      - ./adc.json:/app/adc.json:ro
     ports:
       - "127.0.0.1:3001:3001"
     command: sh -c "npx prisma migrate deploy 2>/dev/null; npx prisma db push --accept-data-loss 2>/dev/null; npx prisma generate && node dist/server.js"
