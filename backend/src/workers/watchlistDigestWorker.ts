@@ -4,11 +4,13 @@
 // For each firm with watchlist entries, sends a single digest email
 // summarizing recent BigQuery activity for the watched NAICS / agencies.
 // =============================================================
+import nodemailer from 'nodemailer'
 import { Worker, Queue, Job } from 'bullmq'
 import { redis } from '../config/redis'
 import { prisma } from '../config/database'
 import { logger } from '../utils/logger'
 import { getCompetitionProfile, getAgencyProfile } from '../services/bigquery/analyticsService'
+import { renderWatchlistDigestEmail, DigestRow } from '../services/watchlistDigestEmail'
 
 export const WATCHLIST_DIGEST_QUEUE_NAME = 'watchlist-digest'
 
@@ -22,13 +24,6 @@ export const watchlistDigestQueue = new Queue(WATCHLIST_DIGEST_QUEUE_NAME, {
   },
 })
 
-interface DigestRow {
-  kind: 'NAICS' | 'AGENCY'
-  label: string
-  recentAwards: number
-  topWinner: string | null
-}
-
 async function buildDigestForFirm(consultingFirmId: string): Promise<DigestRow[]> {
   const entries = await prisma.marketWatchlistEntry.findMany({
     where: { consultingFirmId },
@@ -38,26 +33,76 @@ async function buildDigestForFirm(consultingFirmId: string): Promise<DigestRow[]
     if (e.naicsCode) {
       const profile = await getCompetitionProfile(e.naicsCode).catch(() => null)
       if (profile) {
+        const top = profile.topWinners?.[0]
         rows.push({
           kind: 'NAICS',
           label: e.naicsCode,
-          recentAwards: profile.totalAwards,
-          topWinner: profile.topWinners?.[0]?.name ?? null,
+          title: `NAICS ${e.naicsCode}`,
+          stat1Label: 'Total Awards',
+          stat1Value: profile.totalAwards.toLocaleString(),
+          stat2Label: 'Avg Award',
+          stat2Value: formatBigDollars(profile.avgAwardAmount),
+          callout: top ? `Top winner: ${top.name} · ${(top.shareOfWins * 100).toFixed(1)}% share of ${profile.totalAwards} contracts` : undefined,
         })
       }
     } else if (e.agency) {
       const profile = await getAgencyProfile(e.agency).catch(() => null)
       if (profile) {
+        const topNaics = profile.topNaicsCodes?.[0]
         rows.push({
           kind: 'AGENCY',
           label: e.agency,
-          recentAwards: profile.totalAwards,
-          topWinner: null,
+          title: e.agency,
+          stat1Label: 'Awards',
+          stat1Value: profile.totalAwards.toLocaleString(),
+          stat2Label: 'Avg Award',
+          stat2Value: formatBigDollars(profile.avgAwardAmount),
+          callout: topNaics ? `Top NAICS: ${topNaics.naics} (${topNaics.count} awards) · Competitiveness: ${profile.competitiveness}` : `Competitiveness: ${profile.competitiveness}`,
         })
       }
     }
   }
   return rows
+}
+
+function formatBigDollars(n: number): string {
+  if (n >= 1e9) return `$${(n / 1e9).toFixed(1)}B`
+  if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`
+  if (n >= 1e3) return `$${(n / 1e3).toFixed(0)}K`
+  return `$${Math.round(n)}`
+}
+
+let mailer: nodemailer.Transporter | null = null
+function getMailer(): nodemailer.Transporter | null {
+  if (mailer) return mailer
+  const host = process.env.SMTP_HOST
+  if (!host) return null
+  mailer = nodemailer.createTransport({
+    host,
+    port: parseInt(process.env.SMTP_PORT || '587', 10),
+    secure: process.env.SMTP_SECURE === 'true',
+    auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined,
+  })
+  return mailer
+}
+
+async function sendDigestEmail(opts: { to: string; firmName: string; subject: string; html: string; text: string }) {
+  const tx = getMailer()
+  const fromAddress = process.env.SMTP_FROM || 'noreply@mrgovcon.co'
+  if (!tx) {
+    logger.warn('SMTP not configured — digest email logged instead', {
+      to: opts.to, subject: opts.subject, firmName: opts.firmName,
+    })
+    return
+  }
+  await tx.sendMail({
+    from: `"${opts.firmName}" <${fromAddress}>`,
+    to: opts.to,
+    subject: opts.subject,
+    html: opts.html,
+    text: opts.text,
+  })
+  logger.info('Digest email sent', { to: opts.to, subject: opts.subject })
 }
 
 async function runWatchlistDigest(): Promise<void> {
@@ -72,6 +117,16 @@ async function runWatchlistDigest(): Promise<void> {
   let firmsWithEntries = 0
   let totalDigestRows = 0
 
+  // Compute "Monday of this week" so the email header shows the right date
+  const now = new Date()
+  const day = now.getUTCDay() // 0 = Sun, 1 = Mon
+  const diff = day === 0 ? -6 : 1 - day
+  const weekStart = new Date(Date.UTC(
+    now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + diff,
+  ))
+
+  const appUrl = process.env.APP_URL || 'https://mrgovcon.co'
+
   for (const firm of firms) {
     try {
       const rows = await buildDigestForFirm(firm.id)
@@ -79,20 +134,39 @@ async function runWatchlistDigest(): Promise<void> {
       firmsWithEntries++
       totalDigestRows += rows.length
 
-      // Mark all entries as digested-now so we don't double-send
+      // Render the branded digest email
+      const { subject, html, text } = await renderWatchlistDigestEmail({
+        firmId: firm.id,
+        rows,
+        weekStart,
+        appUrl,
+      })
+
+      // Send (or log if SMTP not configured)
+      if (firm.contactEmail) {
+        await sendDigestEmail({
+          to: firm.contactEmail,
+          firmName: firm.name,
+          subject,
+          html,
+          text,
+        })
+      } else {
+        logger.warn('Watchlist digest skipped — firm has no contactEmail', {
+          firmId: firm.id, firmName: firm.name,
+        })
+      }
+
+      // Mark entries as digested-now so we don't double-send
       await prisma.marketWatchlistEntry.updateMany({
         where: { consultingFirmId: firm.id },
         data: { lastDigestAt: new Date() },
       })
 
-      logger.info('Watchlist digest built', {
+      logger.info('Watchlist digest delivered', {
         firmId: firm.id,
         firmName: firm.name,
         entries: rows.length,
-        // Email send happens in the firm's preferred channel; service is wired
-        // to brandedEmailTemplates but rendering of the digest is a v2 piece —
-        // for v1 we surface results in app.log so admins can verify the
-        // job runs end-to-end. Email rendering is a separate enhancement.
       })
     } catch (err) {
       logger.error('Watchlist digest failed for firm (continuing)', {
