@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { backtestApi } from '../services/api'
 import { Loader, BarChart3, Play, AlertCircle, CheckCircle2, FileText } from 'lucide-react'
@@ -50,7 +50,15 @@ export default function AdminBacktestPage() {
     },
   })
 
+  // Auto-select the most recent COMPLETE run on first load if nothing selected
   const runs = runsQuery.data?.data ?? []
+  useEffect(() => {
+    if (!selectedRunId) {
+      const latestComplete = runs.find((r) => r.status === 'COMPLETE')
+      if (latestComplete) setSelectedRunId(latestComplete.id)
+    }
+  }, [runs, selectedRunId])
+
   const detail = detailQuery.data?.data
   const run: any = detail?.run
   const bins: CalibrationBin[] = run?.calibrationBins ?? []
@@ -107,10 +115,18 @@ export default function AdminBacktestPage() {
             {startMut.isPending ? 'Running… (5–15 min)' : 'Run new backtest'}
           </button>
         </div>
-        {startMut.isError && (
-          <p className="text-xs text-red-400 flex items-center gap-1">
-            <AlertCircle className="w-3 h-3" /> {(startMut.error as any)?.response?.data?.error ?? 'Run failed'}
-          </p>
+        {startMut.isError && !startMut.isPending && (
+          <div className="flex items-center gap-2">
+            <p className="text-xs text-red-400 flex items-center gap-1 flex-1">
+              <AlertCircle className="w-3 h-3" /> {(startMut.error as any)?.response?.data?.error ?? 'Run failed'}
+            </p>
+            <button
+              onClick={() => startMut.reset()}
+              className="text-[11px] text-slate-500 hover:text-slate-300 underline"
+            >
+              dismiss
+            </button>
+          </div>
         )}
         <p className="text-[11px] text-slate-600">
           The run is synchronous and will hold this page for several minutes. USAspending API
@@ -277,6 +293,13 @@ export default function AdminBacktestPage() {
           style={{ background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.3)' }}>
           <p className="font-semibold mb-1">Run failed</p>
           <p className="text-[11px] text-red-400/80">{run.errorMessage ?? 'Unknown error'}</p>
+        </div>
+      )}
+
+      {selectedRunId && detailQuery.isLoading && !run && (
+        <div className="rounded-xl p-5 text-sm text-slate-400 flex items-center gap-3"
+          style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
+          <Loader className="w-4 h-4 animate-spin" /> Loading run details…
         </div>
       )}
 
