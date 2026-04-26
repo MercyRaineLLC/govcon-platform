@@ -48,6 +48,7 @@ import contractsRoutes from './routes/contracts'
 import assistantRoutes from './routes/assistant'
 import brandingRoutes from './routes/branding'
 import stripeWebhookRoutes from './routes/stripeWebhook'
+import backtestRoutes from './routes/backtest'
 import { getVerifiedCustomDomains, PLATFORM_ROOT_DOMAIN } from './services/hostResolver'
 
 async function bootstrap(): Promise<void> {
@@ -204,6 +205,7 @@ async function bootstrap(): Promise<void> {
   apiRouter.use('/contracts', contractsRoutes)
   apiRouter.use('/assistant', assistantRoutes)
   apiRouter.use('/branding', brandingRoutes)
+  apiRouter.use('/admin/backtest', backtestRoutes)
 
   app.use('/api', apiRouter)
 

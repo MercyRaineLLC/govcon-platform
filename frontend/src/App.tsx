@@ -23,6 +23,7 @@ const TemplateLibrary      = lazy(() => import("./pages/TemplateLibrary"))
 const AnalyticsPage        = lazy(() => import("./pages/Analytics"))
 const DecisionsPage        = lazy(() => import("./pages/Decisions"))
 const ComplianceLogsPage   = lazy(() => import("./pages/ComplianceLogs"))
+const AdminBacktestPage    = lazy(() => import("./pages/AdminBacktest"))
 const ClientPortalLogin    = lazy(() => import("./pages/ClientPortalLogin"))
 const ClientPortalDashboard = lazy(() => import("./pages/ClientPortalDashboard"))
 const RewardsPage          = lazy(() => import("./pages/Rewards").then(m => ({ default: m.RewardsPage })))
@@ -87,6 +88,7 @@ export default function App() {
               <Route element={<ProtectedRoute roles={["ADMIN"]} />}>
                 <Route path="/compliance" element={<ComplianceLogsPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/admin/backtest" element={<AdminBacktestPage />} />
               </Route>
             </Route>
           </Route>

@@ -86,6 +86,7 @@ const navSections: { label: string; items: NavItem[] }[] = [
     items: [
       { to: '/billing', icon: CreditCard, label: 'Billing', adminOptional: true },
       { to: '/compliance', icon: ShieldCheck, label: 'Compliance', adminOnly: true },
+      { to: '/admin/backtest', icon: BarChart3, label: 'Model Backtest', adminOnly: true },
       { to: '/settings', icon: Settings, label: 'Settings', adminOnly: true },
     ],
   },

@@ -1178,3 +1178,63 @@ model DeliverableComment {
   @@index([parentId])
   @@map("deliverable_comments")
 }
+
+//////////////////////////////////////////////////////////////
+// HISTORICAL MODEL BACKTEST (admin-only, not tenant-scoped)
+//////////////////////////////////////////////////////////////
+
+model BacktestRun {
+  id               String    @id @default(uuid())
+  consultingFirmId String    // audit only — who ran it
+  triggeredBy      String?   // userId who initiated
+  status           String    // 'RUNNING' | 'COMPLETE' | 'FAILED'
+  sampleSize       Int
+  yearsBack        Int
+  startedAt        DateTime  @default(now())
+  completedAt      DateTime?
+  errorMessage     String?
+
+  // Aggregate metrics (set on completion)
+  predictionCount  Int?
+  brierScore       Float?    // 0 = perfect, 0.25 = random, lower better
+  meanProbability  Float?    // average predicted probability across winners
+  calibrationBins  Json?     // [{ binMin, binMax, count, meanPred, observedRate }]
+  factorMeans      Json?     // mean value per ProbabilityFeatures key
+
+  predictions BacktestPrediction[]
+
+  @@map("backtest_runs")
+}
+
+model BacktestPrediction {
+  id          String      @id @default(uuid())
+  runId       String
+  run         BacktestRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  // The contract (from USAspending)
+  contractId    String   // generated_internal_id
+  agency        String
+  naicsCode     String
+  awardAmount   Float
+  awardDate     DateTime
+  recipientName String
+  recipientUei  String?
+
+  // Synthetic client built from winner certifications
+  syntheticClientNaics String[]
+  syntheticSdvosb      Boolean
+  syntheticWosb        Boolean
+  syntheticHubzone     Boolean
+  syntheticSmallBiz    Boolean
+
+  // Prediction output
+  predictedProbability Float
+  rawScore             Float
+  features             Json    // ProbabilityFeatures snapshot
+  observedOutcome      Float   @default(1.0)  // 1.0 = winner
+
+  createdAt DateTime @default(now())
+
+  @@index([runId])
+  @@map("backtest_predictions")
+}

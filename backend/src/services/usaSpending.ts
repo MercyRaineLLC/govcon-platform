@@ -292,6 +292,82 @@ class UsaSpendingService {
     else if (stats.totalAwards > 100) score += 0.05;
     return Math.min(score, 1.0);
   }
+
+  /**
+   * Sample awarded contracts for backtesting. Pulls a stratified slice across
+   * the date range with NAICS, agency, value, and recipient info. Used by the
+   * historical backtest service to feed the probability engine with real wins.
+   */
+  async sampleAwardedContracts(params: {
+    yearsBack: number
+    sampleSize: number
+  }): Promise<Array<{
+    contractId: string
+    naicsCode: string
+    agency: string
+    awardAmount: number
+    awardDate: string
+    recipientName: string
+    recipientUei: string | null
+    setAside: string | null
+  }>> {
+    const endDate = new Date().toISOString().split('T')[0]
+    const startDate = new Date(Date.now() - params.yearsBack * 365 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split('T')[0]
+
+    // Page through results until we hit sampleSize. USAspending caps page size
+    // at 100. We sort by award date descending for recency bias, but you could
+    // randomize via NAICS sectors if needed.
+    const PAGE_SIZE = 100
+    const out: any[] = []
+    let page = 1
+    while (out.length < params.sampleSize && page <= 50) {
+      try {
+        const response = await this.client.post('/search/spending_by_award/', {
+          filters: {
+            time_period: [{ start_date: startDate, end_date: endDate }],
+            award_type_codes: ['A', 'B', 'C', 'D'],
+          },
+          fields: [
+            'Award Amount',
+            'Recipient Name',
+            'recipient_uei',
+            'Award Date',
+            'Awarding Agency',
+            'NAICS',
+            'Type of Set Aside',
+            'generated_internal_id',
+          ],
+          page,
+          limit: PAGE_SIZE,
+          sort: 'Award Date',
+          order: 'desc',
+        })
+        const results = response.data?.results || []
+        if (results.length === 0) break
+        for (const r of results) {
+          if (!r['NAICS'] || !r['Awarding Agency']) continue
+          out.push({
+            contractId: r['generated_internal_id'] || `${r['Recipient Name']}_${r['Award Date']}`,
+            naicsCode: String(r['NAICS']).split(' ')[0],
+            agency: r['Awarding Agency'],
+            awardAmount: Number(r['Award Amount']) || 0,
+            awardDate: r['Award Date'] || '',
+            recipientName: r['Recipient Name'] || 'Unknown',
+            recipientUei: r['recipient_uei'] || null,
+            setAside: r['Type of Set Aside'] || null,
+          })
+          if (out.length >= params.sampleSize) break
+        }
+        page++
+      } catch (err) {
+        logger.warn('USAspending sample page failed', { page, error: (err as Error).message })
+        break
+      }
+    }
+    return out
+  }
 }
 
 export const usaSpendingService = new UsaSpendingService();
