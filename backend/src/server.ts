@@ -20,6 +20,7 @@ import { startEnrichmentWorker } from './workers/enrichmentWorker'
 import { startRecalibrationWorker } from './workers/recalibrationWorker'
 import { startDeadlineNotificationWorker } from './workers/deadlineNotificationWorker'
 import { startPortfolioScoringWorker } from './workers/portfolioScoringWorker'
+import { startWatchlistDigestWorker } from './workers/watchlistDigestWorker'
 
 // Route imports
 import authRoutes from './routes/auth'
@@ -227,6 +228,7 @@ async function bootstrap(): Promise<void> {
   const recalibrationWorker = startRecalibrationWorker()
   const deadlineNotificationWorker = startDeadlineNotificationWorker()
   const portfolioScoringWorker = startPortfolioScoringWorker()
+  const watchlistDigestWorker = startWatchlistDigestWorker()
 
   // -------------------------------------------------------------
   // Start HTTP Server
@@ -254,6 +256,7 @@ async function bootstrap(): Promise<void> {
       await recalibrationWorker.close()
       await deadlineNotificationWorker.close()
       await portfolioScoringWorker.close()
+      await watchlistDigestWorker.close()
       logger.info('Workers stopped')
 
       await disconnectDatabase()

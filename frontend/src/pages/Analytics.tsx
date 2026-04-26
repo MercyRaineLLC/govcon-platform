@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { analyticsApi, marketAnalyticsApi } from '../services/api'
 import {
   PageHeader,
@@ -197,6 +197,31 @@ export function AnalyticsPage() {
       if (prev.length >= 2) return [prev[1], naics]   // FIFO: drop oldest, keep newest two
       return [...prev, naics]
     })
+  }
+
+  // Watchlist
+  const qcClient = useQueryClient()
+  const { data: watchlistData } = useQuery({
+    queryKey: ['market-watchlist'],
+    queryFn: () => marketAnalyticsApi.listWatchlist(),
+  })
+  const watchlist: any[] = watchlistData?.data ?? []
+  const watchedNaics = new Set(watchlist.filter((w) => w.naicsCode).map((w) => w.naicsCode))
+  const watchedAgencies = new Set(watchlist.filter((w) => w.agency).map((w) => w.agency))
+  const addWatch = useMutation({
+    mutationFn: (body: { naicsCode?: string; agency?: string }) => marketAnalyticsApi.addWatchlist(body),
+    onSuccess: () => qcClient.invalidateQueries({ queryKey: ['market-watchlist'] }),
+  })
+  const removeWatch = useMutation({
+    mutationFn: (id: string) => marketAnalyticsApi.removeWatchlist(id),
+    onSuccess: () => qcClient.invalidateQueries({ queryKey: ['market-watchlist'] }),
+  })
+  const toggleWatch = (kind: 'naics' | 'agency', value: string) => {
+    const existing = watchlist.find((w) =>
+      kind === 'naics' ? w.naicsCode === value : w.agency === value,
+    )
+    if (existing) removeWatch.mutate(existing.id)
+    else addWatch.mutate(kind === 'naics' ? { naicsCode: value } : { agency: value })
   }
 
   const mi = miData?.data
@@ -686,6 +711,15 @@ export function AnalyticsPage() {
                               compareSelection.includes(h.naicsCode) ? 'bg-emerald-900/20' : 'hover:bg-indigo-900/20'
                             }`}
                           >
+                            <button
+                              onClick={(e) => { e.stopPropagation(); toggleWatch('naics', h.naicsCode) }}
+                              className={`text-base leading-none flex-shrink-0 transition-colors ${
+                                watchedNaics.has(h.naicsCode) ? 'text-amber-400' : 'text-gray-700 hover:text-amber-400'
+                              }`}
+                              title={watchedNaics.has(h.naicsCode) ? 'Remove from watchlist' : 'Add to watchlist'}
+                            >
+                              ★
+                            </button>
                             <input
                               type="checkbox"
                               checked={compareSelection.includes(h.naicsCode)}
@@ -803,7 +837,16 @@ export function AnalyticsPage() {
                                   onClick={() => setDrillAgency(a.agency)}
                                   className="border-b border-gray-800/50 text-gray-300 hover:bg-indigo-900/20 cursor-pointer transition-colors"
                                 >
-                                  <td className="py-1.5 pr-6 text-indigo-300 hover:text-indigo-200">{a.agency}</td>
+                                  <td className="py-1.5 pr-6 text-indigo-300 hover:text-indigo-200">
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); toggleWatch('agency', a.agency) }}
+                                      className={`mr-2 ${watchedAgencies.has(a.agency) ? 'text-amber-400' : 'text-gray-700 hover:text-amber-400'}`}
+                                      title={watchedAgencies.has(a.agency) ? 'Remove from watchlist' : 'Add to watchlist'}
+                                    >
+                                      ★
+                                    </button>
+                                    {a.agency}
+                                  </td>
                                   <td className="py-1.5 pr-6 text-right font-mono">{a.awards.toLocaleString()}</td>
                                   <td className="py-1.5 text-right font-mono">{formatCurrency(a.amount)}</td>
                                 </tr>
@@ -818,6 +861,31 @@ export function AnalyticsPage() {
                 <p className="text-sm text-gray-500 text-center py-6">No snapshot data returned.</p>
               )}
             </>
+          )}
+
+          {/* Watchlist summary */}
+          {watchlist.length > 0 && (
+            <div className="mt-6 pt-4 border-t border-gray-800">
+              <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Your Watchlist</h4>
+              <p className="text-[10px] text-gray-600 mb-3">Weekly digest of activity for these NAICS codes and agencies sent every Monday.</p>
+              <div className="flex flex-wrap gap-2">
+                {watchlist.map((w: any) => (
+                  <div key={w.id} className="flex items-center gap-2 px-2 py-1 rounded-md bg-amber-900/20 border border-amber-700/40 text-xs">
+                    <span className="text-amber-300">★</span>
+                    <span className="font-mono text-amber-200">
+                      {w.naicsCode ? `NAICS ${w.naicsCode}` : w.agency}
+                    </span>
+                    <button
+                      onClick={() => removeWatch.mutate(w.id)}
+                      className="text-gray-500 hover:text-red-400 ml-1"
+                      title="Remove from watchlist"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </div>
       </TierGate>

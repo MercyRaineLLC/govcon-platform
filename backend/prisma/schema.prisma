@@ -1206,6 +1206,22 @@ model BacktestRun {
   @@map("backtest_runs")
 }
 
+model MarketWatchlistEntry {
+  id               String   @id @default(uuid())
+  consultingFirmId String
+  // Either a NAICS code or an agency name. Exactly one must be set.
+  naicsCode        String?
+  agency           String?
+  // Optional: last digest delivery so worker doesn't double-send.
+  lastDigestAt     DateTime?
+  createdAt        DateTime @default(now())
+  createdBy        String?
+
+  @@unique([consultingFirmId, naicsCode, agency])
+  @@index([consultingFirmId])
+  @@map("market_watchlist_entries")
+}
+
 model BacktestPrediction {
   id          String      @id @default(uuid())
   runId       String

@@ -451,6 +451,13 @@ export const marketAnalyticsApi = {
     api.get('/market-analytics/insights').then((r) => r.data),
   ingest: (body: { naicsCode?: string; agency?: string; bulk?: boolean; maxPages?: number }) =>
     api.post('/market-analytics/ingest', body).then((r) => r.data),
+  // Watchlist
+  listWatchlist: () =>
+    api.get('/market-analytics/watchlist').then((r) => r.data),
+  addWatchlist: (body: { naicsCode?: string; agency?: string }) =>
+    api.post('/market-analytics/watchlist', body).then((r) => r.data),
+  removeWatchlist: (id: string) =>
+    api.delete(`/market-analytics/watchlist/${id}`).then((r) => r.data),
 }
 
 // ---- State & Municipal ----

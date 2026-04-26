@@ -274,6 +274,81 @@ router.get('/insights', async (req: AuthenticatedRequest, res: Response) => {
   }
 })
 
+// ── Market Watchlist ──────────────────────────────────────────
+
+/**
+ * GET /api/market-analytics/watchlist
+ * List the firm's watched NAICS codes and agencies.
+ */
+router.get('/watchlist', async (req: AuthenticatedRequest, res: Response) => {
+  const firmId = req.user?.consultingFirmId
+  if (!firmId) return res.status(401).json({ success: false, error: 'Unauthorized' })
+  try {
+    const entries = await prisma.marketWatchlistEntry.findMany({
+      where: { consultingFirmId: firmId },
+      orderBy: { createdAt: 'desc' },
+    })
+    res.json({ success: true, data: entries })
+  } catch (err) {
+    logger.error('Watchlist list failed', { error: (err as Error).message })
+    res.status(500).json({ success: false, error: 'Failed to load watchlist' })
+  }
+})
+
+/**
+ * POST /api/market-analytics/watchlist
+ * Body: { naicsCode?: string, agency?: string }  (exactly one)
+ */
+router.post('/watchlist', async (req: AuthenticatedRequest, res: Response) => {
+  const firmId = req.user?.consultingFirmId
+  if (!firmId) return res.status(401).json({ success: false, error: 'Unauthorized' })
+  const { naicsCode, agency } = req.body ?? {}
+  const trimmedNaics = typeof naicsCode === 'string' ? naicsCode.trim() : null
+  const trimmedAgency = typeof agency === 'string' ? agency.trim() : null
+  if ((trimmedNaics && trimmedAgency) || (!trimmedNaics && !trimmedAgency)) {
+    return res.status(400).json({ success: false, error: 'Provide exactly one of naicsCode or agency.' })
+  }
+  try {
+    const entry = await prisma.marketWatchlistEntry.upsert({
+      where: {
+        consultingFirmId_naicsCode_agency: {
+          consultingFirmId: firmId,
+          naicsCode: trimmedNaics,
+          agency: trimmedAgency,
+        },
+      },
+      create: {
+        consultingFirmId: firmId,
+        naicsCode: trimmedNaics,
+        agency: trimmedAgency,
+        createdBy: req.user?.userId,
+      },
+      update: {},
+    })
+    res.json({ success: true, data: entry })
+  } catch (err) {
+    logger.error('Watchlist add failed', { error: (err as Error).message })
+    res.status(500).json({ success: false, error: 'Failed to add to watchlist' })
+  }
+})
+
+/**
+ * DELETE /api/market-analytics/watchlist/:id
+ */
+router.delete('/watchlist/:id', async (req: AuthenticatedRequest, res: Response) => {
+  const firmId = req.user?.consultingFirmId
+  if (!firmId) return res.status(401).json({ success: false, error: 'Unauthorized' })
+  try {
+    await prisma.marketWatchlistEntry.deleteMany({
+      where: { id: req.params.id, consultingFirmId: firmId },
+    })
+    res.json({ success: true })
+  } catch (err) {
+    logger.error('Watchlist delete failed', { error: (err as Error).message })
+    res.status(500).json({ success: false, error: 'Failed to remove watchlist entry' })
+  }
+})
+
 // ── Ingestion (Admin) ─────────────────────────────────────────
 
 /**
