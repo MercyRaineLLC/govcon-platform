@@ -69,9 +69,9 @@ export default function AdminBacktestPage() {
 
   const runs = runsQuery.data?.data ?? []
   const detail = detailQuery.data?.data
-  const run: RunRow | undefined = detail?.run
-  const bins: CalibrationBin[] = (run?.calibrationBins as any) ?? []
-  const factorMeans: Record<string, number> = (run as any)?.factorMeans ?? {}
+  const run: any = detail?.run
+  const bins: CalibrationBin[] = run?.calibrationBins ?? []
+  const factorMeans: Record<string, number> = run?.factorMeans ?? {}
 
   return (
     <div className="space-y-6">
