@@ -23,13 +23,28 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle 401 globally
+// Handle 401 globally — clear auth, redirect to login, and suppress the
+// backend's "Invalid token" string so components that catch the rejection
+// don't briefly display it before the navigation finishes.
 api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
+      // Avoid bouncing the user back to /welcome on every page load if their
+      // token is just stale — go to /login so they re-auth and stay in app.
       localStorage.removeItem('govcon_auth');
-      window.location.href = '/welcome';
+      // Suppress the user-visible "Invalid token" message: components that
+      // display err.response.data.error fall back to their own copy when
+      // the field is empty/null.
+      if (err.response?.data) {
+        err.response.data.error = ''
+      }
+      // Skip if already on a public page to avoid redirect loops
+      const currentPath = window.location.pathname
+      const publicPaths = ['/login', '/welcome', '/register', '/forgot-password', '/reset-password', '/client-login']
+      if (!publicPaths.some((p) => currentPath.startsWith(p))) {
+        window.location.replace('/login')
+      }
     }
     return Promise.reject(err);
   }
