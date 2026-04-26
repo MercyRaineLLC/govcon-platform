@@ -32,8 +32,10 @@ async function runWithConcurrency<T>(
 
 export async function runPortfolioEvaluation(consultingFirmId: string) {
   // Only evaluate the top-scored, active opportunities that haven't been decided recently.
-  // Cap at 200 to prevent O(N×M) blowup at scale (200 opps × 10 clients = 2,000 pairs max).
+  // Cap is configurable via PORTFOLIO_SCORING_CAP (default 1000) to prevent O(N×M)
+  // blowup at scale.
   const staleCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000) // 24 hours ago
+  const cap = Math.max(50, parseInt(process.env.PORTFOLIO_SCORING_CAP || '1000', 10))
 
   const opportunities = await prisma.opportunity.findMany({
     where: {
@@ -45,7 +47,7 @@ export async function runPortfolioEvaluation(consultingFirmId: string) {
     },
     select: { id: true, probabilityScore: true },
     orderBy: { probabilityScore: "desc" },
-    take: 200,
+    take: cap,
   })
 
   const clients = await prisma.clientCompany.findMany({
