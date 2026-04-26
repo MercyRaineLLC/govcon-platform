@@ -49,6 +49,50 @@ function transitionBg(probability: number): string {
 }
 
 /**
+ * Export a market snapshot to CSV. Rolls together heatmap rows + agencies
+ * into two CSV sections so the consultant can drop it straight into Excel.
+ */
+function exportSnapshotCsv(data: any, yearsBack: number) {
+  if (!data) return
+  const rows: string[] = []
+  rows.push(`# MrGovCon Deep Market Intelligence — ${yearsBack}-year snapshot`)
+  rows.push(`# Exported ${new Date().toISOString()}`)
+  rows.push(`# Total market volume: $${Math.round(data.totalOpportunityVolume).toLocaleString()}`)
+  rows.push(`# Avg contract size: $${Math.round(data.avgContractSize).toLocaleString()}`)
+  rows.push(`# Unique competitors: ${data.competitorCount}`)
+  rows.push('')
+  rows.push('NAICS Heatmap')
+  rows.push('naicsCode,awards,avgAmount,uniqueWinners,avgOffers,concentrationHHI,myActiveOpps,myExpectedValue')
+  for (const h of data.heatmap || []) {
+    rows.push([
+      h.naicsCode,
+      h.awards,
+      Math.round(h.avgAmount),
+      h.uniqueWinners ?? '',
+      h.avgOffers != null ? h.avgOffers.toFixed(2) : '',
+      (h.concentration ?? 0).toFixed(3),
+      h.myActiveOpps ?? 0,
+      Math.round(h.myExpectedValue ?? 0),
+    ].join(','))
+  }
+  rows.push('')
+  rows.push('Top Agencies')
+  rows.push('agency,awards,totalAmount')
+  for (const a of (data.topAgencies || []).filter((a: any) => a.agency && a.agency.toUpperCase() !== 'ALL')) {
+    rows.push([`"${String(a.agency).replace(/"/g, '""')}"`, a.awards, Math.round(a.amount)].join(','))
+  }
+  const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `market-snapshot-${yearsBack}y-${new Date().toISOString().split('T')[0]}.csv`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+/**
  * Tiny inline SVG sparkline. Values = quarterly award counts, oldest → newest.
  * Bars rather than line so single-point upticks are visible.
  */
@@ -583,21 +627,30 @@ export function AnalyticsPage() {
                     </div>
                   </div>
 
-                  {/* Date range selector */}
-                  <div className="flex items-center justify-between mb-3">
+                  {/* Date range selector + export */}
+                  <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
                     <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">NAICS Competition Heatmap</h4>
-                    <div className="flex items-center gap-1 p-0.5 rounded-lg" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                      {[1, 3, 5, 10].map((y) => (
-                        <button
-                          key={y}
-                          onClick={() => setYearsBack(y as 1 | 3 | 5 | 10)}
-                          className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-colors ${
-                            yearsBack === y ? 'bg-indigo-500 text-white' : 'text-gray-400 hover:text-gray-200'
-                          }`}
-                        >
-                          {y}Y
-                        </button>
-                      ))}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => exportSnapshotCsv(bqSnapshotData?.data, yearsBack)}
+                        className="text-[10px] px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700"
+                        title="Download the heatmap as CSV"
+                      >
+                        Export CSV
+                      </button>
+                      <div className="flex items-center gap-1 p-0.5 rounded-lg" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                        {[1, 3, 5, 10].map((y) => (
+                          <button
+                            key={y}
+                            onClick={() => setYearsBack(y as 1 | 3 | 5 | 10)}
+                            className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-colors ${
+                              yearsBack === y ? 'bg-indigo-500 text-white' : 'text-gray-400 hover:text-gray-200'
+                            }`}
+                          >
+                            {y}Y
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
 
