@@ -65,10 +65,7 @@ async function runWatchlistDigest(): Promise<void> {
   logger.info('Watchlist digest worker started')
 
   const firms = await prisma.consultingFirm.findMany({
-    where: {
-      isActive: true,
-      // @ts-expect-error — Prisma client may not have the relation typed yet on first build
-    },
+    where: { isActive: true },
     select: { id: true, name: true, contactEmail: true },
   })
 

@@ -309,22 +309,22 @@ router.post('/watchlist', async (req: AuthenticatedRequest, res: Response) => {
     return res.status(400).json({ success: false, error: 'Provide exactly one of naicsCode or agency.' })
   }
   try {
-    const entry = await prisma.marketWatchlistEntry.upsert({
-      where: {
-        consultingFirmId_naicsCode_agency: {
-          consultingFirmId: firmId,
-          naicsCode: trimmedNaics,
-          agency: trimmedAgency,
-        },
-      },
-      create: {
-        consultingFirmId: firmId,
-        naicsCode: trimmedNaics,
-        agency: trimmedAgency,
-        createdBy: req.user?.userId,
-      },
-      update: {},
+    // Prisma's generated compound-unique input type doesn't accept null for
+    // nullable scalar parts; we deduplicate manually since exactly one of the
+    // two fields is set.
+    const existing = await prisma.marketWatchlistEntry.findFirst({
+      where: { consultingFirmId: firmId, naicsCode: trimmedNaics, agency: trimmedAgency },
     })
+    const entry = existing
+      ? existing
+      : await prisma.marketWatchlistEntry.create({
+          data: {
+            consultingFirmId: firmId,
+            naicsCode: trimmedNaics,
+            agency: trimmedAgency,
+            createdBy: req.user?.userId,
+          },
+        })
     res.json({ success: true, data: entry })
   } catch (err) {
     logger.error('Watchlist add failed', { error: (err as Error).message })
