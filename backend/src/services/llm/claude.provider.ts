@@ -13,7 +13,8 @@ export class ClaudeProvider implements LLMProvider {
 
   async generate(req: LLMRequest): Promise<LLMResponse> {
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 180_000) // 180s hard timeout
+    const timeoutMs = req.timeoutMs ?? 180_000
+    const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
     let response: Response
     try {

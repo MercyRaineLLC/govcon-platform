@@ -144,6 +144,7 @@ Each section MUST be fully written prose. No placeholders, no bullet-point outli
         userPrompt,
         maxTokens: 16000,
         temperature: 0.3,
+        timeoutMs: 600_000, // 10 min — large drafts can take 3-5 min on Claude
       },
       consultingFirmId,
       { task: 'BID_GUIDANCE', useCache: false }
@@ -152,19 +153,11 @@ Each section MUST be fully written prose. No placeholders, no bullet-point outli
     const msg = (err as Error).message
     // Re-throw key/rate errors so the route can handle them with proper HTTP codes
     if (msg === 'NO_LLM_KEY' || msg === 'RATE_LIMITED') throw err
-    // Timeout or other transient LLM errors — return a skeleton draft
+    // Timeout / abort / network — surface as EMPTY_LLM_OUTPUT so the route
+    // returns 502 and refunds the token charge. Previously we returned a
+    // 1-section "Notice" stub which silently produced a near-blank PDF.
     logger.error('Proposal draft generation failed', { error: msg })
-    return {
-      opportunityTitle,
-      agency,
-      preparedDate: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
-      sections: [
-        {
-          title: 'Notice',
-          content: 'The AI proposal draft could not be generated at this time (the request timed out or the AI service is temporarily unavailable). Please try again in a few moments. If the problem persists, verify your AI provider settings in Settings → AI Intelligence Provider.',
-        },
-      ],
-    }
+    throw new Error('EMPTY_LLM_OUTPUT')
   }
 
   const sections = parseDraftResponse(response.text)

@@ -5,6 +5,9 @@ export interface LLMRequest {
   userPrompt: string
   maxTokens?: number
   temperature?: number
+  /** Per-request hard timeout in ms. Defaults to 180_000 (3 min). Long
+   *  generations (16K-token drafts) should pass 600_000 (10 min). */
+  timeoutMs?: number
 }
 
 export interface LLMResponse {
