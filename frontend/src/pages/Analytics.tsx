@@ -48,6 +48,37 @@ function transitionBg(probability: number): string {
   return 'bg-red-900/30 border-red-700'
 }
 
+/**
+ * Tiny inline SVG sparkline. Values = quarterly award counts, oldest → newest.
+ * Bars rather than line so single-point upticks are visible.
+ */
+function Sparkline({ values, width = 60, height = 20 }: { values: number[]; width?: number; height?: number }) {
+  if (!values || values.length === 0) return null
+  const max = Math.max(...values, 1)
+  const barW = width / values.length
+  const last = values[values.length - 1]
+  const prev = values[values.length - 2] ?? 0
+  const trendUp = last > prev
+  return (
+    <svg width={width} height={height} className="flex-shrink-0" aria-label="trend">
+      {values.map((v, i) => {
+        const h = max > 0 ? (v / max) * height : 0
+        return (
+          <rect
+            key={i}
+            x={i * barW + 0.5}
+            y={height - h}
+            width={Math.max(barW - 1, 1)}
+            height={Math.max(h, 0.5)}
+            fill={trendUp ? '#34d399' : '#818cf8'}
+            opacity={0.7}
+          />
+        )
+      })}
+    </svg>
+  )
+}
+
 export function AnalyticsPage() {
   const { data: miData, isLoading: miLoading } = useQuery({
     queryKey: ['market-intelligence'],
@@ -70,9 +101,10 @@ export function AnalyticsPage() {
     retry: false,
   })
 
+  const [yearsBack, setYearsBack] = useState<1 | 3 | 5 | 10>(5)
   const { data: bqSnapshotData, isLoading: bqSnapshotLoading } = useQuery({
-    queryKey: ['bq-snapshot'],
-    queryFn: () => marketAnalyticsApi.snapshot(),
+    queryKey: ['bq-snapshot', yearsBack],
+    queryFn: () => marketAnalyticsApi.snapshot({ years: yearsBack }),
     enabled: bqStatusData?.data?.hasData === true,
     retry: false,
   })
@@ -543,10 +575,27 @@ export function AnalyticsPage() {
                     </div>
                   </div>
 
-                  {/* NAICS heatmap — clickable rows */}
+                  {/* Date range selector */}
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">NAICS Competition Heatmap</h4>
+                    <div className="flex items-center gap-1 p-0.5 rounded-lg" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      {[1, 3, 5, 10].map((y) => (
+                        <button
+                          key={y}
+                          onClick={() => setYearsBack(y as 1 | 3 | 5 | 10)}
+                          className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-colors ${
+                            yearsBack === y ? 'bg-indigo-500 text-white' : 'text-gray-400 hover:text-gray-200'
+                          }`}
+                        >
+                          {y}Y
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* NAICS heatmap — clickable rows with sparklines + portfolio overlay */}
                   {bqSnapshotData.data.heatmap?.length > 0 && (
                     <div className="mb-6">
-                      <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">NAICS Competition Heatmap</h4>
                       <div className="space-y-1">
                         {bqSnapshotData.data.heatmap.map((h: any) => (
                           <button
@@ -562,6 +611,10 @@ export function AnalyticsPage() {
                                 style={{ width: `${Math.min(h.concentration * 100, 100)}%` }}
                               />
                             </div>
+                            {/* Sparkline (last N quarters of award counts) */}
+                            {Array.isArray(h.trendBuckets) && h.trendBuckets.length > 0 && (
+                              <Sparkline values={h.trendBuckets} width={60} height={20} />
+                            )}
                             <span className="text-[10px] text-gray-500 w-24 text-right flex-shrink-0">
                               {h.awards} awards · {formatCurrency(h.avgAmount)}
                             </span>
@@ -570,13 +623,22 @@ export function AnalyticsPage() {
                                 ~{h.avgOffers.toFixed(1)} offerors
                               </span>
                             )}
+                            {/* Portfolio overlay */}
+                            {h.myActiveOpps > 0 && (
+                              <span className="text-[10px] text-emerald-400 w-24 text-right flex-shrink-0 font-mono"
+                                title="Your active opps in this NAICS · probability-weighted value">
+                                you: {h.myActiveOpps} · {formatCurrency(h.myExpectedValue ?? 0)}
+                              </span>
+                            )}
                             <span className="text-[10px] text-gray-600 group-hover:text-indigo-400 w-12 text-right flex-shrink-0">
                               View →
                             </span>
                           </button>
                         ))}
                       </div>
-                      <p className="text-[10px] text-gray-600 mt-2">Bar width = winner concentration (HHI). Wider = fewer firms dominate. Click any row to see top winners and recent contracts.</p>
+                      <p className="text-[10px] text-gray-600 mt-2">
+                        Bar width = winner concentration (HHI). Sparkline = quarterly award trend. Green = your firm's active pipeline in that NAICS. Click any row to see top winners.
+                      </p>
                     </div>
                   )}
 

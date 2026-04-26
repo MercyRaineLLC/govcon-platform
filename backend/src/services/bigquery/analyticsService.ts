@@ -60,13 +60,17 @@ export interface MarketSnapshot {
   totalOpportunityVolume: number
   avgContractSize: number
   competitorCount: number
+  yearsBack: number
   topAgencies: { agency: string; awards: number; amount: number }[]
   heatmap: {
     naicsCode: string
     awards: number
     avgAmount: number
     concentration: number  // HHI 0-1
+    uniqueWinners: number
     avgOffers: number | null
+    /** Award counts per quarter, oldest → newest. Length = 4 × yearsBack. */
+    trendBuckets: number[]
   }[]
 }
 
@@ -356,19 +360,29 @@ export async function getContractorProfile(recipientName: string): Promise<Contr
  * Multi-NAICS market snapshot — firm-wide competitive landscape.
  * Returns the overall market context for a firm's NAICS portfolio.
  */
-export async function getMarketSnapshot(naicsCodes: string[]): Promise<MarketSnapshot | null> {
+export async function getMarketSnapshot(
+  naicsCodes: string[],
+  opts: { yearsBack?: number } = {},
+): Promise<MarketSnapshot | null> {
   if (naicsCodes.length === 0) return null
   const bq = getBigQuery()
+
+  const yearsBack = Math.min(10, Math.max(1, opts.yearsBack ?? 5))
+  const startDate = new Date(Date.now() - yearsBack * 365 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .split('T')[0]
 
   // BigQuery doesn't support IN with @param arrays directly; build a literal list
   const naicsLiteral = naicsCodes.map((c) => `'${c.replace(/'/g, '')}'`).join(',')
 
   const query = `
     WITH base AS (
-      SELECT naicsCode, agency, awardAmount, recipientName
+      SELECT naicsCode, agency, awardAmount, recipientName, offersReceived,
+             PARSE_DATE('%Y-%m-%d', CAST(awardDate AS STRING)) AS dt
       FROM ${FULL_TABLE(BQ_TABLES.AWARD_HISTORY)}
       WHERE naicsCode IN (${naicsLiteral})
         AND awardAmount > 0
+        AND SAFE.PARSE_DATE('%Y-%m-%d', CAST(awardDate AS STRING)) >= DATE('${startDate}')
     ),
     heatmap AS (
       SELECT
@@ -377,9 +391,29 @@ export async function getMarketSnapshot(naicsCodes: string[]): Promise<MarketSna
         AVG(awardAmount) AS avgAmount,
         COUNT(DISTINCT recipientName) AS uniqueWinners,
         AVG(offersReceived) AS avgOffers
-      FROM ${FULL_TABLE(BQ_TABLES.AWARD_HISTORY)}
-      WHERE naicsCode IN (${naicsLiteral}) AND awardAmount > 0
+      FROM base
       GROUP BY naicsCode
+    ),
+    quarterly AS (
+      SELECT
+        naicsCode,
+        DATE_TRUNC(dt, QUARTER) AS qtr,
+        COUNT(*) AS cnt
+      FROM base
+      WHERE dt IS NOT NULL
+      GROUP BY naicsCode, qtr
+    ),
+    quarterly_json AS (
+      SELECT
+        naicsCode,
+        TO_JSON_STRING(ARRAY_AGG(STRUCT(qtr AS quarter, cnt) ORDER BY qtr ASC)) AS bucketsJson
+      FROM quarterly
+      GROUP BY naicsCode
+    ),
+    heatmap_with_trend AS (
+      SELECT h.naicsCode, h.awards, h.avgAmount, h.uniqueWinners, h.avgOffers, q.bucketsJson
+      FROM heatmap h
+      LEFT JOIN quarterly_json q USING (naicsCode)
     ),
     top_agencies AS (
       SELECT agency, COUNT(*) AS awards, SUM(awardAmount) AS amount
@@ -397,7 +431,7 @@ export async function getMarketSnapshot(naicsCodes: string[]): Promise<MarketSna
       AVG(awardAmount) AS avgAwardAmount,
       COUNT(DISTINCT recipientName) AS competitorCount,
       TO_JSON_STRING(ARRAY(SELECT AS STRUCT agency, awards, amount FROM top_agencies)) AS agenciesJson,
-      TO_JSON_STRING(ARRAY(SELECT AS STRUCT naicsCode, awards, avgAmount, uniqueWinners, avgOffers FROM heatmap)) AS heatmapJson
+      TO_JSON_STRING(ARRAY(SELECT AS STRUCT naicsCode, awards, avgAmount, uniqueWinners, avgOffers, bucketsJson FROM heatmap_with_trend)) AS heatmapJson
     FROM base
   `
 
@@ -414,18 +448,50 @@ export async function getMarketSnapshot(naicsCodes: string[]): Promise<MarketSna
       })
     )
 
+    // Build the quarter timeline for the requested window so all NAICS rows
+    // align on the same x-axis even when some quarters had zero awards.
+    const totalQuarters = yearsBack * 4
+    const now = new Date()
+    const quarterStarts: string[] = []
+    for (let q = totalQuarters - 1; q >= 0; q--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - 3 * q, 1)
+      // Snap to quarter start month (0, 3, 6, 9)
+      const qMonth = Math.floor(d.getMonth() / 3) * 3
+      const qStart = new Date(d.getFullYear(), qMonth, 1).toISOString().split('T')[0]
+      quarterStarts.push(qStart)
+    }
+
     const heatmap = JSON.parse(r.heatmapJson ?? '[]').map(
-      (x: { naicsCode: string; awards: number; avgAmount: number; uniqueWinners: number; avgOffers: number | null }) => {
+      (x: { naicsCode: string; awards: number; avgAmount: number; uniqueWinners: number; avgOffers: number | null; bucketsJson: string | null }) => {
         const n = Number(x.uniqueWinners ?? 1)
         const awards = Number(x.awards ?? 0)
         // Simple HHI proxy: if 1 winner takes everything, HHI = 1; many winners → low
         const concentration = awards > 0 ? Math.min(1 / Math.max(n, 1), 1) : 0
+
+        // Map quarterly buckets to fixed timeline (zero-fill missing quarters)
+        let trendBuckets: number[] = new Array(totalQuarters).fill(0)
+        if (x.bucketsJson) {
+          try {
+            const parsed: Array<{ quarter: { value: string } | string; cnt: number }> = JSON.parse(x.bucketsJson)
+            const indexByDate: Record<string, number> = {}
+            quarterStarts.forEach((d, i) => { indexByDate[d] = i })
+            for (const b of parsed) {
+              const qStr = typeof b.quarter === 'string' ? b.quarter : b.quarter?.value
+              if (!qStr) continue
+              const idx = indexByDate[qStr]
+              if (idx != null) trendBuckets[idx] = Number(b.cnt) || 0
+            }
+          } catch { /* leave zeros */ }
+        }
+
         return {
           naicsCode: x.naicsCode,
           awards,
           avgAmount: Number(x.avgAmount ?? 0),
           concentration,
+          uniqueWinners: n,
           avgOffers: x.avgOffers != null ? Number(x.avgOffers) : null,
+          trendBuckets,
         }
       }
     )
@@ -435,6 +501,7 @@ export async function getMarketSnapshot(naicsCodes: string[]): Promise<MarketSna
       totalOpportunityVolume: Number(r.totalAmount ?? 0),
       avgContractSize: Number(r.avgAwardAmount ?? 0),
       competitorCount: Number(r.competitorCount ?? 0),
+      yearsBack,
       topAgencies,
       heatmap,
     }

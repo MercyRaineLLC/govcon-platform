@@ -133,7 +133,11 @@ router.get('/contractor/:name', async (req: AuthenticatedRequest, res: Response)
  * GET /api/market-analytics/snapshot
  * Firm-wide multi-NAICS market snapshot.
  * Automatically uses the consulting firm's client NAICS codes.
- * Optional override: ?naics=541511,541519
+ * Optional: ?naics=541511,541519  ?years=1|3|5|10  (default 5)
+ *
+ * Response includes a per-NAICS portfolio overlay:
+ *   { naicsCode, ..., myActiveOpps, myExpectedValue }
+ * sourced from Postgres so users see "your slice of this market".
  */
 router.get('/snapshot', async (req: AuthenticatedRequest, res: Response) => {
   const firmId = req.user?.consultingFirmId
@@ -145,7 +149,6 @@ router.get('/snapshot', async (req: AuthenticatedRequest, res: Response) => {
     if (req.query.naics) {
       naicsCodes = (req.query.naics as string).split(',').map((s) => s.trim()).filter(Boolean)
     } else {
-      // Pull all unique NAICS codes from the firm's active clients
       const clients = await prisma.clientCompany.findMany({
         where: { consultingFirmId: firmId, isActive: true },
         select: { naicsCodes: true },
@@ -158,8 +161,48 @@ router.get('/snapshot', async (req: AuthenticatedRequest, res: Response) => {
       return res.json({ success: true, data: null, message: 'No NAICS codes found for this firm.' })
     }
 
-    const snapshot = await getMarketSnapshot(naicsCodes)
-    res.json({ success: true, data: snapshot })
+    const yearsBack = Math.min(10, Math.max(1, parseInt((req.query.years as string) ?? '5', 10) || 5))
+
+    const snapshot = await getMarketSnapshot(naicsCodes, { yearsBack })
+    if (!snapshot) {
+      return res.json({ success: true, data: null, message: 'No BigQuery data for these NAICS yet.' })
+    }
+
+    // Portfolio overlay — count firm's own active opps per NAICS + probability-weighted value
+    const opps = await prisma.opportunity.findMany({
+      where: {
+        consultingFirmId: firmId,
+        status: 'ACTIVE',
+        naicsCode: { in: naicsCodes },
+      },
+      select: { naicsCode: true, probabilityScore: true, estimatedValue: true },
+    })
+    const portfolioByNaics: Record<string, { count: number; expected: number }> = {}
+    for (const o of opps) {
+      const key = o.naicsCode
+      if (!portfolioByNaics[key]) portfolioByNaics[key] = { count: 0, expected: 0 }
+      portfolioByNaics[key].count++
+      portfolioByNaics[key].expected += Number(o.probabilityScore) * Number(o.estimatedValue ?? 0)
+    }
+
+    const heatmapWithOverlay = snapshot.heatmap.map((row) => ({
+      ...row,
+      myActiveOpps: portfolioByNaics[row.naicsCode]?.count ?? 0,
+      myExpectedValue: portfolioByNaics[row.naicsCode]?.expected ?? 0,
+    }))
+
+    res.json({
+      success: true,
+      data: {
+        ...snapshot,
+        heatmap: heatmapWithOverlay,
+        firmActiveOppCount: opps.length,
+        firmActivePipelineValue: opps.reduce(
+          (s, o) => s + (Number(o.probabilityScore) * Number(o.estimatedValue ?? 0)),
+          0,
+        ),
+      },
+    })
   } catch (err) {
     logger.error('Market snapshot route failed', { error: (err as Error).message })
     res.status(500).json({ success: false, error: 'Failed to load market snapshot' })
