@@ -57,6 +57,14 @@ services:
         condition: service_healthy
     volumes:
       - uploads_data:/app/uploads
+      # Persistent application logs — Winston writes app.log + error.log
+      # to /app/logs with 10MB × 10-file rotation (utils/logger.ts). Without
+      # this volume, every `docker compose up -d --build` wipes the logs
+      # and any post-incident forensics is impossible. ComplianceLog rows
+      # in Postgres remain authoritative for state transitions; this
+      # captures the surrounding application context (errors, external API
+      # calls, request IDs) for FAR/DFARS audit support.
+      - backend_logs:/app/logs
       # Mount BigQuery service-account credentials read-only.
       # The host file lives at /opt/govcon/app/adc.json and must contain a
       # JSON key for a service account with BigQuery Data Editor +
@@ -125,5 +133,6 @@ volumes:
   postgres_data:
   redis_data:
   uploads_data:
+  backend_logs:
   caddy_data:
   caddy_config:
