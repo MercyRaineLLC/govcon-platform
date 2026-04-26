@@ -393,6 +393,14 @@ export const billingApi = {
       .then((r) => r.data?.data ?? r.data),
 }
 
+// ---- Admin: Backtest ----
+export const backtestApi = {
+  listRuns: () => api.get('/admin/backtest/runs').then(r => r.data),
+  getRun: (id: string) => api.get(`/admin/backtest/runs/${id}`).then(r => r.data),
+  startRun: (sampleSize: number, yearsBack: number) =>
+    api.post('/admin/backtest/run', { sampleSize, yearsBack }, { timeout: 30 * 60 * 1000 }).then(r => r.data),
+}
+
 // ---- Add-ons ----
 export const addonsApi = {
   list: () => api.get('/addons').then(r => r.data),

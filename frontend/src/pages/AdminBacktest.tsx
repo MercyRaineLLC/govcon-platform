@@ -1,13 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import axios from 'axios'
+import { backtestApi } from '../services/api'
 import { Loader, BarChart3, Play, AlertCircle, CheckCircle2, FileText } from 'lucide-react'
-
-const API_BASE = (import.meta as any).env?.VITE_API_URL || 'https://mrgovcon.co'
-
-const authHeader = () => ({
-  Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
-})
 
 interface RunRow {
   id: string
@@ -38,29 +32,18 @@ export default function AdminBacktestPage() {
 
   const runsQuery = useQuery<{ data: RunRow[] }>({
     queryKey: ['backtest-runs'],
-    queryFn: () =>
-      axios.get(`${API_BASE}/api/admin/backtest/runs`, { headers: authHeader() }).then((r) => r.data),
+    queryFn: () => backtestApi.listRuns(),
     refetchInterval: 30_000,
   })
 
   const detailQuery = useQuery<any>({
     queryKey: ['backtest-run', selectedRunId],
-    queryFn: () =>
-      axios
-        .get(`${API_BASE}/api/admin/backtest/runs/${selectedRunId}`, { headers: authHeader() })
-        .then((r) => r.data),
+    queryFn: () => backtestApi.getRun(selectedRunId!),
     enabled: !!selectedRunId,
   })
 
   const startMut = useMutation({
-    mutationFn: () =>
-      axios
-        .post(
-          `${API_BASE}/api/admin/backtest/run`,
-          { sampleSize, yearsBack },
-          { headers: authHeader(), timeout: 30 * 60 * 1000 },
-        )
-        .then((r) => r.data),
+    mutationFn: () => backtestApi.startRun(sampleSize, yearsBack),
     onSuccess: (res: any) => {
       qc.invalidateQueries({ queryKey: ['backtest-runs'] })
       if (res?.data?.runId) setSelectedRunId(res.data.runId)
