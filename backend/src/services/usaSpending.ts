@@ -341,16 +341,23 @@ class UsaSpendingService {
           ],
           page,
           limit: PAGE_SIZE,
-          sort: 'Award Date',
+          sort: 'Award Amount',
           order: 'desc',
         })
         const results = response.data?.results || []
         if (results.length === 0) break
         for (const r of results) {
-          if (!r['NAICS'] || !r['Awarding Agency']) continue
+          // NAICS comes back as { code, description } — pluck the code
+          const naicsRaw = r['NAICS']
+          const naicsCode = typeof naicsRaw === 'object' && naicsRaw?.code
+            ? String(naicsRaw.code)
+            : typeof naicsRaw === 'string'
+              ? naicsRaw.split(' ')[0]
+              : ''
+          if (!naicsCode || !r['Awarding Agency']) continue
           out.push({
             contractId: r['generated_internal_id'] || `${r['Recipient Name']}_${r['Award Date']}`,
-            naicsCode: String(r['NAICS']).split(' ')[0],
+            naicsCode,
             agency: r['Awarding Agency'],
             awardAmount: Number(r['Award Amount']) || 0,
             awardDate: r['Award Date'] || '',
