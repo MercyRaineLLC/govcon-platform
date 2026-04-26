@@ -4,6 +4,13 @@ import axios from 'axios'
 
 const API_BASE = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001'
 
+function getAuthToken(): string {
+  try {
+    const raw = localStorage.getItem('govcon_auth')
+    return raw ? (JSON.parse(raw).token ?? '') : ''
+  } catch { return '' }
+}
+
 interface ComplianceGap {
   clauseCode: string
   category: 'FAR' | 'DFARS' | 'SET_ASIDE' | 'OTHER'
@@ -80,7 +87,7 @@ export function ComplianceGapAnalysis({ opportunityId }: Props) {
     if (data && withAi) setAiLoading(true)
     axios
       .get(`${API_BASE}/api/compliance-matrix/${opportunityId}/gap-analysis${withAi ? '?ai=true' : ''}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` },
+        headers: { Authorization: `Bearer ${getAuthToken()}` },
       })
       .then((res) => {
         if (!cancelled) setData(res.data.data)

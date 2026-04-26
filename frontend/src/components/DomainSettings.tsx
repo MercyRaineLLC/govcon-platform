@@ -6,6 +6,13 @@ import { useBranding } from '../hooks/useBranding'
 
 const API_BASE = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001'
 
+function getAuthToken(): string {
+  try {
+    const raw = localStorage.getItem('govcon_auth')
+    return raw ? (JSON.parse(raw).token ?? '') : ''
+  } catch { return '' }
+}
+
 interface DnsInstructions {
   type: string
   host: string
@@ -51,7 +58,7 @@ export function DomainSettings() {
     try {
       setLoading(true)
       const res = await axios.get(`${API_BASE}/api/branding/admin/domain-config`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` },
+        headers: { Authorization: `Bearer ${getAuthToken()}` },
       })
       if (res.data.success) {
         setConfig(res.data.data)
@@ -73,7 +80,7 @@ export function DomainSettings() {
       const res = await axios.put(
         `${API_BASE}/api/branding/admin/subdomain`,
         { subdomain: subdomainInput.trim() || null },
-        { headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` } }
+        { headers: { Authorization: `Bearer ${getAuthToken()}` } }
       )
       if (res.data.success) {
         flash('ok', res.data.message || 'Subdomain saved')
@@ -92,7 +99,7 @@ export function DomainSettings() {
       const res = await axios.put(
         `${API_BASE}/api/branding/admin/custom-domain`,
         { customDomain: customDomainInput.trim() || null },
-        { headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` } }
+        { headers: { Authorization: `Bearer ${getAuthToken()}` } }
       )
       if (res.data.success) {
         flash('ok', res.data.message || 'Domain saved')
@@ -111,7 +118,7 @@ export function DomainSettings() {
       const res = await axios.post(
         `${API_BASE}/api/branding/admin/custom-domain/verify`,
         {},
-        { headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` } }
+        { headers: { Authorization: `Bearer ${getAuthToken()}` } }
       )
       if (res.data.success) {
         const { verified, message } = res.data.data

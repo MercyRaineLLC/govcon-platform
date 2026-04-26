@@ -3,6 +3,13 @@ import { useAuth } from '../hooks/useAuth'
 import axios from 'axios'
 import { AlertCircle, Loader } from 'lucide-react'
 
+function getAuthToken(): string {
+  try {
+    const raw = localStorage.getItem('govcon_auth')
+    return raw ? (JSON.parse(raw).token ?? '') : ''
+  } catch { return '' }
+}
+
 interface BrandingForm {
   displayName: string
   tagline: string
@@ -64,7 +71,7 @@ export function BrandingSettings() {
         form,
         {
           headers: {
-            Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
+            Authorization: `Bearer ${getAuthToken()}`,
           },
         }
       )
