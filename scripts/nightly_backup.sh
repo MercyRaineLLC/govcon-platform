@@ -19,10 +19,24 @@
 set -euo pipefail
 
 BACKUP_DIR="/opt/govcon/backups"
+PROJECT_DIR="/opt/govcon/app"
 CONTAINER="govcon_postgres"
-DB_USER="${POSTGRES_USER:-govcon_prod}"
-DB_NAME="${POSTGRES_DB:-govcon_platform}"
 RETENTION_DAYS=14
+
+# -------------------------------------------------------------
+# Load Postgres credentials from .env.prod. Cron doesn't inherit
+# the operator's shell env, and the compose file's defaults
+# (govcon_prod) don't match what's actually deployed (govcon_user
+# per deploy.sh). Source the same file the backend container uses.
+# -------------------------------------------------------------
+ENV_FILE="${PROJECT_DIR}/.env.prod"
+if [[ -r "$ENV_FILE" ]]; then
+  # shellcheck disable=SC1090
+  set -a; source "$ENV_FILE"; set +a
+fi
+
+DB_USER="${POSTGRES_USER:-govcon_user}"
+DB_NAME="${POSTGRES_DB:-govcon_platform}"
 TS=$(date +%Y%m%d_%H%M%S)
 DEST="${BACKUP_DIR}/nightly_${TS}.sql.gz"
 
