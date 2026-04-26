@@ -125,6 +125,14 @@ export function AnalyticsPage() {
     enabled: !!drillNaics,
   })
 
+  // Agency drill-down modal state
+  const [drillAgency, setDrillAgency] = useState<string | null>(null)
+  const { data: agencyData, isLoading: agencyLoading } = useQuery({
+    queryKey: ['bq-agency-drill', drillAgency],
+    queryFn: () => marketAnalyticsApi.agency(drillAgency!),
+    enabled: !!drillAgency,
+  })
+
   const mi = miData?.data
   const health = healthData?.data
   const pipeline = pipelineData?.data
@@ -661,10 +669,14 @@ export function AnalyticsPage() {
                             {bqSnapshotData.data.topAgencies
                               .filter((a: any) => a.agency && a.agency.trim() && a.agency.trim().toUpperCase() !== 'ALL')
                               .map((a: any) => (
-                                <tr key={a.agency} className="border-b border-gray-800/50 text-gray-300">
-                                  <td className="py-1.5 pr-6 text-gray-200">{a.agency}</td>
-                                  <td className="py-1.5 pr-6 text-right">{a.awards.toLocaleString()}</td>
-                                  <td className="py-1.5 text-right">{formatCurrency(a.amount)}</td>
+                                <tr
+                                  key={a.agency}
+                                  onClick={() => setDrillAgency(a.agency)}
+                                  className="border-b border-gray-800/50 text-gray-300 hover:bg-indigo-900/20 cursor-pointer transition-colors"
+                                >
+                                  <td className="py-1.5 pr-6 text-indigo-300 hover:text-indigo-200">{a.agency}</td>
+                                  <td className="py-1.5 pr-6 text-right font-mono">{a.awards.toLocaleString()}</td>
+                                  <td className="py-1.5 text-right font-mono">{formatCurrency(a.amount)}</td>
                                 </tr>
                               ))}
                           </tbody>
@@ -791,6 +803,102 @@ export function AnalyticsPage() {
               )}
               {!drillLoading && !drillData?.data && (
                 <p className="text-sm text-gray-500 text-center py-6">No data found for NAICS {drillNaics}.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Agency Drill-Down Modal ── */}
+      {drillAgency && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)' }}
+          onClick={() => setDrillAgency(null)}
+        >
+          <div
+            className="rounded-xl w-full max-w-3xl max-h-[85vh] overflow-y-auto"
+            style={{ background: '#0b1628', border: '1px solid rgba(99,102,241,0.3)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sticky top-0 z-10 px-6 py-4 border-b border-gray-800 flex items-center justify-between"
+              style={{ background: '#0b1628' }}>
+              <div>
+                <h3 className="text-base font-semibold text-gray-100">{drillAgency}</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Agency buying profile · set-aside affinity · top NAICS</p>
+              </div>
+              <button onClick={() => setDrillAgency(null)} className="text-gray-500 hover:text-gray-200 text-2xl leading-none px-2">×</button>
+            </div>
+
+            <div className="px-6 py-5">
+              {agencyLoading && <div className="flex justify-center py-8"><Spinner /></div>}
+              {!agencyLoading && agencyData?.data && (
+                <div className="space-y-5">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="bg-gray-800/50 rounded-lg p-3">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Total Awards</p>
+                      <p className="text-lg font-bold text-indigo-400">{agencyData.data.totalAwards?.toLocaleString()}</p>
+                    </div>
+                    <div className="bg-gray-800/50 rounded-lg p-3">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Total $</p>
+                      <p className="text-lg font-bold text-blue-400">{formatCurrency(agencyData.data.totalAmount ?? 0)}</p>
+                    </div>
+                    <div className="bg-gray-800/50 rounded-lg p-3">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Avg Award</p>
+                      <p className="text-lg font-bold text-purple-400">{formatCurrency(agencyData.data.avgAwardAmount ?? 0)}</p>
+                    </div>
+                    <div className="bg-gray-800/50 rounded-lg p-3">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Competitiveness</p>
+                      <p className={`text-lg font-bold ${agencyData.data.competitiveness === 'HIGH' ? 'text-green-400' : agencyData.data.competitiveness === 'LOW' ? 'text-red-400' : 'text-yellow-400'}`}>
+                        {agencyData.data.competitiveness}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Set-aside affinity */}
+                  <div>
+                    <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Set-Aside Affinity (% of awards)</h4>
+                    <div className="space-y-1.5">
+                      {[
+                        { label: 'Small Business', rate: agencyData.data.smallBizRate, color: '#3b82f6' },
+                        { label: 'SDVOSB', rate: agencyData.data.sdvosbRate, color: '#10b981' },
+                        { label: 'WOSB', rate: agencyData.data.wosbRate, color: '#a855f7' },
+                        { label: 'HUBZone', rate: agencyData.data.hubzoneRate, color: '#f59e0b' },
+                      ].map((s) => (
+                        <div key={s.label} className="flex items-center gap-3 text-xs">
+                          <span className="w-32 text-gray-300">{s.label}</span>
+                          <div className="flex-1 bg-gray-800 rounded h-3 overflow-hidden">
+                            <div className="h-full" style={{ width: `${(s.rate ?? 0) * 100}%`, background: s.color }} />
+                          </div>
+                          <span className="w-16 text-right text-gray-500 font-mono">{((s.rate ?? 0) * 100).toFixed(1)}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Top NAICS at this agency */}
+                  {agencyData.data.topNaicsCodes?.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Top NAICS Codes Bought</h4>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {agencyData.data.topNaicsCodes.map((n: any) => (
+                          <button
+                            key={n.naics}
+                            onClick={() => { setDrillAgency(null); setTimeout(() => setDrillNaics(n.naics), 50) }}
+                            className="bg-gray-800/50 rounded p-2 text-left hover:bg-indigo-900/30 transition-colors group"
+                          >
+                            <p className="text-[10px] text-gray-500 group-hover:text-indigo-400">NAICS</p>
+                            <p className="text-sm font-mono text-indigo-300 group-hover:text-indigo-200">{n.naics}</p>
+                            <p className="text-[10px] text-gray-500">{n.count} awards</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              {!agencyLoading && !agencyData?.data && (
+                <p className="text-sm text-gray-500 text-center py-6">No data found for this agency.</p>
               )}
             </div>
           </div>
