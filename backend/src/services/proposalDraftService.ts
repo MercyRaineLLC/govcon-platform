@@ -168,6 +168,14 @@ Each section MUST be fully written prose. No placeholders, no bullet-point outli
   }
 
   const sections = parseDraftResponse(response.text)
+  const hasUsableContent = sections.some(s => s.content && s.content.trim().length > 50)
+  if (!hasUsableContent) {
+    logger.error('Proposal draft LLM returned no usable content', {
+      rawLength: response.text?.length ?? 0,
+      sectionCount: sections.length,
+    })
+    throw new Error('EMPTY_LLM_OUTPUT')
+  }
 
   return {
     opportunityTitle,

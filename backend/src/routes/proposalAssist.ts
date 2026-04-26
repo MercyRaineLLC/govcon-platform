@@ -256,12 +256,27 @@ router.post('/:opportunityId/draft', async (req: AuthenticatedRequest, res: Resp
     logger.info('Proposal draft generated, building PDF', { opportunityId, sectionCount: draft.sections.length })
 
     const pdfBuffer = await buildProposalPdf(draft)
-    await deductProposalTokens(consultingFirmId, 5)
 
-    // Persist draft + PDF so reopening doesn't re-bill the firm
+    if (!pdfBuffer || pdfBuffer.length < 1024) {
+      logger.error('Generated PDF buffer is empty or too small — refusing to charge', {
+        opportunityId,
+        size: pdfBuffer?.length ?? 0,
+      })
+      return res.status(500).json({
+        success: false,
+        error: 'Generated draft was empty. No tokens were charged. Please try again.',
+        code: 'EMPTY_DRAFT',
+      })
+    }
+
+    // Persist draft + PDF FIRST so the artifact is recoverable even if the
+    // client connection drops before res.send completes. Tokens are only
+    // deducted after persistence succeeds — if persist fails, no charge.
     const pdfKey = `proposal_${opportunityId}.pdf`
-    const pdfPath = path.join(process.cwd(), 'uploads', pdfKey)
+    const uploadsDir = path.join(process.cwd(), 'uploads')
+    const pdfPath = path.join(uploadsDir, pdfKey)
     try {
+      if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true })
       fs.writeFileSync(pdfPath, pdfBuffer)
       await prisma.opportunity.update({
         where: { id: opportunityId },
@@ -272,8 +287,15 @@ router.post('/:opportunityId/draft', async (req: AuthenticatedRequest, res: Resp
         },
       })
     } catch (persistErr) {
-      logger.warn('Failed to persist proposal draft (non-fatal)', { opportunityId, error: (persistErr as Error).message })
+      logger.error('Failed to persist proposal draft — refusing to charge', { opportunityId, error: (persistErr as Error).message })
+      return res.status(500).json({
+        success: false,
+        error: 'Could not save the generated draft. No tokens were charged. Please try again.',
+        code: 'PERSIST_FAILED',
+      })
     }
+
+    await deductProposalTokens(consultingFirmId, 5)
 
     const safeName = opp.title.replace(/[^a-z0-9]/gi, '_').slice(0, 60)
     res.setHeader('Content-Type', 'application/pdf')
@@ -286,6 +308,13 @@ router.post('/:opportunityId/draft', async (req: AuthenticatedRequest, res: Resp
     }
     if (err?.message === 'RATE_LIMITED') {
       return res.status(429).json({ success: false, error: 'AI rate limit reached — please wait 60 seconds and try again.', code: 'RATE_LIMITED' })
+    }
+    if (err?.message === 'EMPTY_LLM_OUTPUT') {
+      return res.status(502).json({
+        success: false,
+        error: 'The AI provider returned no usable content. No tokens were charged. Please verify your AI provider in Settings and try again.',
+        code: 'EMPTY_LLM_OUTPUT',
+      })
     }
     next(err)
   }

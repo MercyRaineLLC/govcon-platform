@@ -63,6 +63,14 @@ export async function generateWithRouter(
     }
   }
 
+  // LocalAI (Mistral 7B class) cannot reliably produce the 16K-token structured
+  // JSON required for full proposal drafts — the output is truncated/malformed
+  // and renders as a blank PDF. Block LocalAI for BID_GUIDANCE entirely.
+  const localAiBlockedForTask = opts.task === 'BID_GUIDANCE'
+  if (llmProvider === 'localai' && localAiBlockedForTask) {
+    throw new Error('NO_LLM_KEY')
+  }
+
   // Validate the key for the chosen provider (LocalAI runs locally — no key required)
   const activeKey =
     llmProvider === 'openai' ? openaiApiKey :
@@ -137,11 +145,11 @@ export async function generateWithRouter(
         throw providerErr
       }
     } else {
-      // Only try LocalAI fallback if it's actually configured
+      // LocalAI fallback is disabled for BID_GUIDANCE (proposal drafts) — Mistral 7B
+      // can't produce reliable 16K JSON output and silently corrupts the artifact.
       const localaiUrl = localaiBaseUrl || process.env.LOCALAI_BASE_URL || null
-      if (!localaiUrl) {
-        // No LocalAI configured — surface the original error directly
-        logger.warn(`${llmProvider} call failed, no LocalAI fallback configured`, { error: errMsg })
+      if (!localaiUrl || localAiBlockedForTask) {
+        logger.warn(`${llmProvider} call failed, LocalAI fallback skipped`, { error: errMsg, task: opts.task })
         throw providerErr
       }
       logger.warn(`${llmProvider} call failed — falling back to LocalAI`, { error: errMsg, url: localaiUrl })

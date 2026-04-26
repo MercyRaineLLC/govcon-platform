@@ -354,6 +354,30 @@ export default function OpportunityDetail() {
       // Deduct 5 tokens from local display
       setTokenBalance(prev => prev !== null ? Math.max(0, prev - 5) : null)
     } catch (err: any) {
+      // Server may have completed and persisted the PDF after the client timed out.
+      // Check the saved-draft endpoint before reporting failure so the user can recover.
+      try {
+        const saved: any = await proposalAssistApi.getSaved(id)
+        const data = saved?.data
+        const generatedAt = data?.draftGeneratedAt ? new Date(data.draftGeneratedAt).getTime() : 0
+        const recentlyPersisted = generatedAt > Date.now() - 10 * 60 * 1000
+        if (data?.hasDraftPdf && recentlyPersisted) {
+          const blob = await proposalAssistApi.downloadSavedDraftPdf(id)
+          const url = URL.createObjectURL(blob)
+          const fileName = `Proposal_Draft_${id.slice(0, 8)}.pdf`
+          setDraftDownloadUrl(url)
+          setDraftFileName(fileName)
+          setHasSavedDraft(true)
+          setSavedDraftAt(data.draftGeneratedAt ?? new Date().toISOString())
+          const a = document.createElement('a')
+          a.href = url
+          a.download = fileName
+          document.body.appendChild(a)
+          a.click()
+          document.body.removeChild(a)
+          return
+        }
+      } catch { /* recovery best-effort; fall through to error */ }
       handleProposalError(err, 'Draft generation failed — check your AI key in Settings.')
     } finally {
       setDraftGenerating(false)
