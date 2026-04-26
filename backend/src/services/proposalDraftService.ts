@@ -142,7 +142,7 @@ Each section MUST be fully written prose. No placeholders, no bullet-point outli
       {
         systemPrompt: DRAFT_SYSTEM_PROMPT,
         userPrompt,
-        maxTokens: 16000,
+        maxTokens: 32000,
         temperature: 0.3,
         timeoutMs: 600_000, // 10 min — large drafts can take 3-5 min on Claude
       },
@@ -179,22 +179,104 @@ Each section MUST be fully written prose. No placeholders, no bullet-point outli
 }
 
 function parseDraftResponse(raw: string): ProposalDraftSection[] {
-  try {
-    const cleaned = raw
-      .replace(/```json\s*/gi, '')
-      .replace(/```\s*/g, '')
-      .trim()
-    const start = cleaned.indexOf('{')
-    const end = cleaned.lastIndexOf('}')
-    if (start === -1 || end === -1) throw new Error('No JSON found')
-    const obj = JSON.parse(cleaned.slice(start, end + 1))
-    if (!Array.isArray(obj.sections)) throw new Error('No sections array')
-    return obj.sections
-      .filter((s: any) => s.title && s.content)
-      .map((s: any) => ({ title: String(s.title), content: String(s.content) }))
-  } catch (e) {
-    logger.warn('Failed to parse proposal draft JSON, attempting text extraction', { error: (e as Error).message })
-    // Fallback: try to extract sections from raw text
-    return [{ title: 'Proposal Draft', content: raw.slice(0, 10000) }]
+  const cleaned = raw
+    .replace(/```json\s*/gi, '')
+    .replace(/```\s*/g, '')
+    .trim()
+  const start = cleaned.indexOf('{')
+  if (start === -1) {
+    logger.warn('Proposal draft response had no JSON object', { rawLength: raw.length })
+    return []
   }
+
+  // Fast path: complete, valid JSON
+  const end = cleaned.lastIndexOf('}')
+  if (end !== -1) {
+    try {
+      const obj = JSON.parse(cleaned.slice(start, end + 1))
+      if (Array.isArray(obj.sections)) {
+        const sections = obj.sections
+          .filter((s: any) => s.title && s.content)
+          .map((s: any) => ({ title: String(s.title), content: String(s.content) }))
+        if (sections.length) return sections
+      }
+    } catch {
+      // Fall through to truncation recovery
+    }
+  }
+
+  // Truncation recovery: scan for completed {"title": "...", "content": "..."} objects.
+  // When Claude hits max_tokens mid-section, the trailing object is malformed but
+  // earlier sections are intact. Returning those is far better than dumping raw
+  // truncated JSON into a single PDF section.
+  const recovered = recoverCompleteSections(cleaned.slice(start))
+  if (recovered.length) {
+    logger.warn('Proposal draft JSON was truncated; recovered complete sections', {
+      recoveredCount: recovered.length,
+      rawLength: raw.length,
+    })
+    return recovered
+  }
+
+  logger.error('Proposal draft response could not be parsed or recovered', { rawLength: raw.length })
+  return []
+}
+
+function recoverCompleteSections(text: string): ProposalDraftSection[] {
+  const sections: ProposalDraftSection[] = []
+  let i = 0
+  while (i < text.length) {
+    const titleKey = text.indexOf('"title"', i)
+    if (titleKey === -1) break
+    const title = readJsonStringValue(text, titleKey + '"title"'.length)
+    if (!title) { i = titleKey + 1; continue }
+    const contentKey = text.indexOf('"content"', title.endIndex)
+    if (contentKey === -1) break
+    const content = readJsonStringValue(text, contentKey + '"content"'.length)
+    if (!content) { i = title.endIndex; continue }
+    if (title.value.trim() && content.value.trim().length > 50) {
+      sections.push({ title: title.value, content: content.value })
+    }
+    i = content.endIndex
+  }
+  return sections
+}
+
+function readJsonStringValue(text: string, from: number): { value: string; endIndex: number } | null {
+  let j = from
+  while (j < text.length && text[j] !== '"') {
+    if (text[j] !== ' ' && text[j] !== ':' && text[j] !== '\t' && text[j] !== '\n' && text[j] !== '\r') return null
+    j++
+  }
+  if (j >= text.length) return null
+  const startQuote = j
+  j++
+  let out = ''
+  while (j < text.length) {
+    const ch = text[j]
+    if (ch === '\\') {
+      const next = text[j + 1]
+      if (next === undefined) return null
+      if (next === 'n') out += '\n'
+      else if (next === 't') out += '\t'
+      else if (next === 'r') out += '\r'
+      else if (next === '"') out += '"'
+      else if (next === '\\') out += '\\'
+      else if (next === '/') out += '/'
+      else if (next === 'u' && j + 5 < text.length) {
+        const hex = text.slice(j + 2, j + 6)
+        const code = parseInt(hex, 16)
+        if (!Number.isNaN(code)) out += String.fromCharCode(code)
+        j += 4
+      } else {
+        out += next
+      }
+      j += 2
+      continue
+    }
+    if (ch === '"') return { value: out, endIndex: j + 1 }
+    out += ch
+    j++
+  }
+  return null
 }

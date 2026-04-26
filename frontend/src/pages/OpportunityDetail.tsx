@@ -15,6 +15,7 @@ import {
   UserCheck, BarChart3, Table2, RefreshCw, Pencil, Lightbulb, Target, AlertTriangle, Star, Zap, Trash2, FileDown, StarOff,
 } from 'lucide-react'
 import { parseSubmissionInstructions } from '../utils/parseSubmission'
+import { useToast } from '../components/Toast'
 
 interface Amendment {
   id: string
@@ -79,6 +80,7 @@ interface OpportunityDetail {
 export default function OpportunityDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { toast } = useToast()
 
   const [data, setData] = useState<OpportunityDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -353,6 +355,7 @@ export default function OpportunityDetail() {
       document.body.removeChild(a)
       // Deduct 5 tokens from local display
       setTokenBalance(prev => prev !== null ? Math.max(0, prev - 5) : null)
+      toast('Proposal draft ready — download started.', 'success')
     } catch (err: any) {
       // Server may have completed and persisted the PDF after the client timed out.
       // Check the saved-draft endpoint before reporting failure so the user can recover.
@@ -375,6 +378,7 @@ export default function OpportunityDetail() {
           document.body.appendChild(a)
           a.click()
           document.body.removeChild(a)
+          toast('Proposal draft ready — download started.', 'success')
           return
         }
       } catch { /* recovery best-effort; fall through to error */ }
@@ -2302,7 +2306,7 @@ ${data.amendments.map(a => `
                 <div className="flex items-center justify-between border-t border-gray-800/60 pt-3">
                   <p className="text-xs text-gray-500">
                     {draftGenerating
-                      ? 'Writing full proposal draft — this takes 15–30 seconds...'
+                      ? 'Writing full proposal draft — this typically takes 3–5 minutes. Do not close this tab; the page will update automatically when the PDF is ready.'
                       : draftDownloadUrl
                         ? 'Draft ready! Click Download if it did not save automatically.'
                         : hasSavedDraft

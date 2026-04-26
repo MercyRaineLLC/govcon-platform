@@ -24,28 +24,49 @@ api.interceptors.request.use((config) => {
 });
 
 // Handle 401 globally — clear auth, redirect to login, and suppress the
-// backend's "Invalid token" string so components that catch the rejection
-// don't briefly display it before the navigation finishes.
+// backend's "Invalid token" / "Token expired" strings so components that
+// catch the rejection don't briefly display them before navigation finishes.
+function handle401(err: any) {
+  if (err.response?.status !== 401) return
+  // Decide which auth to clear based on the URL: client-portal routes use
+  // a separate token; everything else uses the consultant token.
+  const url: string = err.config?.url || err.response?.config?.url || ''
+  const isClientPortal = /\/api\/client-(portal|deliverables)/.test(url)
+  if (isClientPortal) {
+    localStorage.removeItem('govcon_client_auth')
+  } else {
+    localStorage.removeItem('govcon_auth')
+  }
+  // Wipe any backend-supplied error string so toasts that read
+  // err.response.data.error fall back to their own copy.
+  if (err.response?.data && typeof err.response.data === 'object') {
+    err.response.data.error = ''
+    err.response.data.message = ''
+  }
+  // Skip redirect if already on a public page to avoid loops.
+  const currentPath = window.location.pathname
+  const publicPaths = ['/login', '/welcome', '/register', '/forgot-password', '/reset-password', '/client-login']
+  if (!publicPaths.some((p) => currentPath.startsWith(p))) {
+    window.location.replace(isClientPortal ? '/client-login' : '/login')
+  }
+}
+
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401) {
-      // Avoid bouncing the user back to /welcome on every page load if their
-      // token is just stale — go to /login so they re-auth and stay in app.
-      localStorage.removeItem('govcon_auth');
-      // Suppress the user-visible "Invalid token" message: components that
-      // display err.response.data.error fall back to their own copy when
-      // the field is empty/null.
-      if (err.response?.data) {
-        err.response.data.error = ''
-      }
-      // Skip if already on a public page to avoid redirect loops
-      const currentPath = window.location.pathname
-      const publicPaths = ['/login', '/welcome', '/register', '/forgot-password', '/reset-password', '/client-login']
-      if (!publicPaths.some((p) => currentPath.startsWith(p))) {
-        window.location.replace('/login')
-      }
-    }
+    handle401(err)
+    return Promise.reject(err);
+  }
+);
+
+// Many components call bare axios.get / axios.post (bypassing the `api`
+// instance), which means they previously skipped the 401 handler and let
+// the backend "Invalid token" string flash through. Attach the same handler
+// to the default axios instance so the suppression is global.
+axios.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    handle401(err)
     return Promise.reject(err);
   }
 );
