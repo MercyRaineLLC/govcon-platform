@@ -447,6 +447,8 @@ export const marketAnalyticsApi = {
     api.get(`/market-analytics/contractor/${encodeURIComponent(name)}`).then((r) => r.data),
   snapshot: (naics?: string) =>
     api.get('/market-analytics/snapshot', { params: naics ? { naics } : {} }).then((r) => r.data),
+  insights: () =>
+    api.get('/market-analytics/insights').then((r) => r.data),
   ingest: (body: { naicsCode?: string; agency?: string; bulk?: boolean; maxPages?: number }) =>
     api.post('/market-analytics/ingest', body).then((r) => r.data),
 }

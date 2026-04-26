@@ -16,6 +16,7 @@ import {
   getAwardHistoryCount,
 } from '../services/bigquery/analyticsService'
 import { ingestAwardsForNaics, ingestBulkNaics } from '../services/bigquery/ingestionService'
+import { getMarketInsights } from '../services/bigquery/marketInsights'
 import { logger } from '../utils/logger'
 
 const router = Router()
@@ -162,6 +163,71 @@ router.get('/snapshot', async (req: AuthenticatedRequest, res: Response) => {
   } catch (err) {
     logger.error('Market snapshot route failed', { error: (err as Error).message })
     res.status(500).json({ success: false, error: 'Failed to load market snapshot' })
+  }
+})
+
+/**
+ * GET /api/market-analytics/insights
+ * Returns 3-5 plain-English market insights tailored to the firm's
+ * client portfolio (certifications, NAICS coverage, pipeline activity).
+ */
+router.get('/insights', async (req: AuthenticatedRequest, res: Response) => {
+  const firmId = req.user?.consultingFirmId
+  if (!firmId) return res.status(401).json({ success: false, error: 'Unauthorized' })
+
+  try {
+    const clients = await prisma.clientCompany.findMany({
+      where: { consultingFirmId: firmId, isActive: true },
+      select: { naicsCodes: true, sdvosb: true, wosb: true, hubzone: true, smallBusiness: true },
+    })
+    if (clients.length === 0) {
+      return res.json({ success: true, data: [], message: 'Add active clients to see insights.' })
+    }
+
+    const naicsCodes = [...new Set(clients.flatMap((c) => c.naicsCodes))]
+    if (naicsCodes.length === 0) {
+      return res.json({ success: true, data: [], message: 'Set NAICS codes on a client to enable insights.' })
+    }
+
+    const snapshot = await getMarketSnapshot(naicsCodes)
+    if (!snapshot) {
+      return res.json({ success: true, data: [], message: 'No BigQuery data for these NAICS yet — run ingest first.' })
+    }
+
+    // Aggregate firm-level certifications (any active client with the cert flips the firm flag)
+    const firmCertifications = {
+      sdvosb: clients.some((c) => c.sdvosb),
+      wosb: clients.some((c) => c.wosb),
+      hubzone: clients.some((c) => c.hubzone),
+      smallBiz: clients.some((c) => c.smallBusiness),
+    }
+
+    // Pipeline context (probability-weighted active opps in tracked NAICS)
+    const opps = await prisma.opportunity.findMany({
+      where: {
+        consultingFirmId: firmId,
+        status: 'ACTIVE',
+        naicsCode: { in: naicsCodes },
+      },
+      select: { probabilityScore: true, estimatedValue: true },
+    })
+    const firmActiveOppCount = opps.length
+    const firmActivePipelineValue = opps.reduce(
+      (sum, o) => sum + (Number(o.probabilityScore) * Number(o.estimatedValue ?? 0)),
+      0,
+    )
+
+    const insights = await getMarketInsights({
+      snapshot,
+      firmCertifications,
+      firmActivePipelineValue,
+      firmActiveOppCount,
+    })
+
+    res.json({ success: true, data: insights })
+  } catch (err) {
+    logger.error('Market insights route failed', { error: (err as Error).message })
+    res.status(500).json({ success: false, error: 'Failed to load insights' })
   }
 })
 

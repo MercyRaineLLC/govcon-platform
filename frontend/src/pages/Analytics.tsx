@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { analyticsApi, marketAnalyticsApi } from '../services/api'
 import {
@@ -74,6 +75,22 @@ export function AnalyticsPage() {
     queryFn: () => marketAnalyticsApi.snapshot(),
     enabled: bqStatusData?.data?.hasData === true,
     retry: false,
+  })
+
+  const { data: bqInsightsData } = useQuery({
+    queryKey: ['bq-insights'],
+    queryFn: () => marketAnalyticsApi.insights(),
+    enabled: bqStatusData?.data?.hasData === true,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // NAICS drill-down modal state
+  const [drillNaics, setDrillNaics] = useState<string | null>(null)
+  const { data: drillData, isLoading: drillLoading } = useQuery({
+    queryKey: ['bq-naics-drill', drillNaics],
+    queryFn: () => marketAnalyticsApi.competition(drillNaics!),
+    enabled: !!drillNaics,
   })
 
   const mi = miData?.data
@@ -465,6 +482,32 @@ export function AnalyticsPage() {
             </div>
           )}
 
+          {/* Insight bar — algorithmic plain-English recommendations */}
+          {bqStatusData?.data?.hasData && bqInsightsData?.data && bqInsightsData.data.length > 0 && (
+            <div className="mb-5 space-y-2">
+              {bqInsightsData.data.map((ins: any, i: number) => {
+                const palette = ins.level === 'OPPORTUNITY'
+                  ? { bg: 'rgba(34,197,94,0.08)', border: 'rgba(34,197,94,0.30)', text: '#4ade80', label: 'OPPORTUNITY' }
+                  : ins.level === 'RISK'
+                    ? { bg: 'rgba(220,38,38,0.08)', border: 'rgba(220,38,38,0.30)', text: '#f87171', label: 'RISK' }
+                    : { bg: 'rgba(99,102,241,0.08)', border: 'rgba(99,102,241,0.30)', text: '#a5b4fc', label: 'NOTE' }
+                return (
+                  <div key={i} className="rounded-lg p-3 flex gap-3"
+                    style={{ background: palette.bg, border: `1px solid ${palette.border}` }}>
+                    <span className="text-[9px] font-bold tracking-widest px-1.5 py-0.5 rounded h-fit flex-shrink-0"
+                      style={{ background: palette.border, color: palette.text }}>
+                      {palette.label}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold" style={{ color: palette.text }}>{ins.title}</p>
+                      <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">{ins.body}</p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
           {/* Data available: market snapshot */}
           {bqStatusData?.data?.hasData && (
             <>
@@ -500,17 +543,22 @@ export function AnalyticsPage() {
                     </div>
                   </div>
 
-                  {/* NAICS heatmap */}
+                  {/* NAICS heatmap — clickable rows */}
                   {bqSnapshotData.data.heatmap?.length > 0 && (
                     <div className="mb-6">
                       <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">NAICS Competition Heatmap</h4>
-                      <div className="space-y-2">
+                      <div className="space-y-1">
                         {bqSnapshotData.data.heatmap.map((h: any) => (
-                          <div key={h.naicsCode} className="flex items-center gap-3">
-                            <span className="text-xs text-gray-400 w-16 flex-shrink-0">{h.naicsCode}</span>
+                          <button
+                            key={h.naicsCode}
+                            type="button"
+                            onClick={() => setDrillNaics(h.naicsCode)}
+                            className="flex items-center gap-3 w-full px-2 py-1.5 rounded hover:bg-indigo-900/20 transition-colors text-left group"
+                          >
+                            <span className="text-xs text-indigo-300 group-hover:text-indigo-200 font-mono w-16 flex-shrink-0">{h.naicsCode}</span>
                             <div className="flex-1 bg-gray-800 rounded-full h-2 overflow-hidden">
                               <div
-                                className="h-full rounded-full bg-indigo-500"
+                                className="h-full rounded-full bg-indigo-500 group-hover:bg-indigo-400 transition-colors"
                                 style={{ width: `${Math.min(h.concentration * 100, 100)}%` }}
                               />
                             </div>
@@ -522,10 +570,13 @@ export function AnalyticsPage() {
                                 ~{h.avgOffers.toFixed(1)} offerors
                               </span>
                             )}
-                          </div>
+                            <span className="text-[10px] text-gray-600 group-hover:text-indigo-400 w-12 text-right flex-shrink-0">
+                              View →
+                            </span>
+                          </button>
                         ))}
                       </div>
-                      <p className="text-[10px] text-gray-600 mt-2">Bar width = winner concentration (HHI). Wider = fewer firms dominate.</p>
+                      <p className="text-[10px] text-gray-600 mt-2">Bar width = winner concentration (HHI). Wider = fewer firms dominate. Click any row to see top winners and recent contracts.</p>
                     </div>
                   )}
 
@@ -545,13 +596,15 @@ export function AnalyticsPage() {
                             </tr>
                           </thead>
                           <tbody>
-                            {bqSnapshotData.data.topAgencies.map((a: any) => (
-                              <tr key={a.agency} className="border-b border-gray-800/50 text-gray-300">
-                                <td className="py-1.5 pr-6 text-gray-200">{a.agency}</td>
-                                <td className="py-1.5 pr-6 text-right">{a.awards.toLocaleString()}</td>
-                                <td className="py-1.5 text-right">{formatCurrency(a.amount)}</td>
-                              </tr>
-                            ))}
+                            {bqSnapshotData.data.topAgencies
+                              .filter((a: any) => a.agency && a.agency.trim() && a.agency.trim().toUpperCase() !== 'ALL')
+                              .map((a: any) => (
+                                <tr key={a.agency} className="border-b border-gray-800/50 text-gray-300">
+                                  <td className="py-1.5 pr-6 text-gray-200">{a.agency}</td>
+                                  <td className="py-1.5 pr-6 text-right">{a.awards.toLocaleString()}</td>
+                                  <td className="py-1.5 text-right">{formatCurrency(a.amount)}</td>
+                                </tr>
+                              ))}
                           </tbody>
                         </table>
                       </div>
@@ -565,6 +618,122 @@ export function AnalyticsPage() {
           )}
         </div>
       </TierGate>
+
+      {/* ── NAICS Drill-Down Modal ── */}
+      {drillNaics && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)' }}
+          onClick={() => setDrillNaics(null)}
+        >
+          <div
+            className="rounded-xl w-full max-w-3xl max-h-[85vh] overflow-y-auto"
+            style={{ background: '#0b1628', border: '1px solid rgba(99,102,241,0.3)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sticky top-0 z-10 px-6 py-4 border-b border-gray-800 flex items-center justify-between"
+              style={{ background: '#0b1628' }}>
+              <div>
+                <h3 className="text-base font-semibold text-gray-100">NAICS {drillNaics}</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Historical award profile from USAspending</p>
+              </div>
+              <button
+                onClick={() => setDrillNaics(null)}
+                className="text-gray-500 hover:text-gray-200 text-2xl leading-none px-2"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="px-6 py-5">
+              {drillLoading && <div className="flex justify-center py-8"><Spinner /></div>}
+              {!drillLoading && drillData?.data && (
+                <div className="space-y-5">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="bg-gray-800/50 rounded-lg p-3">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Total Awards</p>
+                      <p className="text-lg font-bold text-indigo-400">{drillData.data.totalAwards?.toLocaleString()}</p>
+                    </div>
+                    <div className="bg-gray-800/50 rounded-lg p-3">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Total $</p>
+                      <p className="text-lg font-bold text-blue-400">{formatCurrency(drillData.data.totalAmount ?? 0)}</p>
+                    </div>
+                    <div className="bg-gray-800/50 rounded-lg p-3">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Avg Award</p>
+                      <p className="text-lg font-bold text-purple-400">{formatCurrency(drillData.data.avgAwardAmount ?? 0)}</p>
+                    </div>
+                    <div className="bg-gray-800/50 rounded-lg p-3">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Unique Winners</p>
+                      <p className="text-lg font-bold text-yellow-400">{drillData.data.uniqueWinners?.toLocaleString()}</p>
+                    </div>
+                  </div>
+
+                  {drillData.data.topWinners?.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Top Winners</h4>
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-left text-[10px] text-gray-500 border-b border-gray-700">
+                            <th className="pb-2 pr-4">Recipient</th>
+                            <th className="pb-2 pr-4 text-right">Wins</th>
+                            <th className="pb-2 pr-4 text-right">Total $</th>
+                            <th className="pb-2 text-right">Share</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {drillData.data.topWinners.slice(0, 10).map((w: any) => (
+                            <tr key={w.name} className="border-b border-gray-800/50 text-gray-300">
+                              <td className="py-1.5 pr-4 truncate max-w-xs text-gray-200">{w.name}</td>
+                              <td className="py-1.5 pr-4 text-right font-mono">{w.wins}</td>
+                              <td className="py-1.5 pr-4 text-right font-mono">{formatCurrency(w.totalAmount)}</td>
+                              <td className="py-1.5 text-right font-mono text-amber-400">{(w.shareOfWins * 100).toFixed(1)}%</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {drillData.data.setAsideBreakdown?.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Set-Aside Breakdown</h4>
+                      <div className="space-y-1.5">
+                        {drillData.data.setAsideBreakdown.slice(0, 8).map((s: any) => (
+                          <div key={s.type} className="flex items-center gap-3 text-xs">
+                            <span className="w-32 text-gray-300 truncate">{s.type || '(unspecified)'}</span>
+                            <div className="flex-1 bg-gray-800 rounded h-3 overflow-hidden">
+                              <div className="h-full bg-purple-500" style={{ width: `${s.pct}%` }} />
+                            </div>
+                            <span className="w-20 text-right text-gray-500 font-mono">{s.pct.toFixed(1)}% ({s.count})</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {drillData.data.yearlySummary?.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Awards by Year</h4>
+                      <div className="grid grid-cols-5 sm:grid-cols-10 gap-1">
+                        {drillData.data.yearlySummary.map((y: any) => (
+                          <div key={y.year} className="bg-gray-800/50 rounded p-2 text-center">
+                            <p className="text-[10px] text-gray-500">{y.year}</p>
+                            <p className="text-xs font-semibold text-gray-200">{y.awards}</p>
+                            <p className="text-[9px] text-indigo-400 font-mono">{formatCurrency(y.totalAmount)}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              {!drillLoading && !drillData?.data && (
+                <p className="text-sm text-gray-500 text-center py-6">No data found for NAICS {drillNaics}.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

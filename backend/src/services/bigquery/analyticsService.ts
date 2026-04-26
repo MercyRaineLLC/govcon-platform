@@ -384,9 +384,12 @@ export async function getMarketSnapshot(naicsCodes: string[]): Promise<MarketSna
     top_agencies AS (
       SELECT agency, COUNT(*) AS awards, SUM(awardAmount) AS amount
       FROM base
+      WHERE agency IS NOT NULL
+        AND TRIM(agency) != ''
+        AND UPPER(TRIM(agency)) != 'ALL'
       GROUP BY agency
       ORDER BY awards DESC
-      LIMIT 8
+      LIMIT 12
     )
     SELECT
       COUNT(*) AS totalAwards,
