@@ -23,50 +23,45 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle 401 globally — clear auth, redirect to login, and suppress the
-// backend's "Invalid token" / "Token expired" strings so components that
-// catch the rejection don't briefly display them before navigation finishes.
-function handle401(err: any) {
+// Suppress the literal "Invalid token" / "Token expired" strings on every 401
+// so components that catch the rejection don't briefly render them. Run on
+// both the configured `api` instance AND the default axios instance, since
+// many components use bare axios.get / axios.post.
+function suppressAuthErrorMessage(err: any) {
   if (err.response?.status !== 401) return
-  // Decide which auth to clear based on the URL: client-portal routes use
-  // a separate token; everything else uses the consultant token.
-  const url: string = err.config?.url || err.response?.config?.url || ''
-  const isClientPortal = /\/api\/client-(portal|deliverables)/.test(url)
-  if (isClientPortal) {
-    localStorage.removeItem('govcon_client_auth')
-  } else {
-    localStorage.removeItem('govcon_auth')
-  }
-  // Wipe any backend-supplied error string so toasts that read
-  // err.response.data.error fall back to their own copy.
   if (err.response?.data && typeof err.response.data === 'object') {
     err.response.data.error = ''
     err.response.data.message = ''
   }
-  // Skip redirect if already on a public page to avoid loops.
-  const currentPath = window.location.pathname
-  const publicPaths = ['/login', '/welcome', '/register', '/forgot-password', '/reset-password', '/client-login']
-  if (!publicPaths.some((p) => currentPath.startsWith(p))) {
-    window.location.replace(isClientPortal ? '/client-login' : '/login')
-  }
 }
 
+// On the CONFIGURED api instance only: also clear auth and redirect. This
+// instance is exclusively used for our own authenticated API calls, so a
+// 401 here is unambiguously "the consultant's token is dead."
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    handle401(err)
+    suppressAuthErrorMessage(err)
+    if (err.response?.status === 401) {
+      localStorage.removeItem('govcon_auth')
+      const currentPath = window.location.pathname
+      const publicPaths = ['/login', '/welcome', '/register', '/forgot-password', '/reset-password', '/client-login']
+      if (!publicPaths.some((p) => currentPath.startsWith(p))) {
+        window.location.replace('/login')
+      }
+    }
     return Promise.reject(err);
   }
 );
 
-// Many components call bare axios.get / axios.post (bypassing the `api`
-// instance), which means they previously skipped the 401 handler and let
-// the backend "Invalid token" string flash through. Attach the same handler
-// to the default axios instance so the suppression is global.
+// On the DEFAULT axios instance: only suppress the message, never clear auth
+// or redirect. Bare axios calls go to a mix of public endpoints, client-portal
+// endpoints, and (rarely) third-party APIs — a 401 from any of them must not
+// kick a logged-in consultant out of an unrelated page.
 axios.interceptors.response.use(
   (res) => res,
   (err) => {
-    handle401(err)
+    suppressAuthErrorMessage(err)
     return Promise.reject(err);
   }
 );
