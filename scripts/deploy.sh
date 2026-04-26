@@ -23,7 +23,8 @@ set -euo pipefail
 # -------------------------------------------------------------
 PROJECT_DIR="/opt/govcon/app"
 BACKUP_DIR="/opt/govcon/backups"
-COMPOSE_FILE="docker-compose.yml"
+COMPOSE_FILE="docker-compose.prod.yml"
+ENV_FILE=".env.prod"
 HEALTH_URL="http://localhost:3001/health"
 HEALTH_TIMEOUT=60
 
@@ -88,9 +89,9 @@ git log --oneline "${PREV_COMMIT}..${NEW_COMMIT}"
 # 3. Rebuild + restart containers
 # -------------------------------------------------------------
 log "Rebuilding containers (this can take 3-5 min)..."
-docker compose -f "$COMPOSE_FILE" build --pull
+docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" build --pull
 log "Restarting services..."
-docker compose -f "$COMPOSE_FILE" up -d
+docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d
 
 # Give containers a moment to settle
 sleep 8
@@ -118,7 +119,7 @@ done
 if [[ "${HEALTH_OK:-0}" != "1" ]]; then
   log "❌ HEALTH CHECK FAILED — rolling back to $PREV_COMMIT"
   git checkout "$PREV_COMMIT"
-  docker compose -f "$COMPOSE_FILE" up -d --build
+  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --build
   log "Rolled back. DB backup at $BACKUP_DIR/db_${TS}.sql if needed."
   die "Deploy failed — check container logs"
 fi
@@ -140,4 +141,4 @@ log "  DB backup: $BACKUP_DIR/db_${TS}.sql"
 log ""
 log "If any issue arises:"
 log "  bash scripts/deploy.sh rollback   # not yet implemented — manual:"
-log "  cd $PROJECT_DIR && git checkout $PREV_COMMIT && docker compose up -d --build"
+log "  cd $PROJECT_DIR && git checkout $PREV_COMMIT && docker compose --env-file $ENV_FILE -f $COMPOSE_FILE up -d --build"
