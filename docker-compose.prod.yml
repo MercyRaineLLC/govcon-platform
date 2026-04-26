@@ -90,10 +90,12 @@ services:
     depends_on:
       - backend
     healthcheck:
-      # BusyBox wget — discard body to /dev/null; exits 0 only on 2xx/3xx.
-      # Avoids --spider (unreliable across busybox builds) and --tries
-      # (GNU-only). -T is the BusyBox connect-timeout flag.
-      test: ["CMD-SHELL", "wget -q -T 5 -O /dev/null http://localhost/ || exit 1"]
+      # Probe 127.0.0.1 directly, not "localhost". BusyBox wget on Alpine
+      # tries IPv6 first when given a hostname; nginx in this image listens
+      # IPv4-only (our nginx.conf has `listen 80;` without `listen [::]:80;`)
+      # so a localhost probe gets ECONNREFUSED on ::1 without falling back.
+      # Using -T 5 for connect timeout (BusyBox flag, not GNU --tries).
+      test: ["CMD-SHELL", "wget -q -T 5 -O /dev/null http://127.0.0.1/ || exit 1"]
       interval: 30s
       timeout: 8s
       retries: 3
