@@ -177,6 +177,28 @@ export function AnalyticsPage() {
     enabled: !!drillAgency,
   })
 
+  // NAICS compare state — pick up to 2 NAICS to compare side-by-side
+  const [compareSelection, setCompareSelection] = useState<string[]>([])
+  const compareA = compareSelection[0] ?? null
+  const compareB = compareSelection[1] ?? null
+  const { data: compareDataA } = useQuery({
+    queryKey: ['bq-compare', compareA],
+    queryFn: () => marketAnalyticsApi.competition(compareA!),
+    enabled: !!compareA,
+  })
+  const { data: compareDataB } = useQuery({
+    queryKey: ['bq-compare', compareB],
+    queryFn: () => marketAnalyticsApi.competition(compareB!),
+    enabled: !!compareB,
+  })
+  const toggleCompare = (naics: string) => {
+    setCompareSelection((prev) => {
+      if (prev.includes(naics)) return prev.filter((n) => n !== naics)
+      if (prev.length >= 2) return [prev[1], naics]   // FIFO: drop oldest, keep newest two
+      return [...prev, naics]
+    })
+  }
+
   const mi = miData?.data
   const health = healthData?.data
   const pipeline = pipelineData?.data
@@ -659,12 +681,24 @@ export function AnalyticsPage() {
                     <div className="mb-6">
                       <div className="space-y-1">
                         {bqSnapshotData.data.heatmap.map((h: any) => (
-                          <button
-                            key={h.naicsCode}
-                            type="button"
-                            onClick={() => setDrillNaics(h.naicsCode)}
-                            className="flex items-center gap-3 w-full px-2 py-1.5 rounded hover:bg-indigo-900/20 transition-colors text-left group"
+                          <div key={h.naicsCode}
+                            className={`flex items-center gap-3 w-full px-2 py-1.5 rounded transition-colors group cursor-pointer ${
+                              compareSelection.includes(h.naicsCode) ? 'bg-emerald-900/20' : 'hover:bg-indigo-900/20'
+                            }`}
                           >
+                            <input
+                              type="checkbox"
+                              checked={compareSelection.includes(h.naicsCode)}
+                              onChange={() => toggleCompare(h.naicsCode)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="cursor-pointer flex-shrink-0"
+                              title="Add to compare (max 2)"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setDrillNaics(h.naicsCode)}
+                              className="flex items-center gap-3 flex-1 text-left"
+                            >
                             <span className="text-xs text-indigo-300 group-hover:text-indigo-200 font-mono w-16 flex-shrink-0">{h.naicsCode}</span>
                             <div className="flex-1 bg-gray-800 rounded-full h-2 overflow-hidden">
                               <div
@@ -694,12 +728,54 @@ export function AnalyticsPage() {
                             <span className="text-[10px] text-gray-600 group-hover:text-indigo-400 w-12 text-right flex-shrink-0">
                               View →
                             </span>
-                          </button>
+                            </button>
+                          </div>
                         ))}
                       </div>
                       <p className="text-[10px] text-gray-600 mt-2">
-                        Bar width = winner concentration (HHI). Sparkline = quarterly award trend. Green = your firm's active pipeline in that NAICS. Click any row to see top winners.
+                        Bar width = winner concentration (HHI). Sparkline = quarterly award trend. Green = your firm's active pipeline. Check up to 2 boxes to compare side-by-side. Click any row to drill in.
                       </p>
+
+                      {/* Side-by-side compare panel */}
+                      {compareSelection.length === 2 && compareDataA?.data && compareDataB?.data && (
+                        <div className="mt-4 rounded-xl p-4" style={{ background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.25)' }}>
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="text-xs font-semibold text-emerald-300 uppercase tracking-wider">Side-by-Side Comparison</h4>
+                            <button onClick={() => setCompareSelection([])} className="text-[11px] text-gray-500 hover:text-gray-200">clear</button>
+                          </div>
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="text-left text-[10px] text-gray-500 border-b border-gray-700">
+                                <th className="pb-2 pr-4">Metric</th>
+                                <th className="pb-2 pr-4 text-right text-indigo-300 font-mono">{compareA}</th>
+                                <th className="pb-2 text-right text-emerald-300 font-mono">{compareB}</th>
+                              </tr>
+                            </thead>
+                            <tbody className="text-gray-300">
+                              {([
+                                ['Total Awards', compareDataA.data.totalAwards, compareDataB.data.totalAwards, (n: number) => n.toLocaleString()],
+                                ['Total $', compareDataA.data.totalAmount, compareDataB.data.totalAmount, (n: number) => formatCurrency(n)],
+                                ['Avg Award', compareDataA.data.avgAwardAmount, compareDataB.data.avgAwardAmount, (n: number) => formatCurrency(n)],
+                                ['Median Award', compareDataA.data.medianAwardAmount, compareDataB.data.medianAwardAmount, (n: number) => formatCurrency(n)],
+                                ['Unique Winners', compareDataA.data.uniqueWinners, compareDataB.data.uniqueWinners, (n: number) => n.toLocaleString()],
+                                ['Avg Offerors', compareDataA.data.avgOffersReceived, compareDataB.data.avgOffersReceived, (n: number | null) => n != null ? n.toFixed(1) : '—'],
+                                ['Concentration HHI', compareDataA.data.winnerConcentrationHHI, compareDataB.data.winnerConcentrationHHI, (n: number) => n.toFixed(3)],
+                                ['Top Winner', compareDataA.data.topWinners?.[0]?.name, compareDataB.data.topWinners?.[0]?.name, (s: string) => s ?? '—'],
+                                ['Top Winner Share', compareDataA.data.topWinners?.[0]?.shareOfWins, compareDataB.data.topWinners?.[0]?.shareOfWins, (n: number) => n != null ? `${(n * 100).toFixed(1)}%` : '—'],
+                              ] as Array<[string, any, any, (v: any) => string]>).map(([label, a, b, fmt]) => (
+                                <tr key={label} className="border-b border-gray-800/50">
+                                  <td className="py-1.5 pr-4 text-gray-400">{label}</td>
+                                  <td className="py-1.5 pr-4 text-right font-mono">{fmt(a)}</td>
+                                  <td className="py-1.5 text-right font-mono">{fmt(b)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                      {compareSelection.length === 1 && (
+                        <p className="text-[10px] text-emerald-400 mt-2">Pick one more NAICS to enable side-by-side comparison.</p>
+                      )}
                     </div>
                   )}
 
