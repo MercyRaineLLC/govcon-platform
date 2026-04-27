@@ -300,12 +300,28 @@ export function OpportunitiesPage() {
           detail: `${newCount.toLocaleString()} new contracts added · ${job.scoringJobsQueued || 0} being scored · ${job.errors || 0} errors${expiredNote}`,
         });
         setTimeout(() => setIngestState(defaultJobState()), 20000);
-      }, 450); // 450 × 4s = 30 min max; large syncs (25k+ contracts) can take 15+ min
+      }, 225); // 225 × 4s = 15 min max. Backend may keep running past this;
+              // we just stop watching and surface as complete so the UI never hangs.
     } catch (err: any) {
       clearJobFromStorage('ingest');
       const detail = err?.response?.data?.error || err?.message || 'SAM.gov unavailable';
       setIngestState({ jobId: null, status: 'error', message: 'Ingest failed', detail });
     }
+  };
+
+  // Stop watching the in-flight sync. Backend BullMQ jobs don't support
+  // mid-flight cancellation, so the worker keeps running until it
+  // finishes or fails — but the UI returns to idle, the polling timer
+  // is cleared, and localStorage is wiped so a page refresh will not
+  // resume polling. The dataset list still refetches once the worker
+  // finishes via the 15s background poll.
+  const handleCancelIngest = () => {
+    if (ingestPollRef.current) {
+      clearTimeout(ingestPollRef.current as any);
+      ingestPollRef.current = null;
+    }
+    clearJobFromStorage('ingest');
+    setIngestState(defaultJobState());
   };
 
   const handleEnrich = async () => {
@@ -425,6 +441,15 @@ export function OpportunitiesPage() {
             {ingestState.status === 'running' ? <Loader className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
             {ingestState.status === 'running' ? 'Syncing...' : 'Sync Contracts'}
           </button>
+          {ingestState.status === 'running' && (
+            <button
+              onClick={handleCancelIngest}
+              className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg border border-red-700 bg-red-900/30 text-red-300 hover:bg-red-900/50 transition-colors"
+              title="Stop watching this sync. The backend may keep running, but the UI returns to idle and refresh will not resume polling."
+            >
+              <X className="w-4 h-4" /> Cancel
+            </button>
+          )}
         </div>
       </PageHeader>
 
