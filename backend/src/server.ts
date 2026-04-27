@@ -21,6 +21,7 @@ import { startRecalibrationWorker } from './workers/recalibrationWorker'
 import { startDeadlineNotificationWorker } from './workers/deadlineNotificationWorker'
 import { startPortfolioScoringWorker } from './workers/portfolioScoringWorker'
 import { startWatchlistDigestWorker } from './workers/watchlistDigestWorker'
+import { startStripeWebhookRotationReminderWorker } from './workers/stripeWebhookRotationReminderWorker'
 
 // Route imports
 import authRoutes from './routes/auth'
@@ -229,6 +230,7 @@ async function bootstrap(): Promise<void> {
   const deadlineNotificationWorker = startDeadlineNotificationWorker()
   const portfolioScoringWorker = startPortfolioScoringWorker()
   const watchlistDigestWorker = startWatchlistDigestWorker()
+  const stripeRotationReminderWorker = startStripeWebhookRotationReminderWorker()
 
   // -------------------------------------------------------------
   // Start HTTP Server
@@ -257,6 +259,7 @@ async function bootstrap(): Promise<void> {
       await deadlineNotificationWorker.close()
       await portfolioScoringWorker.close()
       await watchlistDigestWorker.close()
+      await stripeRotationReminderWorker.close()
       logger.info('Workers stopped')
 
       await disconnectDatabase()
