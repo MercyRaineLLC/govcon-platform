@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import { billingApi, addonsApi } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import { StripeCheckout } from '../components/StripeCheckout'
+import { isBetaPricingHidden, BETA_PRICE_PLACEHOLDER } from '../utils/betaMode'
 import {
   CreditCard,
   CheckCircle2,
@@ -316,8 +317,29 @@ export default function BillingPage() {
         </div>
       )}
 
-      {/* Stripe Checkout (Lifetime + Add-ons) */}
-      {isAdmin && (
+      {isBetaPricingHidden() && (
+        <div
+          className="rounded-lg p-4 mb-4 flex items-start gap-3"
+          style={{
+            background: 'rgba(245,158,11,0.08)',
+            border: '1px solid rgba(245,158,11,0.30)',
+          }}
+        >
+          <Lock className="w-4 h-4 mt-0.5 text-amber-400 flex-shrink-0" />
+          <div className="text-sm">
+            <p className="font-semibold text-amber-300">Beta access — pricing to be announced</p>
+            <p className="text-slate-400 mt-1">
+              Self-service plan changes, lifetime purchases, add-ons, and proposal token packs are paused
+              while MrGovCon is in invite-only beta. You retain full feature access on your current tier.
+              Final pricing will be announced at general availability.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Stripe Checkout (Lifetime + Add-ons) — hidden during beta to prevent any
+          accidental customer charges while pricing is unannounced. */}
+      {isAdmin && !isBetaPricingHidden() && (
         <StripeCheckout
           hasLifetimeAccess={hasLifetimeAccess}
           purchasedAddons={purchasedAddons}
@@ -483,10 +505,20 @@ export default function BillingPage() {
                 </div>
 
                 <div>
-                  <span className="text-2xl font-bold text-slate-100">{fmt(price)}</span>
-                  <span className="text-slate-500 text-xs">/mo</span>
-                  {selectedCycle === 'ANNUAL' && (
-                    <p className="text-[11px] text-emerald-400 mt-0.5">Billed as {fmt(price * 12)}/yr</p>
+                  {isBetaPricingHidden() ? (
+                    <>
+                      <span className="text-2xl font-bold text-amber-400">{BETA_PRICE_PLACEHOLDER}</span>
+                      <span className="text-slate-500 text-xs ml-1">at GA</span>
+                      <p className="text-[11px] text-slate-500 mt-0.5">Pricing announced at general availability</p>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-2xl font-bold text-slate-100">{fmt(price)}</span>
+                      <span className="text-slate-500 text-xs">/mo</span>
+                      {selectedCycle === 'ANNUAL' && (
+                        <p className="text-[11px] text-emerald-400 mt-0.5">Billed as {fmt(price * 12)}/yr</p>
+                      )}
+                    </>
                   )}
                 </div>
 
@@ -501,6 +533,22 @@ export default function BillingPage() {
 
                 {isAdmin && !isCurrent && (
                   (() => {
+                    // Beta: disable all upgrade / switch CTAs. No customer should
+                    // be able to start a Stripe Checkout while pricing is TBA.
+                    if (isBetaPricingHidden()) {
+                      return (
+                        <div
+                          className="w-full py-2 rounded-lg text-sm font-semibold text-center"
+                          style={{
+                            background: 'rgba(245,158,11,0.06)',
+                            border: '1px solid rgba(245,158,11,0.20)',
+                            color: '#94a3b8',
+                          }}
+                        >
+                          Available at GA
+                        </div>
+                      )
+                    }
                     const targetRank = PLAN_RANK[p.slug] ?? 0
                     const isUpgrade = targetRank > currentRank
                     // Elite tier: contact for pricing (not self-service)
@@ -593,9 +641,18 @@ export default function BillingPage() {
 
                   <div className="flex items-center justify-between">
                     <div>
-                      <span className="text-base font-bold text-slate-200">${addon.priceMonthly}</span>
-                      <span className="text-slate-500 text-xs">/mo</span>
-                      <span className="text-emerald-400 text-[11px] ml-2">(${addon.priceAnnual}/mo annual)</span>
+                      {isBetaPricingHidden() ? (
+                        <>
+                          <span className="text-base font-bold text-amber-400">{BETA_PRICE_PLACEHOLDER}</span>
+                          <span className="text-slate-500 text-xs ml-1">at GA</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-base font-bold text-slate-200">${addon.priceMonthly}</span>
+                          <span className="text-slate-500 text-xs">/mo</span>
+                          <span className="text-emerald-400 text-[11px] ml-2">(${addon.priceAnnual}/mo annual)</span>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -606,7 +663,7 @@ export default function BillingPage() {
                         <CheckCircle2 className="w-3.5 h-3.5 inline mr-1" />
                         {addon.includedInPlan ? 'Included in Plan' : 'Active'}
                       </div>
-                      {isAdmin && !addon.includedInPlan && (
+                      {isAdmin && !addon.includedInPlan && !isBetaPricingHidden() && (
                         <button
                           onClick={() => { if (confirm(`Cancel ${addon.name}?`)) cancelAddonMut.mutate(addon.slug) }}
                           disabled={cancelAddonMut.isPending}
@@ -616,6 +673,13 @@ export default function BillingPage() {
                           Cancel
                         </button>
                       )}
+                    </div>
+                  ) : isBetaPricingHidden() ? (
+                    <div
+                      className="w-full py-1.5 rounded-lg text-xs font-semibold text-center"
+                      style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.20)', color: '#94a3b8' }}
+                    >
+                      Available at GA
                     </div>
                   ) : isAdmin ? (
                     <button
@@ -730,15 +794,31 @@ export default function BillingPage() {
 
                 <div className="flex items-center justify-between">
                   <div>
-                    <span className="text-xl font-bold text-amber-400">${pack.priceMonthly}</span>
-                    <span className="text-slate-500 text-xs ml-1">one-time</span>
+                    {isBetaPricingHidden() ? (
+                      <>
+                        <span className="text-xl font-bold text-amber-400">{BETA_PRICE_PLACEHOLDER}</span>
+                        <span className="text-slate-500 text-xs ml-1">at GA</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-xl font-bold text-amber-400">${pack.priceMonthly}</span>
+                        <span className="text-slate-500 text-xs ml-1">one-time</span>
+                      </>
+                    )}
                   </div>
                   <span className="text-[11px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
                     {pack.tokenAmount} tokens
                   </span>
                 </div>
 
-                {isAdmin ? (
+                {isBetaPricingHidden() ? (
+                  <div
+                    className="w-full py-1.5 rounded-lg text-xs font-semibold text-center"
+                    style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.20)', color: '#94a3b8' }}
+                  >
+                    Available at GA
+                  </div>
+                ) : isAdmin ? (
                   <button
                     onClick={() => tokenPackMut.mutate(pack.slug)}
                     disabled={tokenPackMut.isPending}

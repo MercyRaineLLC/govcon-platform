@@ -6,6 +6,7 @@ import {
   Search, BarChart3, Shield, Users, FileText, Zap,
   CheckCircle, ArrowRight, Star, Activity,
 } from 'lucide-react'
+import { isBetaPricingHidden, getBetaRequestUrl, BETA_CTA_LABEL } from '../utils/betaMode'
 
 // Pricing table config (env-driven so test/live mode can be toggled per build)
 const STRIPE_PRICING_TABLE_ID =
@@ -206,65 +207,99 @@ export function LandingPage() {
       </section>
 
       {/* ---- Pricing Banner ---- */}
-      <section className="px-6 py-16 max-w-4xl mx-auto">
-        <div
-          className="card-gold text-center py-12 px-8"
-          style={{ borderRadius: '16px' }}
-        >
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-400 mb-3">
-            Limited Beta Offer
-          </p>
-          <h2 className="text-3xl font-black text-slate-100 mb-2" style={{ letterSpacing: '-0.02em' }}>
-            Lifetime Access —{' '}
-            <span
-              style={{
-                background: 'linear-gradient(90deg, #fbbf24, #f59e0b)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-              }}
-            >
-              $2,500
-            </span>
-          </h2>
-          <p className="text-sm text-slate-500 mb-1">
-            <span className="line-through text-slate-600">$12,000/yr</span>
-            {' '}— One-time payment. Professional tier base features forever.
-          </p>
-          <p className="text-xs text-slate-600 mb-8">
-            Limited to 10 founders · Founding Member badge · Priority support · Add-ons available separately
-          </p>
+      {isBetaPricingHidden() ? (
+        <section className="px-6 py-16 max-w-4xl mx-auto">
+          <div
+            className="card-gold text-center py-12 px-8"
+            style={{ borderRadius: '16px' }}
+          >
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-400 mb-3">
+              Beta Access · Pricing To Be Announced
+            </p>
+            <h2 className="text-3xl font-black text-slate-100 mb-3" style={{ letterSpacing: '-0.02em' }}>
+              MrGovCon is in invite-only beta
+            </h2>
+            <p className="text-sm text-slate-400 max-w-xl mx-auto mb-8">
+              We are onboarding a limited cohort of federal contracting consultants and
+              freight brokerage operators. Final pricing tiers and Founders Lifetime
+              terms will be announced at general availability.
+            </p>
 
-          <div className="flex flex-col items-center gap-4">
-            <Link to="/register" className="btn-primary text-sm py-3 px-8">
-              Claim Your Spot <ArrowRight className="w-4 h-4" />
-            </Link>
-            <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-xs text-slate-500">
-              <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-emerald-500" /> 14-day free trial</span>
-              <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-emerald-500" /> No credit card to start</span>
-              <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-emerald-500" /> Cancel anytime during trial</span>
+            <div className="flex flex-col items-center gap-4">
+              <a href={getBetaRequestUrl()} className="btn-primary text-sm py-3 px-8">
+                {BETA_CTA_LABEL} <ArrowRight className="w-4 h-4" />
+              </a>
+              <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-xs text-slate-500">
+                <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-emerald-500" /> Invite-only access</span>
+                <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-emerald-500" /> No credit card during beta</span>
+                <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-emerald-500" /> Direct line to the platform team</span>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      ) : (
+        <>
+          <section className="px-6 py-16 max-w-4xl mx-auto">
+            <div
+              className="card-gold text-center py-12 px-8"
+              style={{ borderRadius: '16px' }}
+            >
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-400 mb-3">
+                Limited Beta Offer
+              </p>
+              <h2 className="text-3xl font-black text-slate-100 mb-2" style={{ letterSpacing: '-0.02em' }}>
+                Lifetime Access —{' '}
+                <span
+                  style={{
+                    background: 'linear-gradient(90deg, #fbbf24, #f59e0b)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                  }}
+                >
+                  $2,500
+                </span>
+              </h2>
+              <p className="text-sm text-slate-500 mb-1">
+                <span className="line-through text-slate-600">$12,000/yr</span>
+                {' '}— One-time payment. Professional tier base features forever.
+              </p>
+              <p className="text-xs text-slate-600 mb-8">
+                Limited to 10 founders · Founding Member badge · Priority support · Add-ons available separately
+              </p>
 
-      {/* ---- Recurring Subscription Tiers (Stripe Pricing Table) ---- */}
-      <section className="px-6 py-16 max-w-6xl mx-auto">
-        <div className="text-center mb-10">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-400 mb-3">
-            Or Choose a Monthly Plan
-          </p>
-          <h2 className="text-3xl font-black text-slate-100 mb-2" style={{ letterSpacing: '-0.02em' }}>
-            Recurring Subscription Plans
-          </h2>
-          <p className="text-sm text-slate-500 max-w-xl mx-auto">
-            Prefer to pay as you grow? Choose a monthly plan and scale up as your firm scales.
-          </p>
-        </div>
-        <stripe-pricing-table
-          pricing-table-id={STRIPE_PRICING_TABLE_ID}
-          publishable-key={STRIPE_PUBLISHABLE_KEY}
-        />
-      </section>
+              <div className="flex flex-col items-center gap-4">
+                <Link to="/register" className="btn-primary text-sm py-3 px-8">
+                  Claim Your Spot <ArrowRight className="w-4 h-4" />
+                </Link>
+                <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-xs text-slate-500">
+                  <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-emerald-500" /> 14-day free trial</span>
+                  <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-emerald-500" /> No credit card to start</span>
+                  <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-emerald-500" /> Cancel anytime during trial</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* ---- Recurring Subscription Tiers (Stripe Pricing Table) ---- */}
+          <section className="px-6 py-16 max-w-6xl mx-auto">
+            <div className="text-center mb-10">
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-400 mb-3">
+                Or Choose a Monthly Plan
+              </p>
+              <h2 className="text-3xl font-black text-slate-100 mb-2" style={{ letterSpacing: '-0.02em' }}>
+                Recurring Subscription Plans
+              </h2>
+              <p className="text-sm text-slate-500 max-w-xl mx-auto">
+                Prefer to pay as you grow? Choose a monthly plan and scale up as your firm scales.
+              </p>
+            </div>
+            <stripe-pricing-table
+              pricing-table-id={STRIPE_PRICING_TABLE_ID}
+              publishable-key={STRIPE_PUBLISHABLE_KEY}
+            />
+          </section>
+        </>
+      )}
 
       {/* ---- Trust Footer ---- */}
       <section className="px-6 py-12 max-w-6xl mx-auto text-center">
