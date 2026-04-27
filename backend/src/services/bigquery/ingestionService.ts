@@ -68,7 +68,14 @@ export async function ingestAwardsForNaics(params: {
             'Award Amount',
             'Recipient Name',
             'recipient_uei',
-            'Award Date',
+            // USAspending has NO "Award Date" field on spending_by_award.
+            // The closest semantic for "when was this contract awarded" is
+            // "Base Obligation Date" (date funds were obligated). When that
+            // is null we fall back to "Last Modified Date" (always populated)
+            // and "Period of Performance Start Date" as a last resort.
+            'Base Obligation Date',
+            'Last Modified Date',
+            'Period of Performance Start Date',
             'Base and All Options Value',
             'Award Type',
             'Contract Award Type',
@@ -89,6 +96,19 @@ export async function ingestAwardsForNaics(params: {
       const total: number = resp.data?.page_metadata?.total ?? 0
 
       for (const r of results) {
+        // Derive a usable date in priority order: Base Obligation Date
+        // (the contract obligation date — the real "award date" for
+        // procurement awards) → Last Modified Date (always populated by
+        // USAspending, useful as a stable fallback) → Period of
+        // Performance Start Date. Truncate any datetime form to YYYY-MM-DD
+        // so the BigQuery DATE column accepts it cleanly.
+        const rawDate =
+          (r['Base Obligation Date'] as string | null) ||
+          (r['Last Modified Date'] as string | null) ||
+          (r['Period of Performance Start Date'] as string | null) ||
+          null
+        const awardDate = rawDate ? rawDate.slice(0, 10) : null
+
         rows.push({
           id:             uuidv4(),
           naicsCode,
@@ -96,7 +116,7 @@ export async function ingestAwardsForNaics(params: {
           recipientName:  (r['Recipient Name'] as string) ?? 'Unknown',
           recipientUei:   (r['recipient_uei'] as string) ?? null,
           awardAmount:    Number(r['Award Amount'] ?? 0),
-          awardDate:      (r['Award Date'] as string) ?? null,
+          awardDate,
           setAsideType:   (r['Award Type'] as string) ?? null,
           offersReceived: r['Number of Offers Received'] != null
             ? Number(r['Number of Offers Received'])

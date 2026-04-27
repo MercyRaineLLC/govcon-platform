@@ -55,7 +55,7 @@ export function mapSetAside(value?: string | null): string {
   // Order matters: more-specific patterns must match before generic ones.
   if (v.includes("SDVOSB") || v.includes("SERVICE-DISABLED")) return "SDVOSB"
   if (v.includes("EDWOSB") || v.includes("ECONOMICALLY DISADVANTAGED")) return "EDWOSB"
-  if (v.includes("WOSB") || v.includes("WOMEN")) return "WOSB"
+  if (v.includes("WOSB") || v.includes("WOMAN") || v.includes("WOMEN")) return "WOSB"
   if (v.includes("HUBZONE") || v.includes("HUB ZONE")) return "HUBZONE"
   if (v.includes("8(A)") || v.includes("8A") || v.includes("8 A")) return "SBA_8A"
   if (v.includes("VETERAN")) return "VOSB"
