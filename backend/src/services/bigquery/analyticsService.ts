@@ -96,7 +96,7 @@ export async function getCompetitionProfile(
         awardDate,
         offersReceived,
         setAsideType,
-        EXTRACT(YEAR FROM PARSE_DATE('%Y-%m-%d', CAST(awardDate AS STRING))) AS awardYear
+        EXTRACT(YEAR FROM SAFE.PARSE_DATE('%Y-%m-%d', SUBSTR(CAST(awardDate AS STRING), 1, 10))) AS awardYear
       FROM ${FULL_TABLE(BQ_TABLES.AWARD_HISTORY)}
       WHERE naicsCode = @naicsCode
         ${agencyFilter}
@@ -378,11 +378,11 @@ export async function getMarketSnapshot(
   const query = `
     WITH base AS (
       SELECT naicsCode, agency, awardAmount, recipientName, offersReceived,
-             PARSE_DATE('%Y-%m-%d', CAST(awardDate AS STRING)) AS dt
+             SAFE.PARSE_DATE('%Y-%m-%d', SUBSTR(CAST(awardDate AS STRING), 1, 10)) AS dt
       FROM ${FULL_TABLE(BQ_TABLES.AWARD_HISTORY)}
       WHERE naicsCode IN (${naicsLiteral})
         AND awardAmount > 0
-        AND SAFE.PARSE_DATE('%Y-%m-%d', CAST(awardDate AS STRING)) >= DATE('${startDate}')
+        AND SAFE.PARSE_DATE('%Y-%m-%d', SUBSTR(CAST(awardDate AS STRING), 1, 10)) >= DATE('${startDate}')
     ),
     heatmap AS (
       SELECT
