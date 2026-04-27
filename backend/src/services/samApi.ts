@@ -12,15 +12,57 @@ function formatSamDate(date: Date): string {
   return `${mm}/${dd}/${yyyy}`
 }
 
-function mapSetAside(value?: string | null) {
+// SAM.gov `typeOfSetAside` returns either a short code (SBA, SDVOSBC, HZC,
+// 8AN, etc.) or, less commonly, a descriptive label ("Total Small Business
+// Set-Aside"). The previous matcher used substring lookups against label
+// shapes only, so several codes silently fell through to "NONE" — most
+// notably SBA (Total Small Business), HZC/HZS (HUBZone), VSA/VOSB
+// (Veteran-Owned non-SDVOSB), and the sole-source variants. PROMPT §8.1 #8.
+//
+// Canonical downstream values consumed by SET_ASIDE_CAPABILITIES (in
+// services/complianceGapAnalysis.ts) and the scoring/proposal pathways:
+//   NONE | SMALL_BUSINESS | TOTAL_SMALL_BUSINESS | SDVOSB | VOSB
+//   | WOSB | EDWOSB | HUBZONE | SBA_8A | INDIAN
+export function mapSetAside(value?: string | null): string {
   if (!value) return "NONE"
-  const normalized = value.toUpperCase()
-  if (normalized.includes("SDVOSB")) return "SDVOSB"
-  if (normalized.includes("WOSB")) return "WOSB"
-  if (normalized.includes("HUBZONE")) return "HUBZONE"
-  if (normalized.includes("8A")) return "SBA_8A"
-  if (normalized.includes("TOTAL SMALL")) return "TOTAL_SMALL_BUSINESS"
-  if (normalized.includes("SMALL")) return "SMALL_BUSINESS"
+  const v = value.toUpperCase().trim()
+
+  // -- Short-code path (SAM.gov canonical codes) --------------------
+  // Reference: https://open.gsa.gov/api/get-opportunities-public-api/
+  switch (v) {
+    case "SBA":            return "TOTAL_SMALL_BUSINESS"          // Total Small Business
+    case "SBP":            return "SMALL_BUSINESS"                // Partial Small Business
+    case "RSB":            return "SMALL_BUSINESS"                // Reserved for Small Business
+    case "8A":
+    case "8AN":            return "SBA_8A"                        // 8(a) Set-Aside / Sole Source
+    case "SDVOSBC":
+    case "SDVOSBS":        return "SDVOSB"
+    case "VSA":
+    case "VSS":
+    case "VOSB":           return "VOSB"                          // Veteran-Owned (non-SDVOSB)
+    case "WOSB":
+    case "WOSBSS":         return "WOSB"
+    case "EDWOSB":
+    case "EDWOSBSS":       return "EDWOSB"
+    case "HZC":
+    case "HZS":            return "HUBZONE"
+    case "IEE":
+    case "BICIV":
+    case "ISBEE":          return "INDIAN"                        // Buy Indian / Indian Economic Enterprise
+  }
+
+  // -- Label / partial-text fallback (defensive) -------------------
+  // Order matters: more-specific patterns must match before generic ones.
+  if (v.includes("SDVOSB") || v.includes("SERVICE-DISABLED")) return "SDVOSB"
+  if (v.includes("EDWOSB") || v.includes("ECONOMICALLY DISADVANTAGED")) return "EDWOSB"
+  if (v.includes("WOSB") || v.includes("WOMEN")) return "WOSB"
+  if (v.includes("HUBZONE") || v.includes("HUB ZONE")) return "HUBZONE"
+  if (v.includes("8(A)") || v.includes("8A") || v.includes("8 A")) return "SBA_8A"
+  if (v.includes("VETERAN")) return "VOSB"
+  if (v.includes("INDIAN") || v.includes("NATIVE AMERICAN")) return "INDIAN"
+  if (v.includes("TOTAL SMALL")) return "TOTAL_SMALL_BUSINESS"
+  if (v.includes("SMALL")) return "SMALL_BUSINESS"
+
   return "NONE"
 }
 

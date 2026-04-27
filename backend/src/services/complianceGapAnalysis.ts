@@ -149,10 +149,20 @@ const SET_ASIDE_CAPABILITIES: Record<string, { name: string; cert: string; plain
     cert: 'VetCert (formerly SBA VOSB Verification)',
     plain: 'Owner must be a service-disabled veteran (rated 0%+) who controls daily operations. Must be verified through SBA VetCert program.',
   },
+  VOSB: {
+    name: 'Veteran-Owned Small Business',
+    cert: 'VetCert (SBA Veteran Small Business Certification)',
+    plain: 'At least 51% owned and controlled by one or more veterans (no disability rating required). Must be verified through SBA VetCert.',
+  },
   WOSB: {
     name: 'Woman-Owned Small Business',
     cert: 'SBA WOSB certification (or third-party)',
     plain: 'At least 51% owned and controlled by women who are U.S. citizens, with at least one woman managing daily operations.',
+  },
+  EDWOSB: {
+    name: 'Economically Disadvantaged Woman-Owned Small Business',
+    cert: 'SBA EDWOSB certification',
+    plain: 'WOSB-qualified plus owners must meet personal net-worth, income, and asset thresholds (economically disadvantaged criteria).',
   },
   HUBZONE: {
     name: 'HUBZone Small Business',
@@ -168,6 +178,16 @@ const SET_ASIDE_CAPABILITIES: Record<string, { name: string; cert: string; plain
     name: 'Small Business',
     cert: 'SAM.gov small business representation',
     plain: 'Must be at or below the SBA size standard for the assigned NAICS code (revenue or employee count).',
+  },
+  TOTAL_SMALL_BUSINESS: {
+    name: 'Total Small Business Set-Aside',
+    cert: 'SAM.gov small business representation',
+    plain: 'Restricted to small businesses at or below the SBA size standard for the assigned NAICS code. No additional ownership certification required beyond SAM.gov self-representation.',
+  },
+  INDIAN: {
+    name: 'Indian Economic Enterprise / Buy Indian',
+    cert: 'BIA Indian Economic Enterprise certification',
+    plain: 'Owned by enrolled members of a federally recognized tribe or by an Indian-owned economic enterprise. Verified through BIA.',
   },
 }
 
