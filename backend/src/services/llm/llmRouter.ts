@@ -9,7 +9,15 @@ import { DeepSeekProvider } from './deepseek.provider'
 import { InsightEngineProvider } from './insight.provider'
 import { LocalAIProvider } from './localai.provider'
 
-export type LLMTask = 'DOCUMENT_ANALYSIS' | 'COMPLIANCE_MATRIX' | 'BID_GUIDANCE' | 'AI_ASSISTANT'
+export type LLMTask =
+  | 'DOCUMENT_ANALYSIS'
+  | 'COMPLIANCE_MATRIX'
+  | 'BID_GUIDANCE'
+  | 'AI_ASSISTANT'
+  | 'REQUIREMENT_EXTRACTION'
+  | 'PROPOSAL_OUTLINE'
+  | 'PROPOSAL_DRAFT'
+  | 'CONTRACT_ANALYSIS'
 
 const CACHE_TTL_SECONDS = 60 * 60 * 24 * 7 // 7 days
 

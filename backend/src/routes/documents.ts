@@ -50,15 +50,32 @@ router.post('/upload', upload.single('file'), async (req: AuthenticatedRequest, 
         fileSize: req.file.size,
         isAmendment: req.body.isAmendment === 'true',
         analysisStatus: 'PENDING',
+        extractionStatus: 'PENDING',  // Initialize extraction status
       },
     })
 
-    logger.info('Document uploaded', { documentId: document.id, opportunityId })
+    // Queue requirement extraction as background job
+    try {
+      const { queueRequirementExtraction } = await import('../workers/requirementExtractionWorker');
+      await queueRequirementExtraction(document.id);
+      logger.info('Document uploaded and extraction queued', {
+        documentId: document.id,
+        opportunityId,
+      });
+    } catch (queueErr) {
+      logger.error('Failed to queue requirement extraction', {
+        documentId: document.id,
+        error: String(queueErr),
+      });
+      // Don't fail the upload if queueing fails — extraction can be triggered manually
+    }
+
     res.json({
       success: true,
       data: {
         ...document,
         fileUrl: `/api/documents/download/${document.id}`,
+        message: 'Document uploaded. Requirement extraction in progress.',
       },
     })
   } catch (err) { next(err) }

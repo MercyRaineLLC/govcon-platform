@@ -120,11 +120,20 @@ export function Layout() {
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: '#040d1a' }}>
+      {/* Skip-link — first focusable element so keyboard users can jump
+          past the sidebar nav. Visible only when focused. */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[200] focus:px-3 focus:py-2 focus:bg-amber-500 focus:text-slate-900 focus:rounded focus:font-semibold"
+      >
+        Skip to main content
+      </a>
 
       {/* ============================================================
           SIDEBAR
           ============================================================ */}
       <aside
+        aria-label="Primary navigation"
         className="w-60 flex-shrink-0 flex flex-col overflow-y-auto"
         style={{
           background: 'linear-gradient(180deg, #050e1e 0%, #071120 40%, #060f1c 100%)',
@@ -400,9 +409,9 @@ export function Layout() {
         />
 
         {/* Content */}
-        <div className="relative z-10 p-8 max-w-[1400px] mx-auto">
+        <main id="main-content" tabIndex={-1} className="relative z-10 p-8 max-w-[1400px] mx-auto">
           <Outlet />
-        </div>
+        </main>
 
         {/* Brand footer */}
         <div

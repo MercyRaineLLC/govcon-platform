@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { authApi } from '../services/api';
 import { Eye, EyeOff, Star, Shield, TrendingUp, Award } from 'lucide-react';
+import { useToast } from '../components/Toast';
 
 /* ------------------------------------------------------------------ */
 /*  Inline Umbrella SVG — Mercy Raine brand mark                       */
@@ -49,15 +50,31 @@ const pillars = [
 export function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const handleResendVerification = async () => {
+    if (!email) {
+      toast('Enter your email above first.', 'warning');
+      return;
+    }
+    try {
+      await authApi.resendVerification(email);
+      toast('Verification email re-sent. Check your inbox.', 'success');
+    } catch {
+      toast('Could not resend right now. Try again later.', 'error');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setErrorCode(null);
     setLoading(true);
     try {
       const res = await authApi.login(email, password);
@@ -70,7 +87,26 @@ export function LoginPage() {
       login(token, user, firm);
       navigate('/');
     } catch (err: any) {
-      setError(err?.response?.data?.error || 'Login failed');
+      const code = err?.response?.data?.code;
+      setErrorCode(code ?? null);
+      if (code === 'EMAIL_NOT_VERIFIED') {
+        setError('Verify your email before signing in. Use the link we sent, or resend below.');
+      } else if (code === 'AGREEMENT_REQUIRED') {
+        setError('Our Terms of Service or Beta NDA have been updated. Please re-register to accept the latest versions, or contact support.');
+      } else if (code === 'BETA_QUESTIONNAIRE_REQUIRED') {
+        // Gate-3: forward to the questionnaire page with the scoped completionToken.
+        const data = err?.response?.data;
+        navigate('/beta-questionnaire', {
+          state: {
+            completionToken: data?.completionToken,
+            questionnaireId: data?.questionnaireId,
+            email,
+          },
+        });
+        return;
+      } else {
+        setError(err?.response?.data?.error || 'Login failed');
+      }
     } finally {
       setLoading(false);
     }
@@ -152,7 +188,7 @@ export function LoginPage() {
             className="text-sm italic font-medium"
             style={{ color: 'rgba(245,158,11,0.8)' }}
           >
-            "Empowering All Small Businesses to Win Government Contracts."
+            "Built on the FAR. Scored on capability. Won on discipline."
           </p>
 
           {/* Trust pillars */}
@@ -242,10 +278,24 @@ export function LoginPage() {
 
             {error && (
               <div
-                className="text-sm rounded-lg px-4 py-3 flex items-center gap-2"
+                role="alert"
+                className="text-sm rounded-lg px-4 py-3"
                 style={{ background: 'rgba(127,29,29,0.4)', border: '1px solid rgba(185,28,28,0.5)', color: '#fca5a5' }}
               >
-                <span className="text-red-400">✕</span> {error}
+                <div className="flex items-start gap-2">
+                  <span className="text-red-400">✕</span>
+                  <span>{error}</span>
+                </div>
+                {errorCode === 'EMAIL_NOT_VERIFIED' && (
+                  <button
+                    type="button"
+                    onClick={handleResendVerification}
+                    className="mt-2 text-xs font-semibold underline"
+                    style={{ color: '#fbbf24' }}
+                  >
+                    Resend verification email
+                  </button>
+                )}
               </div>
             )}
 

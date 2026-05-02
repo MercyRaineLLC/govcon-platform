@@ -170,23 +170,27 @@ model ConsultingFirm {
 }
 
 model User {
-  id               String    @id @default(uuid())
-  consultingFirmId String
-  email            String    @unique
-  passwordHash     String
-  firstName        String
-  lastName         String
-  role             String
-  isActive         Boolean   @default(true)
-  lastLoginAt      DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id                String    @id @default(uuid())
+  consultingFirmId  String
+  email             String    @unique
+  passwordHash      String
+  firstName         String
+  lastName          String
+  role              String
+  isActive          Boolean   @default(true)
+  isEmailVerified   Boolean   @default(false)
+  emailVerifiedAt   DateTime?
+  lastLoginAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   consultingFirm    ConsultingFirm     @relation(fields: [consultingFirmId], references: [id], onDelete: Cascade)
   submissionRecords SubmissionRecord[]
   createdTemplates  DocumentTemplate[] @relation("TemplateCreator")
 
-  passwordResetTokens PasswordResetToken[]
+  passwordResetTokens      PasswordResetToken[]
+  emailVerificationTokens  EmailVerificationToken[]
+  agreements               UserAgreement[]
 
   @@index([consultingFirmId])
   @@map("users")
@@ -491,12 +495,21 @@ model OpportunityDocument {
   rawAnalysis      Json?
   analyzedAt       DateTime?
 
+  // Requirement extraction tracking
+  extractionStatus              String    @default("PENDING")  // PENDING, EXTRACTING, EXTRACTED, FAILED
+  extractedRequirementCount     Int       @default(0)
+  extractionConfidence          Float?    // 0-1: overall confidence in extraction
+  extractionError               String?
+  extractedAt                   DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  extractedRequirements MatrixRequirement[] @relation("SourceDocument")
 
   @@index([opportunityId])
+  @@index([extractionStatus])
   @@map("opportunity_documents")
 }
 
@@ -881,12 +894,28 @@ model MatrixRequirement {
   isMandatory     Boolean @default(true)
   farReference    String?
   sortOrder       Int     @default(0)
+
+  // Source document tracking (AI extraction)
+  sourceDocumentId              String?   // Which document this requirement was extracted from
+  sourcePageNumber              Int?      // Which page (if known)
+  extractionMethod              String    @default("AI")  // AI, MANUAL, HYBRID
+  extractionConfidence          Float     @default(0.8)  // 0-1 scale
+  isManuallyVerified            Boolean   @default(false)
+  manualOverrideReason          String?   // Why the requirement was manually overridden
+
+  // Proposal coverage tracking (future use)
+  proposalSectionId             String?   // Linked proposal section
+  coverageStatus                String    @default("UNCOVERED")  // UNCOVERED, PARTIAL, COVERED
+  coverageScore                 Float     @default(0)  // 0-1: how well addressed
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   matrix ComplianceMatrix @relation(fields: [matrixId], references: [id], onDelete: Cascade)
+  sourceDocument OpportunityDocument? @relation("SourceDocument", fields: [sourceDocumentId], references: [id], onDelete: SetNull)
 
   @@index([matrixId])
+  @@index([sourceDocumentId])
   @@map("matrix_requirements")
 }
 
@@ -1253,4 +1282,594 @@ model BacktestPrediction {
 
   @@index([runId])
   @@map("backtest_predictions")
+}
+
+//////////////////////////////////////////////////////////////
+// FAR / DFARS / NIST / CMMC / SECTION 508 — REGULATORY ONTOLOGY
+// Global (not tenant-scoped). Seeded from Acquisition.gov and
+// official sources. The platform's foundational reference layer.
+//////////////////////////////////////////////////////////////
+
+model FarClause {
+  id                       String    @id @default(cuid())
+  code                     String    @unique  // e.g. "52.219-14"
+  partNumber               String              // "52"
+  subpartNumber            String?             // "52.2"
+  title                    String
+  prescribedAt             String?             // FAR section that prescribes this clause (e.g. "19.508")
+  applicableContractTypes  String[]  @default([]) // FFP, T_AND_M, IDIQ, COST_REIMB, BPA, COMMERCIAL
+  setAsideTriggers         String[]  @default([]) // SDVOSB, WOSB, EDWOSB, HUBZONE, EIGHT_A, SMALL_BUSINESS
+  agencyTriggers           String[]  @default([]) // DOD, GSA, VA, DHS, etc. (when applicability is agency-specific)
+  flowDownRequired         Boolean   @default(false)
+  flowDownThreshold        Decimal?  @db.Decimal(14, 2) // dollar threshold above which flow-down applies
+  prerequisiteClauseCodes  String[]  @default([]) // other clause codes that must be present
+  prohibitedClauseCodes    String[]  @default([])
+  commercialItemException  Boolean   @default(false) // FAR Part 12 commercial-item exemption applies
+  isBlocking               Boolean   @default(false) // unsatisfied prerequisite blocks bid?
+  effectiveDate            DateTime?
+  lastRevisedDate          DateTime?
+  text                     String    @default("")
+  summary                  String?   // platform-curated 1-paragraph summary
+  tags                     String[]  @default([]) // PAST_PERFORMANCE, REPRESENTATIONS, LABOR, CYBERSECURITY, etc.
+
+  @@index([partNumber])
+  @@index([code])
+  @@map("far_clauses")
+}
+
+model DfarsClause {
+  id                       String    @id @default(cuid())
+  code                     String    @unique  // e.g. "252.204-7012"
+  partNumber               String
+  title                    String
+  prescribedAt             String?
+  applicableContractTypes  String[]  @default([])
+  agencyTriggers           String[]  @default([]) // typically ["DOD"]
+  flowDownRequired         Boolean   @default(false)
+  flowDownThreshold        Decimal?  @db.Decimal(14, 2)
+  prerequisiteClauseCodes  String[]  @default([])
+  isBlocking               Boolean   @default(false)
+  effectiveDate            DateTime?
+  lastRevisedDate          DateTime?
+  text                     String    @default("")
+  summary                  String?
+  tags                     String[]  @default([])
+
+  @@index([partNumber])
+  @@index([code])
+  @@map("dfars_clauses")
+}
+
+model Nist800171Control {
+  id          String   @id @default(cuid())
+  controlId   String   @unique  // e.g. "3.1.1"
+  family      String              // "Access Control"
+  title       String
+  description String   @default("")
+  cmmcLevels  Int[]    @default([]) // levels at which this control applies (1, 2, 3)
+
+  @@map("nist_800_171_controls")
+}
+
+model CmmcPractice {
+  id          String   @id @default(cuid())
+  practiceId  String   @unique  // e.g. "AC.L1-3.1.1"
+  level       Int                 // 1, 2, or 3
+  domain      String              // "Access Control"
+  title       String
+  description String   @default("")
+  nistMapping String[] @default([]) // NIST 800-171 controls this practice maps to
+
+  @@map("cmmc_practices")
+}
+
+model Section508Criterion {
+  id          String   @id @default(cuid())
+  criterionId String   @unique  // e.g. "302.1" or "E207.2"
+  category    String              // "Functional Performance" | "Software" | "Hardware" | "Support Docs"
+  title       String
+  description String   @default("")
+  appliesTo   String[] @default([]) // ICT, software, hardware, web, mobile, telecom
+
+  @@map("section_508_criteria")
+}
+
+//////////////////////////////////////////////////////////////
+// PER-OPPORTUNITY CLAUSE APPLICABILITY (tenant-scoped)
+// Polymorphic across FAR / DFARS / NIST / CMMC / 508 via
+// (clauseSource, clauseCode). Resolved by farCatalogService.
+//////////////////////////////////////////////////////////////
+
+model FarClauseApplicability {
+  id                  String   @id @default(cuid())
+  consultingFirmId    String
+  opportunityId       String
+  clauseSource        String   @default("FAR") // "FAR" | "DFARS" | "NIST" | "CMMC" | "508"
+  clauseCode          String              // "52.219-14" | "252.204-7012" | "3.1.1" | "AC.L1-3.1.1" | "302.1"
+  applicabilitySource String   @default("AI_EXTRACTED") // AI_EXTRACTED | RFP_EXPLICIT | INFERRED | MANUAL
+  confidence          Float    @default(0.8) // 0-1
+  isBlocking          Boolean  @default(false)
+  isFlowDown          Boolean  @default(false)
+  notes               String?
+  matrixRequirementId String?  // link to the requirement that triggered this applicability
+  createdAt           DateTime @default(now())
+
+  @@index([consultingFirmId])
+  @@index([opportunityId])
+  @@index([clauseSource, clauseCode])
+  @@map("far_clause_applicabilities")
+}
+
+//////////////////////////////////////////////////////////////
+// AUDIT EVENT — first-class audit trail for every material
+// action (mutations, AI inferences, decisions, exports).
+// Replaces the thin ComplianceLog status-transition log.
+//////////////////////////////////////////////////////////////
+
+model AuditEvent {
+  id                    String   @id @default(cuid())
+  consultingFirmId      String
+  actorUserId           String?  // null for system / scheduled actions
+  actorRole             String?
+  action                String   // CREATE | UPDATE | DELETE | LLM_INFERENCE | DECISION_OVERRIDE | EXPORT | APPROVAL | ACCESS
+  entityType            String
+  entityId              String?
+  rationale             String?  // typed reason for material decisions / overrides
+  beforeJson            Json?
+  afterJson             Json?
+  // FAR-grounded inference replay fields
+  farContextHash        String?
+  farClausesReferenced  String[] @default([])
+  llmProvider           String?
+  llmModel              String?
+  llmTask               String?
+  promptHash            String?
+  inputTokens           Int?
+  outputTokens          Int?
+  estimatedCostUsd      Decimal? @db.Decimal(10, 6)
+  // Request context
+  sourceIp              String?
+  userAgent             String?
+  requestId             String?
+  createdAt             DateTime @default(now())
+
+  @@index([consultingFirmId])
+  @@index([entityType, entityId])
+  @@index([actorUserId])
+  @@index([createdAt])
+  @@map("audit_events")
+}
+
+//////////////////////////////////////////////////////////////
+// PROPOSAL SECTIONS + EVIDENCE ARTIFACTS
+//////////////////////////////////////////////////////////////
+
+model ProposalSection {
+  id                String   @id @default(cuid())
+  consultingFirmId  String
+  opportunityId     String
+  sectionNumber     String?  // e.g. "L.1.2" or "Volume 1.3"
+  title             String
+  outline           String?  // bullet outline
+  draft             String?  // current draft text (markdown or HTML)
+  sortOrder         Int      @default(0)
+  ownerUserId       String?
+  status            String   @default("OUTLINE") // OUTLINE | DRAFTING | REVIEW | FINAL
+  pageLimit         Int?
+  wordCount         Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  evidenceLinks     SectionEvidenceLink[]
+  adherenceScores   AdherenceScore[]
+
+  @@index([consultingFirmId])
+  @@index([opportunityId])
+  @@map("proposal_sections")
+}
+
+model EvidenceArtifact {
+  id                       String   @id @default(cuid())
+  consultingFirmId         String
+  opportunityId            String?  // null = tenant-wide library artifact
+  artifactType             String   // PAST_PERFORMANCE | CASE_STUDY | CERTIFICATION | TECHNICAL_DOC | RESUME | OTHER
+  title                    String
+  description              String?
+  fileStorageKey           String?
+  fileType                 String?
+  fileSize                 Int?
+  externalUrl              String?
+  pastPerformanceRecordId  String?  // link to a structured past-performance record
+  tags                     String[] @default([])
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  links SectionEvidenceLink[]
+
+  @@index([consultingFirmId])
+  @@index([opportunityId])
+  @@map("evidence_artifacts")
+}
+
+model SectionEvidenceLink {
+  id                  String   @id @default(cuid())
+  proposalSectionId   String
+  evidenceArtifactId  String
+  rationale           String?  // why this evidence supports this section
+  paragraphAnchor     String?  // optional paragraph identifier within the section
+  createdAt           DateTime @default(now())
+
+  proposalSection   ProposalSection  @relation(fields: [proposalSectionId], references: [id], onDelete: Cascade)
+  evidenceArtifact  EvidenceArtifact @relation(fields: [evidenceArtifactId], references: [id], onDelete: Cascade)
+
+  @@unique([proposalSectionId, evidenceArtifactId])
+  @@map("section_evidence_links")
+}
+
+//////////////////////////////////////////////////////////////
+// ADHERENCE SCORING — sub-dimensional, FAR-aware
+//////////////////////////////////////////////////////////////
+
+model AdherenceScore {
+  id                   String   @id @default(cuid())
+  consultingFirmId     String
+  opportunityId        String
+  proposalSectionId    String?  // null = whole proposal score
+  overallScore         Float    // 0-100
+  requirementCoverage  Float?   // 0-1
+  evaluationAlignment  Float?   // 0-1 (Section M weights)
+  evidenceSufficiency  Float?   // 0-1
+  farClauseCoverage    Float?   // 0-1
+  readability          Float?   // 0-1
+  consistency          Float?   // 0-1
+  ambiguity            Float?   // 0-1 (lower is better)
+  blockersJson         Json?    // structured blocker list
+  computedAt           DateTime @default(now())
+
+  proposalSection      ProposalSection? @relation(fields: [proposalSectionId], references: [id], onDelete: Cascade)
+
+  @@index([consultingFirmId])
+  @@index([opportunityId])
+  @@map("adherence_scores")
+}
+
+//////////////////////////////////////////////////////////////
+// PAST PERFORMANCE — FAR 15.305(a)(2)(i) compliant
+//////////////////////////////////////////////////////////////
+
+model PastPerformanceRecord {
+  id                       String   @id @default(cuid())
+  consultingFirmId         String
+  clientCompanyId          String?
+  contractNumber           String
+  customerName             String
+  customerAgency           String?
+  customerPocName          String?
+  customerPocEmail         String?
+  customerPocPhone         String?
+  contractType             String?  // FFP | T_AND_M | IDIQ | COST_REIMB | BPA
+  totalValue               Decimal? @db.Decimal(14, 2)
+  periodOfPerformanceStart DateTime?
+  periodOfPerformanceEnd   DateTime?
+  cparsRating              String?  // EXCEPTIONAL | VERY_GOOD | SATISFACTORY | MARGINAL | UNSATISFACTORY
+  cparsLink                String?
+  scopeSummary             String   @default("")
+  relevanceTags            String[] @default([]) // NAICS codes, service areas, complexity tags
+  isCurrent                Boolean  @default(true)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@index([consultingFirmId])
+  @@index([clientCompanyId])
+  @@map("past_performance_records")
+}
+
+//////////////////////////////////////////////////////////////
+// CAPTURE WORKSPACE — pursuit Kanban + partner / competitor map
+//////////////////////////////////////////////////////////////
+
+model CapturePlan {
+  id                String   @id @default(cuid())
+  consultingFirmId  String
+  opportunityId     String   @unique
+  stage             String   @default("IDENTIFY") // IDENTIFY | QUALIFY | PURSUE | POSITION | BID
+  winThemes         String[] @default([])
+  discriminators   String[]  @default([])
+  ghostingTargets   String[] @default([]) // competitor weaknesses to subtly highlight
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  tasks CaptureTask[]
+
+  @@index([consultingFirmId])
+  @@map("capture_plans")
+}
+
+model CaptureTask {
+  id            String    @id @default(cuid())
+  capturePlanId String
+  title         String
+  description   String?
+  ownerUserId   String?
+  status        String    @default("OPEN") // OPEN | IN_PROGRESS | DONE | BLOCKED
+  priority      String    @default("MEDIUM") // LOW | MEDIUM | HIGH | CRITICAL
+  dueDate       DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  capturePlan CapturePlan @relation(fields: [capturePlanId], references: [id], onDelete: Cascade)
+
+  @@index([capturePlanId])
+  @@map("capture_tasks")
+}
+
+model Partner {
+  id                  String   @id @default(cuid())
+  consultingFirmId    String
+  name                String
+  uei                 String?
+  cage                String?
+  primarySetAsides    String[] @default([])
+  primaryNaicsCodes   String[] @default([])
+  capabilities        String[] @default([])
+  cmmcLevel           Int?
+  pastPerformanceLink String?
+  contactName         String?
+  contactEmail        String?
+  contactPhone        String?
+  notes               String?
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  arrangements TeamingArrangement[]
+
+  @@index([consultingFirmId])
+  @@map("partners")
+}
+
+model TeamingArrangement {
+  id                String   @id @default(cuid())
+  consultingFirmId  String
+  opportunityId     String
+  partnerId         String
+  role              String   // PRIME | SUB | JV_MEMBER | MENTOR_PROTEGE
+  arrangementType   String   // TEAMING_AGREEMENT | JV | MPA | CTA | INFORMAL
+  scopePercent      Float?
+  dollarShare       Decimal? @db.Decimal(14, 2)
+  flowDownPackageId String?  // future: link to generated subcontract clause set
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@index([consultingFirmId])
+  @@index([opportunityId])
+  @@map("teaming_arrangements")
+}
+
+model Competitor {
+  id                  String   @id @default(cuid())
+  consultingFirmId    String
+  opportunityId       String
+  name                String
+  uei                 String?
+  isIncumbent         Boolean  @default(false)
+  perceivedStrengths  String[] @default([])
+  perceivedWeaknesses String[] @default([])
+  pastWinsAtAgency    Int?
+  notes               String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([consultingFirmId])
+  @@index([opportunityId])
+  @@map("competitors")
+}
+
+//////////////////////////////////////////////////////////////
+// COLOR-TEAM REVIEW CYCLES (Pink / Red / Gold / White)
+//////////////////////////////////////////////////////////////
+
+model ReviewCycle {
+  id                String    @id @default(cuid())
+  consultingFirmId  String
+  opportunityId     String
+  cycleType         String    // PINK | RED | GOLD | WHITE
+  status            String    @default("OPEN") // OPEN | IN_PROGRESS | RESOLVED | APPROVED | REJECTED
+  startedAt         DateTime  @default(now())
+  closedAt          DateTime?
+  approverUserId    String?
+  approvalNotes     String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  comments ReviewComment[]
+
+  @@index([consultingFirmId])
+  @@index([opportunityId])
+  @@map("review_cycles")
+}
+
+model ReviewComment {
+  id                  String    @id @default(cuid())
+  reviewCycleId       String
+  authorUserId        String?
+  proposalSectionId   String?
+  matrixRequirementId String?
+  parentCommentId     String?
+  body                String
+  severity            String    @default("INFO") // INFO | MINOR | MAJOR | BLOCKER
+  status              String    @default("OPEN") // OPEN | RESOLVED | WONT_FIX
+  resolvedAt          DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  reviewCycle ReviewCycle @relation(fields: [reviewCycleId], references: [id], onDelete: Cascade)
+
+  @@index([reviewCycleId])
+  @@map("review_comments")
+}
+
+//////////////////////////////////////////////////////////////
+// CMMC STATUS + COST VOLUME (Phase 4 entities, schema landed early)
+//////////////////////////////////////////////////////////////
+
+model CmmcStatus {
+  id                 String    @id @default(cuid())
+  consultingFirmId   String
+  clientCompanyId    String?   // null = tenant-wide; set = specific client
+  level              Int       // 1 | 2 | 3
+  status             String    // SELF_ASSESSED | C3PAO_AUDIT_SCHEDULED | CERTIFIED | EXPIRED
+  certifyingBody     String?
+  certificationDate  DateTime?
+  expirationDate     DateTime?
+  scope              String?
+  sprsScore          Int?      // -203 to 110
+  poamCount          Int?      // open POA&Ms
+  notes              String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([consultingFirmId])
+  @@index([clientCompanyId])
+  @@map("cmmc_statuses")
+}
+
+model CostVolume {
+  id                   String   @id @default(cuid())
+  consultingFirmId     String
+  opportunityId        String
+  scenarioName         String   @default("Base")
+  contractType         String?  // FFP | T_AND_M | IDIQ | COST_REIMB
+  laborCategoriesJson  Json?
+  indirectRatesJson    Json?
+  odcLinesJson         Json?
+  travelLinesJson      Json?
+  totalProposedPrice   Decimal? @db.Decimal(14, 2)
+  unallowableFlagsJson Json?    // FAR 31.205 violations detected
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([consultingFirmId])
+  @@index([opportunityId])
+  @@map("cost_volumes")
+}
+
+//////////////////////////////////////////////////////////////
+// EMAIL VERIFICATION
+//////////////////////////////////////////////////////////////
+
+model EmailVerificationToken {
+  id        String    @id @default(cuid())
+  userId    String
+  token     String    @unique
+  expiresAt DateTime
+  consumedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+  @@map("email_verification_tokens")
+}
+
+//////////////////////////////////////////////////////////////
+// LEGAL — VERSIONED TERMS OF SERVICE + BETA NDA
+// UserAgreement rows are immutable evidence of acceptance:
+// (userId, documentType, version, contentHash, ip, userAgent, acceptedAt).
+// The contentHash binds the acceptance to the exact text that was shown.
+//////////////////////////////////////////////////////////////
+
+model TermsOfServiceVersion {
+  id          String   @id @default(cuid())
+  version     String   @unique         // "1.0", "1.1", etc.
+  title       String   @default("Terms of Service")
+  body        String                   // full markdown body
+  contentHash String                   // sha256 of body
+  effectiveAt DateTime @default(now())
+  isCurrent   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([isCurrent])
+  @@map("tos_versions")
+}
+
+model BetaNdaVersion {
+  id          String   @id @default(cuid())
+  version     String   @unique
+  title       String   @default("Beta Non-Disclosure & IP Protection Agreement")
+  body        String
+  contentHash String
+  effectiveAt DateTime @default(now())
+  isCurrent   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([isCurrent])
+  @@map("beta_nda_versions")
+}
+
+//////////////////////////////////////////////////////////////
+// BETA WEEKLY QUESTIONNAIRE
+// One questionnaire per ISO week (publishes Monday 13:00 UTC).
+// Login is gated until the current week's questionnaire is answered
+// — this is how we collect beta-feedback discipline. The worker
+// in workers/betaQuestionnaireWorker.ts publishes weekly and
+// emails reminders.
+//////////////////////////////////////////////////////////////
+
+model BetaWeeklyQuestionnaire {
+  id           String   @id @default(cuid())
+  weekStarting DateTime @unique          // Monday 00:00 UTC of the week
+  title        String   @default("Weekly Beta Feedback")
+  questionsJson Json                     // [{id, type, prompt, options?, required}]
+  publishedAt  DateTime @default(now())  // when the worker created it
+  isActive     Boolean  @default(true)   // false = retired, no longer gates login
+
+  responses BetaQuestionnaireResponse[]
+
+  @@index([weekStarting])
+  @@index([isActive])
+  @@map("beta_weekly_questionnaires")
+}
+
+model BetaQuestionnaireResponse {
+  id               String   @id @default(cuid())
+  questionnaireId  String
+  userId           String
+  consultingFirmId String
+  answersJson      Json                  // {questionId: answer}
+  submittedAt      DateTime @default(now())
+  ip               String?
+  userAgent        String?
+
+  questionnaire BetaWeeklyQuestionnaire @relation(fields: [questionnaireId], references: [id], onDelete: Cascade)
+
+  @@unique([questionnaireId, userId])
+  @@index([userId])
+  @@index([consultingFirmId])
+  @@map("beta_questionnaire_responses")
+}
+
+model UserAgreement {
+  id            String   @id @default(cuid())
+  userId        String
+  documentType  String   // "TOS" | "BETA_NDA"
+  documentId    String   // id of the TermsOfServiceVersion or BetaNdaVersion
+  version       String   // denormalized version label for fast queries
+  contentHash   String   // denormalized content hash binds acceptance to exact text
+  acceptedAt    DateTime @default(now())
+  ip            String?
+  userAgent     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, documentType, version])
+  @@index([userId])
+  @@index([documentType, version])
+  @@map("user_agreements")
 }

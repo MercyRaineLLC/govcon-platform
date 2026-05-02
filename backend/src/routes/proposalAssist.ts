@@ -250,7 +250,8 @@ router.post('/:opportunityId/draft', async (req: AuthenticatedRequest, res: Resp
       consultingFirmId,
       answers,
       userGuidance,
-      bidFormContext
+      bidFormContext,
+      opp.id,
     )
 
     logger.info('Proposal draft generated, building PDF', { opportunityId, sectionCount: draft.sections.length })

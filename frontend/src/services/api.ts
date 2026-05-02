@@ -81,6 +81,29 @@ export const authApi = {
     api.post('/auth/forgot-password', { email }).then((r) => r.data),
   resetPassword: (token: string, newPassword: string) =>
     api.post('/auth/reset-password', { token, newPassword }).then((r) => r.data),
+  // Legal + verification flow
+  legalCurrent: () => api.get('/auth/legal/current').then((r) => r.data),
+  verifyEmail: (token: string) =>
+    api.post('/auth/verify-email', { token }).then((r) => r.data),
+  resendVerification: (email: string) =>
+    api.post('/auth/resend-verification', { email }).then((r) => r.data),
+  acceptAgreements: (acceptedTosVersion: string, acceptedBetaNdaVersion: string) =>
+    api.post('/auth/accept-agreements', { acceptedTosVersion, acceptedBetaNdaVersion }).then((r) => r.data),
+};
+
+// ---- Beta Questionnaire ----
+export const betaQuestionnaireApi = {
+  current: () =>
+    api.get('/beta/questionnaire/current').then((r) => r.data),
+  respond: (questionnaireId: string, answers: Record<string, any>) =>
+    api.post('/beta/questionnaire/respond', { questionnaireId, answers }).then((r) => r.data),
+  // Used by login gate-3: caller passes the scoped completionToken explicitly.
+  complete: (questionnaireId: string, answers: Record<string, any>, completionToken: string) =>
+    api.post('/beta/questionnaire/complete', { questionnaireId, answers }, {
+      headers: { Authorization: `Bearer ${completionToken}` },
+    }).then((r) => r.data),
+  responses: (week?: string) =>
+    api.get('/beta/questionnaire/responses', { params: week ? { week } : {} }).then((r) => r.data),
 };
 
 // ---- Opportunities ----

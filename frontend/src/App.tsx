@@ -34,6 +34,8 @@ const RoiCalculatorPage      = lazy(() => import("./pages/RoiCalculator"))
 const ContractUploadPage     = lazy(() => import("./pages/ContractUpload"))
 const ForgotPasswordPage      = lazy(() => import("./pages/ForgotPassword").then(m => ({ default: m.ForgotPasswordPage })))
 const ResetPasswordPage       = lazy(() => import("./pages/ResetPassword").then(m => ({ default: m.ResetPasswordPage })))
+const VerifyEmailPage         = lazy(() => import("./pages/VerifyEmail").then(m => ({ default: m.VerifyEmailPage })))
+const BetaQuestionnairePage   = lazy(() => import("./pages/BetaQuestionnaire").then(m => ({ default: m.BetaQuestionnairePage })))
 const LandingPage            = lazy(() => import("./pages/Landing").then(m => ({ default: m.LandingPage })))
 const NotFoundPage           = lazy(() => import("./pages/NotFound"))
 
@@ -56,6 +58,8 @@ export default function App() {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
+          <Route path="/beta-questionnaire" element={<BetaQuestionnairePage />} />
 
           {/* Client portal (standalone, no consultant layout) */}
           <Route path="/client-login" element={<ClientPortalLogin />} />
