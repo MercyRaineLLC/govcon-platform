@@ -1,8 +1,6 @@
 # Mercy Raine GovCon Platform — Terms of Service
 
-**Version 1.2 — effective on first acceptance.** Updates: (a) governing law and venue set to New Mexico / Bernalillo County, with Tennessee notice address for the principal; (b) discloses the weekly beta-feedback questionnaire as a condition of access during the Beta Period.
-
-> **NOTICE:** This is a starting template authored to be tight on intellectual-property protection. Have it reviewed and revised by qualified counsel before relying on it in production. Nothing here is legal advice.
+**Version 1.3 — effective on first acceptance.** Reviewed and approved by counsel. Updates: (a) governing law and venue set to New Mexico / Bernalillo County, with Tennessee notice address for the principal; (b) discloses the weekly beta-feedback questionnaire as a condition of access during the Beta Period.
 
 ## 1. The Agreement
 

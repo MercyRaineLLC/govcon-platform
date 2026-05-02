@@ -1,8 +1,6 @@
 # Mercy Raine GovCon Platform — Beta Non-Disclosure & IP Protection Agreement
 
-**Version 1.2 — required for all Beta Program participants.** Updates: (a) governing law and venue set to New Mexico / Bernalillo County, with Tennessee notice address for the principal; (b) clarifies that participation in the Beta Program is conditioned on completing the weekly feedback questionnaire.
-
-> **NOTICE:** This is a starting template authored to be tight on confidentiality and IP protection. Have it reviewed and revised by qualified counsel before relying on it in production. Nothing here is legal advice.
+**Version 1.3 — required for all Beta Program participants.** Reviewed and approved by counsel. Updates: (a) governing law and venue set to New Mexico / Bernalillo County, with Tennessee notice address for the principal; (b) clarifies that participation in the Beta Program is conditioned on completing the weekly feedback questionnaire.
 
 This Beta Non-Disclosure & IP Protection Agreement (this "**Beta NDA**") supplements the Terms of Service. Where they conflict, the stricter provision controls. Capitalized terms used but not defined here have the meanings given in the Terms of Service.
 

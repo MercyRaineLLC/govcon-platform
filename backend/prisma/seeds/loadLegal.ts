@@ -26,16 +26,16 @@ export async function loadLegalDocs(prisma: PrismaClient): Promise<void> {
 
   // ToS v1.0 — make it the current version. If a row already exists with the
   // same hash, leave it in place; otherwise upsert and roll the current flag.
-  const existingTos = await prisma.termsOfServiceVersion.findUnique({ where: { version: '1.2' } })
+  const existingTos = await prisma.termsOfServiceVersion.findUnique({ where: { version: '1.3' } })
   if (!existingTos || existingTos.contentHash !== tos.hash) {
     await prisma.termsOfServiceVersion.updateMany({
       where: { isCurrent: true },
       data: { isCurrent: false },
     })
     await prisma.termsOfServiceVersion.upsert({
-      where: { version: '1.2' },
+      where: { version: '1.3' },
       create: {
-        version: '1.2',
+        version: '1.3',
         title: 'Terms of Service',
         body: tos.body,
         contentHash: tos.hash,
@@ -47,21 +47,21 @@ export async function loadLegalDocs(prisma: PrismaClient): Promise<void> {
         isCurrent: true,
       },
     })
-    console.log('Seeded ToS v1.0')
+    console.log('Seeded ToS (current)')
   } else {
-    console.log('ToS v1.0 already current — no change.')
+    console.log('ToS already current — no change.')
   }
 
-  const existingNda = await prisma.betaNdaVersion.findUnique({ where: { version: '1.2' } })
+  const existingNda = await prisma.betaNdaVersion.findUnique({ where: { version: '1.3' } })
   if (!existingNda || existingNda.contentHash !== nda.hash) {
     await prisma.betaNdaVersion.updateMany({
       where: { isCurrent: true },
       data: { isCurrent: false },
     })
     await prisma.betaNdaVersion.upsert({
-      where: { version: '1.2' },
+      where: { version: '1.3' },
       create: {
-        version: '1.2',
+        version: '1.3',
         title: 'Beta Non-Disclosure & IP Protection Agreement',
         body: nda.body,
         contentHash: nda.hash,
@@ -73,8 +73,8 @@ export async function loadLegalDocs(prisma: PrismaClient): Promise<void> {
         isCurrent: true,
       },
     })
-    console.log('Seeded Beta NDA v1.0')
+    console.log('Seeded Beta NDA (current)')
   } else {
-    console.log('Beta NDA v1.0 already current — no change.')
+    console.log('Beta NDA already current — no change.')
   }
 }
