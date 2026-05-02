@@ -1,4 +1,7 @@
-import pdfParse from 'pdf-parse';
+// pdf-parse ships no type declarations — require it dynamically so the
+// build doesn't need @types/pdf-parse (which doesn't exist on npm).
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string; numpages: number }>;
 import { generateWithRouter } from './llm/llmRouter';
 import { logger } from '../utils/logger';
 import { buildContext } from './far/farContextBuilder';

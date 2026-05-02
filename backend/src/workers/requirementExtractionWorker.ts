@@ -2,13 +2,14 @@ import { Worker, Queue, Job } from 'bullmq';
 import path from 'path';
 import fs from 'fs';
 import { prisma } from '../config/database';
+import { redis } from '../config/redis';
 import { extractRequirementsFromPDF } from '../services/requirementExtractor';
 import { logger } from '../utils/logger';
-import { config } from '../config/config';
 
-const redisConnection = {
-  url: config.redis.url,
-};
+// BullMQ 4.x requires an IORedis instance, not { url }. Use the
+// shared `redis` connection from config/redis (same pattern as
+// scoringWorker / enrichmentWorker / recalibrationWorker).
+const redisConnection = redis as any;
 
 export const requirementExtractionQueue = new Queue('requirement-extraction', {
   connection: redisConnection,
@@ -31,8 +32,8 @@ export async function queueRequirementExtraction(documentId: string): Promise<vo
         attempts: 3,
         backoff: { type: 'exponential', delay: 5000 },
         removeOnComplete: true,
-        // Set job timeout to 5 minutes for large PDFs
-        timeout: 5 * 60 * 1000,
+        // BullMQ 4.x removed the per-job `timeout` field. Long-running
+        // PDF extraction is bounded by the worker process lifetime.
       }
     );
     logger.info('Requirement extraction queued', { documentId });

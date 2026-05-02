@@ -17,11 +17,13 @@
 // =============================================================
 import { Worker, Queue, Job } from 'bullmq'
 import { prisma } from '../config/database'
-import { config } from '../config/config'
+import { redis } from '../config/redis'
 import { logger } from '../utils/logger'
 import { sendEmail } from '../services/mailer'
 
-const redisConnection = { url: config.redis.url }
+// BullMQ 4.x requires an IORedis instance, not { url }. Use the
+// shared `redis` connection from config/redis.
+const redisConnection = redis as any
 
 export const betaQuestionnaireQueue = new Queue('beta-questionnaire', {
   connection: redisConnection,
