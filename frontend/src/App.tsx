@@ -36,6 +36,8 @@ const ForgotPasswordPage      = lazy(() => import("./pages/ForgotPassword").then
 const ResetPasswordPage       = lazy(() => import("./pages/ResetPassword").then(m => ({ default: m.ResetPasswordPage })))
 const LandingPage            = lazy(() => import("./pages/Landing").then(m => ({ default: m.LandingPage })))
 const BetaAccessPage         = lazy(() => import("./pages/BetaAccess"))
+const FeedbackPage           = lazy(() => import("./pages/Feedback"))
+const AdminBetaMetricsPage   = lazy(() => import("./pages/AdminBetaMetrics"))
 const NotFoundPage           = lazy(() => import("./pages/NotFound"))
 
 function PageLoader() {
@@ -86,11 +88,13 @@ export default function App() {
               <Route path="/billing" element={<BillingPage />} />
               <Route path="/roi-calculator" element={<RoiCalculatorPage />} />
               <Route path="/contract-upload" element={<ContractUploadPage />} />
+              <Route path="/feedback" element={<FeedbackPage />} />
 
               <Route element={<ProtectedRoute roles={["ADMIN"]} />}>
                 <Route path="/compliance" element={<ComplianceLogsPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/admin/backtest" element={<AdminBacktestPage />} />
+                <Route path="/admin/beta-metrics" element={<AdminBetaMetricsPage />} />
               </Route>
             </Route>
           </Route>
