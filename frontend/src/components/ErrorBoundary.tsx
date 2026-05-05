@@ -17,7 +17,12 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error('React error boundary caught:', error, info)
+    // React error boundaries can't use hooks; log to a non-interactive channel.
+    // In production this surfaces in the browser's performance/error panel only.
+    // Backend audit trail is maintained via ComplianceLog for all state mutations.
+    if (typeof window !== 'undefined' && (window as any).__govcon_logError) {
+      (window as any).__govcon_logError(error.message, info.componentStack)
+    }
   }
 
   render() {

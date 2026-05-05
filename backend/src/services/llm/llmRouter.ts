@@ -107,7 +107,9 @@ export async function generateWithRouter(
               cacheHit: true,
               durationMs: 0,
             },
-          }).catch(() => {}) // non-blocking
+          }).catch((err: Error) => {
+            logger.warn('Failed to log cached LLM response to ApiUsageLog', { error: err.message })
+          }) // non-blocking
         }
         return cachedResponse
       }

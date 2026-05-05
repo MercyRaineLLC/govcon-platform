@@ -226,9 +226,9 @@ export function LandingPage() {
             </p>
 
             <div className="flex flex-col items-center gap-4">
-              <a href={getBetaRequestUrl()} className="btn-primary text-sm py-3 px-8">
+              <Link to={getBetaRequestUrl('landing')} className="btn-primary text-sm py-3 px-8">
                 {BETA_CTA_LABEL} <ArrowRight className="w-4 h-4" />
-              </a>
+              </Link>
               <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-xs text-slate-500">
                 <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-emerald-500" /> Invite-only access</span>
                 <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-emerald-500" /> No credit card during beta</span>

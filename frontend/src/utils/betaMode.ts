@@ -20,11 +20,11 @@ export function isBetaPricingHidden(): boolean {
   return flag === 'true' || flag === true
 }
 
-export function getBetaRequestUrl(): string {
+export function getBetaRequestUrl(source = 'landing'): string {
   const url = (import.meta as any).env?.VITE_BETA_REQUEST_URL
-  return typeof url === 'string' && url.trim().length > 0
-    ? url
-    : 'mailto:johngladmon917@gmail.com?subject=MrGovCon%20Beta%20Access%20Request'
+  // Default to in-app beta access page; supports source-attribution query.
+  if (typeof url === 'string' && url.trim().length > 0) return url
+  return `/beta-access?source=${encodeURIComponent(source)}`
 }
 
 // Display string used wherever a price would otherwise render.

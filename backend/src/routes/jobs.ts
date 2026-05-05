@@ -311,7 +311,9 @@ router.post('/analyze/:documentId', async (req: AuthenticatedRequest, res: Respo
               ? 'No AI provider key configured. Add it in Settings → AI Intelligence Provider.'
               : errorMsg,
           },
-        }).catch(() => {});
+        }).catch((err: Error) => {
+          logger.warn('Failed to update opportunity analysisStatus on job failure', { error: err.message })
+        });
         await prisma.ingestionJob.update({
           where: { id: job.id },
           data: { status: isNoKey ? 'COMPLETE' : 'FAILED', completedAt: new Date(), errorDetail: isNoKey ? null : errorMsg },

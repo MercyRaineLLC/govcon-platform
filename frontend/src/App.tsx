@@ -35,6 +35,7 @@ const ContractUploadPage     = lazy(() => import("./pages/ContractUpload"))
 const ForgotPasswordPage      = lazy(() => import("./pages/ForgotPassword").then(m => ({ default: m.ForgotPasswordPage })))
 const ResetPasswordPage       = lazy(() => import("./pages/ResetPassword").then(m => ({ default: m.ResetPasswordPage })))
 const LandingPage            = lazy(() => import("./pages/Landing").then(m => ({ default: m.LandingPage })))
+const BetaAccessPage         = lazy(() => import("./pages/BetaAccess"))
 const NotFoundPage           = lazy(() => import("./pages/NotFound"))
 
 function PageLoader() {
@@ -56,6 +57,7 @@ export default function App() {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/beta-access" element={<BetaAccessPage />} />
 
           {/* Client portal (standalone, no consultant layout) */}
           <Route path="/client-login" element={<ClientPortalLogin />} />

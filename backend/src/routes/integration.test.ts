@@ -277,3 +277,82 @@ describe('Response Contract', () => {
     expect(apiRes.body).toHaveProperty('data')
   })
 })
+
+// -------------------------------------------------------------
+// Tier Gating — feature-flag enforcement (PROMPT.md §10.1.10)
+// New firms default to 'starter' tier (no Subscription row), which only
+// has compliance_matrix, opportunity_scoring, dashboard. Anything gated
+// behind professional+ should reject with TIER_LIMIT.
+// -------------------------------------------------------------
+
+describe('Tier Gating — starter tier rejects gated features', () => {
+  it('rejects bid_guidance (professional-tier feature) with TIER_LIMIT', async () => {
+    // POST /api/compliance-matrix/:opportunityId/bid-guidance is gated by requireFeature('bid_guidance')
+    // We don't need a real opportunity for the gate test — middleware runs before route logic.
+    const res = await request(app)
+      .post('/api/compliance-matrix/00000000-0000-0000-0000-000000000000/bid-guidance')
+      .set('Authorization', `Bearer ${adminA.token}`)
+      .send({})
+    // Either 403 from tier gate OR 404 from opportunity not found — must NOT be 200/201.
+    // For starter (default tier), the gate is the first middleware to run.
+    expect([403, 404]).toContain(res.status)
+    if (res.status === 403) {
+      expect(res.body.error).toBe('TIER_LIMIT')
+      expect(res.body.feature).toBe('bid_guidance')
+    }
+  })
+})
+
+// -------------------------------------------------------------
+// Client Portal — separate JWT scope, never confusable with consultant JWT
+// -------------------------------------------------------------
+
+describe('Client Portal — JWT scope isolation', () => {
+  it('consultant JWT cannot access /api/client-portal endpoints', async () => {
+    // Consultant token has role=ADMIN, no clientPortalUserId. Client-portal middleware
+    // (authenticateClientJWT) requires role=CLIENT and rejects everything else.
+    const res = await request(app)
+      .get('/api/client-portal/dashboard')
+      .set('Authorization', `Bearer ${adminA.token}`)
+    expect([401, 403]).toContain(res.status)
+  })
+
+  it('unauthenticated request to /api/client-portal/dashboard is 401', async () => {
+    const res = await request(app).get('/api/client-portal/dashboard')
+    expect(res.status).toBe(401)
+  })
+})
+
+// -------------------------------------------------------------
+// Beta Access — public unauthenticated waitlist signup
+// -------------------------------------------------------------
+
+describe('Beta Access — public waitlist endpoint', () => {
+  it('POST /api/beta/request accepts a valid signup', async () => {
+    const res = await request(app)
+      .post('/api/beta/request')
+      .send({
+        email: `beta-${Date.now()}@example.com`,
+        firmName: 'Acme Federal Services',
+        naicsFocus: '541512',
+      })
+    // Either 201 (created) or 200 (idempotent re-signup) — must not be 401/403/500.
+    expect([200, 201]).toContain(res.status)
+    expect(res.body.success).toBe(true)
+  })
+
+  it('POST /api/beta/request rejects missing email with 422', async () => {
+    const res = await request(app)
+      .post('/api/beta/request')
+      .send({ firmName: 'Missing Email Firm' })
+    expect(res.status).toBe(422)
+    expect(res.body.code).toBe('VALIDATION_ERROR')
+  })
+
+  it('POST /api/beta/request rejects malformed email with 422', async () => {
+    const res = await request(app)
+      .post('/api/beta/request')
+      .send({ email: 'not-an-email', firmName: 'Acme' })
+    expect(res.status).toBe(422)
+  })
+})

@@ -159,7 +159,9 @@ export async function evaluateBidDecision(
         winProbability: 0,
         changeReason: `INELIGIBLE: ${complianceResult.blockers.join('; ')}`,
       },
-    }).catch(() => {})
+    }).catch((err: Error) => {
+      logger.warn('Failed to write NO_BID compliance log for ineligible decision', { opportunityId, clientCompanyId, error: err.message })
+    })
 
     return ineligibleDecision
   }

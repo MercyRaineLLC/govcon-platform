@@ -51,8 +51,8 @@ export function BrandingSettings() {
             faviconUrl: b.faviconUrl || '',
           })
         }
-      } catch (err) {
-        console.warn('Failed to load branding:', err)
+      } catch {
+        // Non-fatal — component renders with empty form fields if branding load fails
       }
     }
     loadBranding()

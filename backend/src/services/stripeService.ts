@@ -710,7 +710,9 @@ async function handleSubscriptionDeleted(event: StripeEvent): Promise<{ processe
   await prisma.consultingFirm.update({
     where: { id: consultingFirmId },
     data: { stripeSubscriptionId: null },
-  }).catch(() => {})
+  }).catch((err: Error) => {
+    logger.warn('Failed to clear stripeSubscriptionId on subscription cancellation', { consultingFirmId, error: err.message })
+  })
 
   await prisma.complianceLog.create({
     data: {

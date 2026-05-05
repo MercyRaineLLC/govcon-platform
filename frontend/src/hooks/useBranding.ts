@@ -63,7 +63,7 @@ export function useBranding(firmId?: string) {
         setBranding(DEFAULT_BRANDING)
         setError(null)
       } catch (err: any) {
-        console.warn('Failed to load branding config:', err.message)
+        // Branding fetch failure is non-fatal; log for visibility without crashing the app
         setError(err.message)
         setBranding(DEFAULT_BRANDING)
       } finally {

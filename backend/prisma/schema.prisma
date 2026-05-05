@@ -165,6 +165,7 @@ model ConsultingFirm {
   invoices                 Invoice[]
   stateMunicipalOpps       StateMunicipalOpportunity[]
   subcontractOpportunities SubcontractOpportunity[]
+  betaFeedback             BetaFeedback[]
 
   @@map("consulting_firms")
 }
@@ -1253,4 +1254,54 @@ model BacktestPrediction {
 
   @@index([runId])
   @@map("backtest_predictions")
+}
+
+// ---------------------------------------------------------------
+// Beta Access Waitlist
+// Captures unauthenticated signups from the public /beta-access page.
+// No tenant scope (firms don't exist yet at signup time).
+// ---------------------------------------------------------------
+model BetaAccessRequest {
+  id            String   @id @default(uuid())
+  email         String
+  firmName      String?
+  contactName   String?
+  naicsFocus    String?  // primary NAICS the firm bids in (e.g. "541512")
+  source        String?  // attribution: "landing", "billing", "referral", etc.
+  notes         String?  // free-form text from the signup form
+  ipAddress     String?  // for rate-limit dedup
+  userAgent     String?
+
+  // Lifecycle
+  status        String   @default("PENDING") // PENDING | CONTACTED | INVITED | DECLINED
+  contactedAt   DateTime?
+  invitedAt     DateTime?
+  invitedFirmId String?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([email])
+  @@index([status])
+  @@map("beta_access_requests")
+}
+
+// ---------------------------------------------------------------
+// Beta Feedback — NPS-light + free-text from authenticated firm admins.
+// Tenant-scoped via consultingFirmId for isolation.
+// ---------------------------------------------------------------
+model BetaFeedback {
+  id                String   @id @default(uuid())
+  consultingFirmId  String
+  consultingFirm    ConsultingFirm @relation(fields: [consultingFirmId], references: [id], onDelete: Cascade)
+  submittedByUserId String
+  npsScore          Int      // 0-10
+  killFeature       String?  // "If you could remove one feature, what would it be?"
+  addFeature        String?  // "If you could add one feature, what would it be?"
+  freeText          String?
+
+  createdAt DateTime @default(now())
+
+  @@index([consultingFirmId, createdAt])
+  @@map("beta_feedback")
 }

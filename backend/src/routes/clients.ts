@@ -11,6 +11,7 @@ import { Router, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import multer from 'multer';
 import { prisma } from '../config/database';
+import { logger } from '../utils/logger';
 import { authenticateJWT, requireRole } from '../middleware/auth';
 import { enforceTenantScope, getTenantId } from '../middleware/tenant';
 import { AuthenticatedRequest } from '../types';
@@ -144,7 +145,9 @@ router.post('/import-csv', upload.single('file'), async (req: AuthenticatedReque
       }
     }
 
-    if (created > 0) enqueueAllOpportunitiesForScoring(consultingFirmId).catch(() => {});
+    if (created > 0) enqueueAllOpportunitiesForScoring(consultingFirmId).catch((err: Error) => {
+      logger.warn('enqueueAllOpportunitiesForScoring failed after bulk client import', { consultingFirmId, error: err.message })
+    });
 
     res.json({ success: true, data: { created, skipped, errors, total: rows.length } });
   } catch (err) {
@@ -216,7 +219,9 @@ router.post('/', async (req: AuthenticatedRequest, res: Response, next: NextFunc
     });
 
     // Enqueue async scoring for this new client across all opportunities
-    enqueueAllOpportunitiesForScoring(consultingFirmId).catch(() => {});
+    enqueueAllOpportunitiesForScoring(consultingFirmId).catch((err: Error) => {
+      logger.warn('enqueueAllOpportunitiesForScoring failed after client create', { consultingFirmId, error: err.message })
+    });
 
     res.status(201).json({ success: true, data: client });
   } catch (err) {
