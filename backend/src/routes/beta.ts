@@ -153,8 +153,11 @@ authedRouter.get('/metrics', requireRole('ADMIN'), async (req: AuthenticatedRequ
       activeClients,
       feedback,
     ] = await Promise.all([
-      prisma.opportunity.count({ where: { consultingFirmId, isScored: true, scoredAt: { gte: since } } }),
-      prisma.bidDecision.count({ where: { consultingFirmId, decidedAt: { gte: since } } }),
+      // Opportunity has no scoredAt; use updatedAt as proxy for "scored within window"
+      // (the scoring worker writes probabilityScore + sets isScored, which updates the row).
+      prisma.opportunity.count({ where: { consultingFirmId, isScored: true, updatedAt: { gte: since } } }),
+      // BidDecision uses createdAt for "when the decision was first made".
+      prisma.bidDecision.count({ where: { consultingFirmId, createdAt: { gte: since } } }),
       prisma.submissionRecord.count({ where: { consultingFirmId, submittedAt: { gte: since } } }),
       prisma.opportunity.count({ where: { consultingFirmId, savedProposalDraftAt: { gte: since } } }),
       prisma.clientCompany.count({ where: { consultingFirmId, isActive: true } }),
