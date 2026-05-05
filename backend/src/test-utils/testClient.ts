@@ -27,6 +27,7 @@ import clientDeliverablesRoutes from '../routes/clientDeliverables'
 import clientPortalRoutes from '../routes/clientPortal'
 import complianceMatrixRoutes from '../routes/complianceMatrix'
 import stripeWebhookRoutes from '../routes/stripeWebhook'
+import betaRoutes from '../routes/beta'
 
 export function buildTestApp(): Express {
   const app = express()
@@ -52,6 +53,7 @@ export function buildTestApp(): Express {
   apiRouter.use('/client-deliverables', clientDeliverablesRoutes)
   apiRouter.use('/client-portal', clientPortalRoutes)
   apiRouter.use('/compliance-matrix', complianceMatrixRoutes)
+  apiRouter.use('/beta', betaRoutes)
   app.use('/api', apiRouter)
 
   app.use(notFoundHandler)

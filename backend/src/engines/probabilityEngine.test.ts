@@ -117,11 +117,13 @@ describe('computeNaicsOverlap', () => {
     expect(computeNaicsOverlap(['541512'], '541519')).toBe(0.6)
   })
 
-  it('returns 0.3 on 2-digit subsector match (541512 vs 561730)', () => {
-    expect(computeNaicsOverlap(['541512'], '561730')).toBe(0.3)
+  it('returns 0.3 on 2-digit subsector match (541512 vs 549999 — both sector 54)', () => {
+    // Both NAICS share the 2-digit prefix "54" but differ at the 4-digit
+    // sector level (5415 vs 5499), so the matcher should return 0.3.
+    expect(computeNaicsOverlap(['541512'], '549999')).toBe(0.3)
   })
 
-  it('returns 0 on no overlap', () => {
+  it('returns 0 on completely different 2-digit codes (541512 vs 111110)', () => {
     expect(computeNaicsOverlap(['541512'], '111110')).toBe(0)
   })
 
@@ -236,7 +238,12 @@ describe('scoreOpportunityForClient — end-to-end', () => {
     expect(r.expectedValue).toBeGreaterThan(900_000)
   })
 
-  it('produces low probability for a NAICS-mismatched, dominant-incumbent opp', () => {
+  it('produces low probability for a NAICS-mismatched, dominant-incumbent, hyper-competitive opp', () => {
+    // Worst-case scenario: wrong NAICS (overlap=0), dominant incumbent
+    // (incumbentProbability=0.9, but competition=20 not 1 so no sole-source
+    // bonus that would otherwise inflate the density score), high
+    // competition (density score crashes), low historical base rate,
+    // and weak document/agency signal.
     const r = scoreOpportunityForClient({
       opportunityNaics: '111110',
       opportunityEstimatedValue: 500_000,
@@ -244,8 +251,13 @@ describe('scoreOpportunityForClient — end-to-end', () => {
       clientNaics: ['541512'],
       clientProfile: { sdvosb: false, wosb: false, hubzone: false, smallBusiness: true },
       incumbentProbability: 0.9,
-      competitionCount: 1,
+      competitionCount: 20,
+      offersReceived: 20,
       historicalDistribution: 0.1,
+      documentAlignmentScore: 0.1,
+      agencyAlignmentScore: 0.2,
+      agencyHistoryScore: 0.2,
+      deadlineUrgencyScore: 0.3,
     })
     expect(r.probability).toBeLessThan(0.2)
   })
