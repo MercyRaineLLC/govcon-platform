@@ -340,15 +340,26 @@ router.post('/login', loginRateLimit, async (req: Request, res: Response, next: 
       });
     }
 
-    // Gate 2 — current ToS + Beta NDA must be accepted.
+    // Gate 2 — current ToS + Beta NDA must be accepted. Issue a SCOPED
+    // completion token (scope='accept_agreements') that ONLY the
+    // /api/auth/complete-agreements endpoint accepts; full-access
+    // routes (rejectScopedToken or scope guard) refuse it.
     const agreementsOk = await userHasAcceptedCurrentLegal(user.id);
     if (!agreementsOk) {
       const { tos, nda } = await getCurrentLegalVersions();
+      const completionToken = generateToken({
+        userId: user.id,
+        consultingFirmId: user.consultingFirmId,
+        role: user.role as any,
+        email: user.email,
+        scope: 'accept_agreements',
+      } as any);
       return res.status(403).json({
         success: false,
         error: 'You must accept the current Terms of Service and Beta NDA before signing in.',
         code: 'AGREEMENT_REQUIRED',
         currentVersions: { tosVersion: tos.version, betaNdaVersion: nda.version },
+        completionToken,
       });
     }
 
@@ -886,6 +897,142 @@ router.post(
       });
 
       res.json({ success: true, message: 'Agreements recorded.' });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+/**
+ * POST /api/auth/complete-agreements
+ * Accepts EITHER a full session JWT OR a scoped completionToken
+ * (scope='accept_agreements') issued by login gate-2. On success:
+ * records the UserAgreement rows, runs gate-3 questionnaire check,
+ * and either issues a full session JWT or hands off to the
+ * questionnaire flow with a new scoped token.
+ *
+ * This is the only endpoint an accept_agreements scoped token can reach.
+ */
+router.post(
+  '/complete-agreements',
+  authenticateJWT,
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const tokenScope = (req.user as any)?.scope;
+      if (tokenScope && tokenScope !== 'accept_agreements') {
+        return res.status(403).json({
+          success: false,
+          error: 'This endpoint requires a full session or accept_agreements scoped token.',
+          code: 'WRONG_SCOPE',
+        });
+      }
+
+      const body = AcceptAgreementsSchema.parse(req.body);
+      const { tos, nda } = await getCurrentLegalVersions();
+
+      if (body.acceptedTosVersion !== tos.version) {
+        return res.status(409).json({
+          success: false,
+          error: 'Stale Terms of Service version. Please reload and accept the latest.',
+          code: 'TOS_VERSION_MISMATCH',
+          currentVersion: tos.version,
+        });
+      }
+      if (body.acceptedBetaNdaVersion !== nda.version) {
+        return res.status(409).json({
+          success: false,
+          error: 'Stale Beta NDA version. Please reload and accept the latest.',
+          code: 'NDA_VERSION_MISMATCH',
+          currentVersion: nda.version,
+        });
+      }
+
+      const userId = req.user!.userId;
+      const consultingFirmId = req.user!.consultingFirmId;
+      const role = req.user!.role;
+      const email = req.user!.email;
+      const ip = req.ip ?? null;
+      const userAgent = req.get('user-agent') ?? null;
+
+      await prisma.userAgreement.createMany({
+        data: [
+          { userId, documentType: 'TOS', documentId: tos.id, version: tos.version, contentHash: tos.contentHash, ip, userAgent },
+          { userId, documentType: 'BETA_NDA', documentId: nda.id, version: nda.version, contentHash: nda.contentHash, ip, userAgent },
+        ],
+        skipDuplicates: true,
+      });
+
+      void logAudit({
+        consultingFirmId,
+        actorUserId: userId,
+        action: 'AGREEMENT_ACCEPTED',
+        entityType: 'UserAgreement',
+        entityId: userId,
+        rationale: `Accepted ToS v${tos.version} and Beta NDA v${nda.version} via login gate`,
+        sourceIp: ip,
+        userAgent,
+      });
+
+      // Gate-3 — run the questionnaire check now that gate-2 passes.
+      const qStatus = await userHasAnsweredCurrentQuestionnaire(userId);
+      if (!qStatus.ok) {
+        const completionToken = generateToken({
+          userId,
+          consultingFirmId,
+          role: role as any,
+          email,
+          scope: 'beta_questionnaire',
+        } as any);
+        return res.status(403).json({
+          success: false,
+          error: 'Please complete this week’s beta feedback questionnaire before signing in.',
+          code: 'BETA_QUESTIONNAIRE_REQUIRED',
+          questionnaireId: qStatus.questionnaireId,
+          weekStarting: qStatus.weekStarting,
+          completionToken,
+        });
+      }
+
+      const fullToken = generateToken({ userId, consultingFirmId, role: role as any, email });
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: { consultingFirm: true },
+      });
+      if (!user) throw new NotFoundError('User');
+
+      await prisma.user.update({
+        where: { id: userId },
+        data: { lastLoginAt: new Date() },
+      });
+
+      void logAudit({
+        consultingFirmId,
+        actorUserId: userId,
+        action: 'LOGIN',
+        entityType: 'User',
+        entityId: userId,
+        sourceIp: ip,
+        userAgent,
+      });
+
+      res.json({
+        success: true,
+        data: {
+          token: fullToken,
+          user: {
+            id: user.id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            role: user.role,
+          },
+          firm: {
+            id: user.consultingFirm.id,
+            name: user.consultingFirm.name,
+          },
+        },
+      });
     } catch (err) {
       next(err);
     }

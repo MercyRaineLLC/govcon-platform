@@ -92,7 +92,15 @@ export function LoginPage() {
       if (code === 'EMAIL_NOT_VERIFIED') {
         setError('Verify your email before signing in. Use the link we sent, or resend below.');
       } else if (code === 'AGREEMENT_REQUIRED') {
-        setError('Our Terms of Service or Beta NDA have been updated. Please re-register to accept the latest versions, or contact support.');
+        // Gate-2: forward to the accept-agreements page with the scoped completionToken.
+        const data = err?.response?.data;
+        navigate('/accept-agreements', {
+          state: {
+            completionToken: data?.completionToken,
+            email,
+          },
+        });
+        return;
       } else if (code === 'BETA_QUESTIONNAIRE_REQUIRED') {
         // Gate-3: forward to the questionnaire page with the scoped completionToken.
         const data = err?.response?.data;

@@ -89,6 +89,14 @@ export const authApi = {
     api.post('/auth/resend-verification', { email }).then((r) => r.data),
   acceptAgreements: (acceptedTosVersion: string, acceptedBetaNdaVersion: string) =>
     api.post('/auth/accept-agreements', { acceptedTosVersion, acceptedBetaNdaVersion }).then((r) => r.data),
+  // Login gate-2: caller passes the scoped completionToken explicitly. On
+  // success returns either a full session ({ token, user, firm }) or a
+  // BETA_QUESTIONNAIRE_REQUIRED 403 with a new questionnaire-scoped token.
+  completeAgreements: (acceptedTosVersion: string, acceptedBetaNdaVersion: string, completionToken: string) =>
+    api.post('/auth/complete-agreements',
+      { acceptedTosVersion, acceptedBetaNdaVersion },
+      { headers: { Authorization: `Bearer ${completionToken}` } }
+    ).then((r) => r.data),
 };
 
 // ---- Beta Questionnaire ----

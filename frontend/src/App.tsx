@@ -36,6 +36,7 @@ const ForgotPasswordPage      = lazy(() => import("./pages/ForgotPassword").then
 const ResetPasswordPage       = lazy(() => import("./pages/ResetPassword").then(m => ({ default: m.ResetPasswordPage })))
 const VerifyEmailPage         = lazy(() => import("./pages/VerifyEmail").then(m => ({ default: m.VerifyEmailPage })))
 const BetaQuestionnairePage   = lazy(() => import("./pages/BetaQuestionnaire").then(m => ({ default: m.BetaQuestionnairePage })))
+const AcceptAgreementsPage    = lazy(() => import("./pages/AcceptAgreements").then(m => ({ default: m.AcceptAgreementsPage })))
 const LandingPage            = lazy(() => import("./pages/Landing").then(m => ({ default: m.LandingPage })))
 const BetaAccessPage         = lazy(() => import("./pages/BetaAccess"))
 const FeedbackPage           = lazy(() => import("./pages/Feedback"))
@@ -63,6 +64,7 @@ export default function App() {
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/verify-email" element={<VerifyEmailPage />} />
           <Route path="/beta-questionnaire" element={<BetaQuestionnairePage />} />
+          <Route path="/accept-agreements" element={<AcceptAgreementsPage />} />
           <Route path="/beta-access" element={<BetaAccessPage />} />
 
           {/* Client portal (standalone, no consultant layout) */}
