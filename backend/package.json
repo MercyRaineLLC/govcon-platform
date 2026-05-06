@@ -15,6 +15,8 @@
     "db:seed": "ts-node prisma/seed.ts",
     "db:seed:naics": "ts-node prisma/seedNaics.ts",
     "db:studio": "prisma studio",
+    "db:reset-beta": "ts-node prisma/scripts/resetBeta.ts",
+    "db:seed-prod": "ts-node prisma/scripts/seedProd.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"

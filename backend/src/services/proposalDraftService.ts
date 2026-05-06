@@ -1,4 +1,5 @@
 import { generateWithRouter } from './llm/llmRouter'
+import { farGroundedComplete } from './far/farGroundedComplete'
 import { logger } from '../utils/logger'
 
 export interface ProposalAnswer {
@@ -94,7 +95,8 @@ export async function generateProposalDraft(
   consultingFirmId: string,
   answers: ProposalAnswer[] = [],
   userGuidance?: string,
-  bidFormContext?: string
+  bidFormContext?: string,
+  opportunityId: string | null = null,
 ): Promise<ProposalDraft> {
   const mandatoryReqs = requirements
     .filter(r => r.isMandatory)
@@ -137,18 +139,30 @@ Write a COMPLETE, COMPREHENSIVE, SUBMISSION-READY proposal draft. This must read
 Each section MUST be fully written prose. No placeholders, no bullet-point outlines, no [INSERT] markers.`
 
   let response
+  // Note: maxTokens 32000 + timeoutMs 600000 are the prod fixes from
+  // 6e02f4e9 ("timeout was killing Claude mid-generation") — large
+  // drafts take 3-5 minutes on Claude. Both the FAR-grounded and
+  // direct-router paths inherit them.
+  const llmReq = {
+    systemPrompt: DRAFT_SYSTEM_PROMPT,
+    userPrompt,
+    maxTokens: 32000,
+    temperature: 0.3,
+    timeoutMs: 600_000,
+  }
   try {
-    response = await generateWithRouter(
-      {
-        systemPrompt: DRAFT_SYSTEM_PROMPT,
-        userPrompt,
-        maxTokens: 32000,
-        temperature: 0.3,
-        timeoutMs: 600_000, // 10 min — large drafts can take 3-5 min on Claude
-      },
-      consultingFirmId,
-      { task: 'BID_GUIDANCE', useCache: false }
-    )
+    response = opportunityId
+      ? await farGroundedComplete(llmReq, {
+          scope: 'PROPOSAL_DRAFT',
+          opportunityId,
+          consultingFirmId,
+          task: 'PROPOSAL_DRAFT',
+          useCache: false,
+        })
+      : await generateWithRouter(llmReq, consultingFirmId, {
+          task: 'PROPOSAL_DRAFT',
+          useCache: false,
+        })
   } catch (err) {
     const msg = (err as Error).message
     // Re-throw key/rate errors so the route can handle them with proper HTTP codes

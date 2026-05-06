@@ -4,6 +4,31 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ----------------------------------------------------------------
+   Accessibility baseline (Section 508 / WCAG 2.1 AA)
+   - Visible focus rings only when navigating by keyboard
+   - Respect prefers-reduced-motion for any animation we ship
+   ---------------------------------------------------------------- */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--gold-400, #fbbf24);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  /* Suppress focus ring for mouse-only interactions */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
 /* ================================================================
    Mercy Raine LLC — Premium Intelligence Platform Design System
    Empowering All Small Businesses to Win Government Contracts.

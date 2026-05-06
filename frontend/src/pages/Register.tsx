@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { useAuth } from '../hooks/useAuth';
 import { authApi } from '../services/api';
-import { CheckCircle, Zap, ShieldCheck } from 'lucide-react';
+import { CheckCircle, Zap, ShieldCheck, MailCheck } from 'lucide-react';
+import { useToast } from '../components/Toast';
 
 function UmbrellaLogo({ size = 48, className = '' }: { size?: number; className?: string }) {
   return (
@@ -36,13 +36,17 @@ const perks = [
 ];
 
 export function RegisterPage() {
-  const { login } = useAuth();
-  const navigate = useNavigate();
+  const { toast } = useToast();
   const [form, setForm] = useState({
     firmName: '', contactEmail: '', firstName: '', lastName: '', password: '',
   });
+  const [acceptedTos, setAcceptedTos] = useState(false);
+  const [acceptedNda, setAcceptedNda] = useState(false);
+  const [tosExpanded, setTosExpanded] = useState(false);
+  const [ndaExpanded, setNdaExpanded] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
 
   const { data: betaData } = useQuery({
     queryKey: ['beta-status'],
@@ -53,23 +57,57 @@ export function RegisterPage() {
   const slotsRemaining = betaData?.data?.slotsRemaining ?? null;
   const isBetaOpen = betaData?.data?.isBetaOpen ?? true;
 
+  const { data: legalData } = useQuery({
+    queryKey: ['legal-current'],
+    queryFn: () => authApi.legalCurrent(),
+    staleTime: 5 * 60_000,
+  });
+  const tos = legalData?.data?.tos;
+  const nda = legalData?.data?.betaNda;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    if (!tos || !nda) {
+      setError('Legal documents are still loading. Please retry in a moment.');
+      return;
+    }
+    if (!acceptedTos || !acceptedNda) {
+      setError('You must accept both the Terms of Service and the Beta NDA to continue.');
+      return;
+    }
     setLoading(true);
     try {
-      const res = await authApi.registerFirm(form);
-      login(res.data.token, res.data.user, res.data.firm);
-      navigate('/');
+      const res = await authApi.registerFirm({
+        ...form,
+        acceptedTosVersion: tos.version,
+        acceptedBetaNdaVersion: nda.version,
+      });
+      // Backend now returns { requiresEmailVerification: true, email, verificationUrl } —
+      // no JWT until the user verifies their email.
+      setPendingEmail(res.data?.email ?? form.contactEmail);
+      toast('Account created. Check your email to verify.', 'success');
     } catch (err: any) {
       const code = err.response?.data?.code;
       if (code === 'BETA_FULL') {
         setError('All beta slots have been claimed. Join our waitlist for the next opening.');
+      } else if (code === 'TOS_VERSION_MISMATCH' || code === 'NDA_VERSION_MISMATCH') {
+        setError('Our terms have just been updated. Please reload the page and re-accept the latest versions.');
       } else {
         setError(err.response?.data?.error || 'Registration failed');
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (!pendingEmail) return;
+    try {
+      await authApi.resendVerification(pendingEmail);
+      toast('Verification email re-sent. Check your inbox.', 'success');
+    } catch {
+      toast('Could not resend right now. Try again in a few minutes.', 'error');
     }
   };
 
@@ -124,7 +162,7 @@ export function RegisterPage() {
         </div>
 
         <p className="relative z-10 text-xs italic text-amber-400/60">
-          "Empowering All Small Businesses to Win Government Contracts."
+          "Built on the FAR. Scored on capability. Won on discipline."
         </p>
       </div>
 
@@ -138,6 +176,25 @@ export function RegisterPage() {
         </div>
 
         <div className="w-full max-w-md">
+          {pendingEmail ? (
+            <div className="rounded-xl p-6" style={{ background: 'rgba(15,23,42,0.6)', border: '1px solid rgba(245,158,11,0.25)' }}>
+              <div className="flex items-center gap-3 mb-4">
+                <MailCheck className="w-7 h-7 text-amber-400" aria-hidden="true" />
+                <h2 className="text-xl font-bold text-slate-100">Check your email</h2>
+              </div>
+              <p className="text-sm text-slate-300 mb-3">
+                We sent a verification link to <span className="font-semibold text-amber-300">{pendingEmail}</span>. Click it to activate your account — the link expires in 24 hours.
+              </p>
+              <p className="text-xs text-slate-500 mb-5">
+                Didn't get the email? Check your spam folder, or resend below.
+              </p>
+              <div className="flex gap-3">
+                <button type="button" onClick={handleResend} className="btn-secondary flex-1 py-2.5 text-sm">Resend email</button>
+                <Link to="/login" className="btn-primary flex-1 py-2.5 text-sm text-center">Back to sign in</Link>
+              </div>
+            </div>
+          ) : (
+          <>
           <div className="mb-5">
             <h2 className="text-2xl font-bold text-slate-100 mb-1">Claim Your Beta Access</h2>
             <p className="text-sm text-slate-500">14-day free trial. No credit card required.</p>
@@ -197,8 +254,8 @@ export function RegisterPage() {
             </div>
 
             <div>
-              <label className="label">Password</label>
-              <input type="password" className="input" value={form.password}
+              <label className="label" htmlFor="reg-password">Password</label>
+              <input id="reg-password" type="password" className="input" value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })} required
                 placeholder="Min 12 chars — upper, lower, number, symbol" />
               <p className="text-[11px] text-slate-600 mt-1 ml-0.5">
@@ -206,14 +263,67 @@ export function RegisterPage() {
               </p>
             </div>
 
+            {/* Legal acceptance — Terms of Service + Beta NDA */}
+            <fieldset className="space-y-3 rounded-lg p-4" style={{ background: 'rgba(15,23,42,0.5)', border: '1px solid rgba(245,158,11,0.18)' }}>
+              <legend className="px-2 text-xs font-semibold tracking-wider text-amber-400/90 uppercase">Required Agreements</legend>
+
+              <div>
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={acceptedTos}
+                    onChange={(e) => setAcceptedTos(e.target.checked)}
+                    className="mt-1"
+                    aria-describedby="tos-desc"
+                  />
+                  <span id="tos-desc" className="text-xs text-slate-300 leading-snug">
+                    I have read and accept the{' '}
+                    <button type="button" onClick={() => setTosExpanded((v) => !v)} className="font-semibold underline" style={{ color: '#fbbf24' }}>
+                      Terms of Service{tos ? ` (v${tos.version})` : ''}
+                    </button>
+                    , including the IP-protection restrictions on copying, redistribution, recreation, and reverse engineering.
+                  </span>
+                </label>
+                {tosExpanded && tos && (
+                  <div className="mt-2 max-h-56 overflow-y-auto p-3 rounded text-[11px] whitespace-pre-wrap leading-relaxed text-slate-400" style={{ background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(148,163,184,0.15)' }}>
+                    {tos.body}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={acceptedNda}
+                    onChange={(e) => setAcceptedNda(e.target.checked)}
+                    className="mt-1"
+                    aria-describedby="nda-desc"
+                  />
+                  <span id="nda-desc" className="text-xs text-slate-300 leading-snug">
+                    I have read and accept the{' '}
+                    <button type="button" onClick={() => setNdaExpanded((v) => !v)} className="font-semibold underline" style={{ color: '#fbbf24' }}>
+                      Beta Non-Disclosure & IP Protection Agreement{nda ? ` (v${nda.version})` : ''}
+                    </button>
+                    . I will not share, screenshot, recreate, or reverse engineer any part of the platform.
+                  </span>
+                </label>
+                {ndaExpanded && nda && (
+                  <div className="mt-2 max-h-56 overflow-y-auto p-3 rounded text-[11px] whitespace-pre-wrap leading-relaxed text-slate-400" style={{ background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(148,163,184,0.15)' }}>
+                    {nda.body}
+                  </div>
+                )}
+              </div>
+            </fieldset>
+
             {error && (
-              <div className="text-sm rounded-lg px-4 py-3"
+              <div role="alert" className="text-sm rounded-lg px-4 py-3"
                 style={{ background: 'rgba(127,29,29,0.4)', border: '1px solid rgba(185,28,28,0.5)', color: '#fca5a5' }}>
                 {error}
               </div>
             )}
 
-            <button type="submit" disabled={loading || !isBetaOpen} className="btn-primary w-full py-3 text-sm">
+            <button type="submit" disabled={loading || !isBetaOpen || !acceptedTos || !acceptedNda} className="btn-primary w-full py-3 text-sm">
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
                   <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
@@ -242,6 +352,8 @@ export function RegisterPage() {
               <span>Veteran Owned & Operated · Secured Platform</span>
             </div>
           </div>
+          </>
+          )}
         </div>
       </div>
     </div>

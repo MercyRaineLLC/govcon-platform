@@ -34,3 +34,7 @@ Thumbs.db
 
 # Coverage / testing
 coverage/
+
+# Claude Code project memory (local-only, not part of the repo)
+CLAUDE.md
+.claude/

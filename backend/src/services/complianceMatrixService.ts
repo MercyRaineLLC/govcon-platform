@@ -2,6 +2,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { logger } from '../utils/logger'
 import { generateWithRouter } from './llm/llmRouter'
+import { farGroundedComplete } from './far/farGroundedComplete'
 
 const MATRIX_PROMPT = `You are a federal contracting compliance expert. Extract ALL distinct requirements from this government solicitation document (RFP/RFQ/IFB).
 
@@ -48,20 +49,32 @@ export interface ParsedRequirement extends RawRequirement {
 export async function generateComplianceMatrix(
   text: string,
   opportunityTitle: string,
+  opportunityId: string | null,
   consultingFirmId?: string | null
 ): Promise<ParsedRequirement[]> {
   const truncated = text.substring(0, 25000)
+  const req = {
+    systemPrompt: MATRIX_PROMPT,
+    userPrompt: `Opportunity: ${opportunityTitle}\n\nDocument text:\n${truncated}`,
+    maxTokens: 4000,
+  }
 
   try {
-    const llmResponse = await generateWithRouter(
-      {
-        systemPrompt: MATRIX_PROMPT,
-        userPrompt: `Opportunity: ${opportunityTitle}\n\nDocument text:\n${truncated}`,
-        maxTokens: 4000,
-      },
-      consultingFirmId ?? undefined,
-      { task: 'COMPLIANCE_MATRIX', useCache: true }
-    )
+    // FAR-grounded path: when opportunityId + tenant are known, every
+    // inference inherits the regulatory frame and writes a replayable audit row.
+    const llmResponse =
+      opportunityId && consultingFirmId
+        ? await farGroundedComplete(req, {
+            scope: 'COMPLIANCE_MATRIX',
+            opportunityId,
+            consultingFirmId,
+            task: 'COMPLIANCE_MATRIX',
+            useCache: true,
+          })
+        : await generateWithRouter(req, consultingFirmId ?? undefined, {
+            task: 'COMPLIANCE_MATRIX',
+            useCache: true,
+          })
 
     const parsed = parseResponse(llmResponse.text)
     if (parsed.length === 0) {
@@ -225,22 +238,32 @@ function buildEnrichmentBlock(ctx: EnrichmentContext): string {
 export async function generateBidGuidance(
   text: string,
   opportunityTitle: string,
+  opportunityId: string | null,
   enrichment?: EnrichmentContext,
   consultingFirmId?: string | null
 ): Promise<BidGuidance | null> {
   const truncated = text.substring(0, 20000)
   const enrichmentBlock = enrichment ? buildEnrichmentBlock(enrichment) : ''
+  const req = {
+    systemPrompt: GUIDANCE_PROMPT,
+    userPrompt: `Opportunity: ${opportunityTitle}${enrichmentBlock}\n\nSolicitation text:\n${truncated}`,
+    maxTokens: 4000,
+  }
 
   try {
-    const llmResponse = await generateWithRouter(
-      {
-        systemPrompt: GUIDANCE_PROMPT,
-        userPrompt: `Opportunity: ${opportunityTitle}${enrichmentBlock}\n\nSolicitation text:\n${truncated}`,
-        maxTokens: 4000,
-      },
-      consultingFirmId ?? undefined,
-      { task: 'BID_GUIDANCE', useCache: true }
-    )
+    const llmResponse =
+      opportunityId && consultingFirmId
+        ? await farGroundedComplete(req, {
+            scope: 'BID_GUIDANCE',
+            opportunityId,
+            consultingFirmId,
+            task: 'BID_GUIDANCE',
+            useCache: true,
+          })
+        : await generateWithRouter(req, consultingFirmId ?? undefined, {
+            task: 'BID_GUIDANCE',
+            useCache: true,
+          })
 
     return parseBidGuidance(llmResponse.text)
   } catch (err) {

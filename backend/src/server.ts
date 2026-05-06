@@ -15,6 +15,7 @@ import { connectDatabase, disconnectDatabase, prisma } from './config/database'
 import { connectRedis, disconnectRedis } from './config/redis'
 import { logger } from './utils/logger'
 import { errorHandler, notFoundHandler } from './middleware/errorHandler'
+import { auditMutations } from './middleware/auditMiddleware'
 import { startScoringWorker } from './workers/scoringWorker'
 import { startEnrichmentWorker } from './workers/enrichmentWorker'
 import { startRecalibrationWorker } from './workers/recalibrationWorker'
@@ -23,6 +24,8 @@ import { startPortfolioScoringWorker } from './workers/portfolioScoringWorker'
 import { startWatchlistDigestWorker } from './workers/watchlistDigestWorker'
 import { startStripeWebhookRotationReminderWorker } from './workers/stripeWebhookRotationReminderWorker'
 import { startMarketIntelligenceRefreshWorker } from './workers/marketIntelligenceRefreshWorker'
+import { startRequirementExtractionWorker } from './workers/requirementExtractionWorker'
+import { startBetaQuestionnaireWorker } from './workers/betaQuestionnaireWorker'
 
 // Route imports
 import authRoutes from './routes/auth'
@@ -54,6 +57,8 @@ import brandingRoutes from './routes/branding'
 import stripeWebhookRoutes from './routes/stripeWebhook'
 import backtestRoutes from './routes/backtest'
 import betaRoutes from './routes/beta'
+import farClausesRoutes from './routes/farClauses'
+import betaQuestionnaireRoutes from './routes/betaQuestionnaire'
 import { getVerifiedCustomDomains, PLATFORM_ROOT_DOMAIN } from './services/hostResolver'
 
 async function bootstrap(): Promise<void> {
@@ -184,6 +189,10 @@ async function bootstrap(): Promise<void> {
   // -------------------------------------------------------------
   const apiRouter = express.Router()
 
+  // Audit-event capture for mutating /api/* requests. Defers the write
+  // until res.finish so per-route auth has populated req.user.
+  apiRouter.use(auditMutations)
+
   apiRouter.use('/auth', authRoutes)
   apiRouter.use('/opportunities', opportunityRoutes)
   apiRouter.use('/clients', clientRoutes)
@@ -211,6 +220,8 @@ async function bootstrap(): Promise<void> {
   apiRouter.use('/assistant', assistantRoutes)
   apiRouter.use('/branding', brandingRoutes)
   apiRouter.use('/admin/backtest', backtestRoutes)
+  apiRouter.use('/far/clauses', farClausesRoutes)
+  apiRouter.use('/beta/questionnaire', betaQuestionnaireRoutes)
   apiRouter.use('/beta', betaRoutes)
 
   app.use('/api', apiRouter)
@@ -235,6 +246,8 @@ async function bootstrap(): Promise<void> {
   const watchlistDigestWorker = startWatchlistDigestWorker()
   const stripeRotationReminderWorker = startStripeWebhookRotationReminderWorker()
   const marketIntelligenceRefreshWorker = startMarketIntelligenceRefreshWorker()
+  const requirementExtractionWorker = startRequirementExtractionWorker()
+  const betaQuestionnaireWorker = startBetaQuestionnaireWorker()
 
   // -------------------------------------------------------------
   // Start HTTP Server
@@ -244,7 +257,7 @@ async function bootstrap(): Promise<void> {
       port: config.port,
       environment: config.env,
       pid: process.pid,
-      tagline: 'Transporting Goods, Transforming Lives',
+      tagline: 'Built on the FAR. Scored on capability. Won on discipline.',
     })
   })
 
@@ -265,6 +278,8 @@ async function bootstrap(): Promise<void> {
       await watchlistDigestWorker.close()
       await stripeRotationReminderWorker.close()
       await marketIntelligenceRefreshWorker.close()
+      await requirementExtractionWorker.close()
+      await betaQuestionnaireWorker.close()
       logger.info('Workers stopped')
 
       await disconnectDatabase()
