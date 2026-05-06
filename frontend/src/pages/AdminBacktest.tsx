@@ -228,6 +228,27 @@ export default function AdminBacktestPage() {
             </div>
           )}
 
+          {/* Calibration curve — predicted vs observed win rate per decile */}
+          {bins.some((b) => b.count > 0) && (
+            <div
+              className="rounded-xl p-5"
+              style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}
+            >
+              <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wide mb-3">
+                Calibration curve (predicted vs observed win rate)
+              </h3>
+              <p className="text-[11px] text-slate-500 mb-4">
+                Each point plots one predicted-probability decile: x = mean predicted probability of bids in
+                that bucket, y = observed win rate. Perfect calibration follows the dashed diagonal.
+                Points above = engine <span className="text-blue-400">underestimates</span>; below = engine{' '}
+                <span className="text-red-400">overestimates</span>. Sample includes synthetic negatives —
+                bids deliberately constructed to NOT match (wrong NAICS / wrong size / wrong set-aside)
+                alongside actual award winners.
+              </p>
+              <CalibrationCurve bins={bins} />
+            </div>
+          )}
+
           {/* Per-factor mean values */}
           {Object.keys(factorMeans).length > 0 && (
             <div className="rounded-xl p-5"
@@ -324,5 +345,87 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
       </p>
       {hint && <p className="text-[11px] text-slate-600 mt-1">{hint}</p>}
     </div>
+  )
+}
+
+/**
+ * Calibration curve — pure SVG so the page stays Recharts-free.
+ * x-axis = mean predicted probability per decile bin
+ * y-axis = observed win rate per bin
+ * Dashed diagonal = perfect calibration reference.
+ */
+function CalibrationCurve({ bins }: { bins: CalibrationBin[] }) {
+  const W = 560
+  const H = 320
+  const PAD = { top: 16, right: 24, bottom: 36, left: 44 }
+  const innerW = W - PAD.left - PAD.right
+  const innerH = H - PAD.top - PAD.bottom
+
+  const x = (v: number) => PAD.left + v * innerW
+  const y = (v: number) => PAD.top + (1 - v) * innerH
+
+  const populated = bins.filter((b) => b.count > 0)
+  const polyline = populated.map((b) => `${x(b.meanPred).toFixed(1)},${y(b.observedRate).toFixed(1)}`).join(' ')
+
+  const ticks = [0, 0.2, 0.4, 0.6, 0.8, 1]
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="Calibration curve">
+      {/* Plot frame */}
+      <rect x={PAD.left} y={PAD.top} width={innerW} height={innerH} fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.08)" />
+
+      {/* Gridlines + axis labels */}
+      {ticks.map((t) => (
+        <g key={`gx-${t}`}>
+          <line x1={x(t)} x2={x(t)} y1={PAD.top} y2={PAD.top + innerH} stroke="rgba(255,255,255,0.05)" />
+          <text x={x(t)} y={PAD.top + innerH + 18} textAnchor="middle" fontSize="10" fill="#64748b">{(t * 100).toFixed(0)}%</text>
+        </g>
+      ))}
+      {ticks.map((t) => (
+        <g key={`gy-${t}`}>
+          <line x1={PAD.left} x2={PAD.left + innerW} y1={y(t)} y2={y(t)} stroke="rgba(255,255,255,0.05)" />
+          <text x={PAD.left - 8} y={y(t) + 3} textAnchor="end" fontSize="10" fill="#64748b">{(t * 100).toFixed(0)}%</text>
+        </g>
+      ))}
+
+      {/* Axis titles */}
+      <text x={PAD.left + innerW / 2} y={H - 6} textAnchor="middle" fontSize="11" fill="#94a3b8">
+        Mean predicted probability
+      </text>
+      <text x={12} y={PAD.top + innerH / 2} textAnchor="middle" fontSize="11" fill="#94a3b8" transform={`rotate(-90 12 ${PAD.top + innerH / 2})`}>
+        Observed win rate
+      </text>
+
+      {/* Perfect-calibration diagonal */}
+      <line
+        x1={x(0)} y1={y(0)}
+        x2={x(1)} y2={y(1)}
+        stroke="#475569"
+        strokeWidth={1}
+        strokeDasharray="5 4"
+      />
+
+      {/* Connector polyline */}
+      {populated.length > 1 && (
+        <polyline points={polyline} fill="none" stroke="#fbbf24" strokeWidth={2} />
+      )}
+
+      {/* Data points — radius scales with bin count */}
+      {populated.map((b, i) => {
+        const total = populated.reduce((a, x) => a + x.count, 0)
+        const r = Math.max(3, Math.min(10, Math.sqrt(b.count / total) * 26))
+        return (
+          <g key={i}>
+            <circle cx={x(b.meanPred)} cy={y(b.observedRate)} r={r} fill="#f59e0b" fillOpacity={0.85} stroke="#0f172a" strokeWidth={1.5}>
+              <title>
+                {`Bin ${(b.binMin * 100).toFixed(0)}–${(b.binMax * 100).toFixed(0)}% · n=${b.count}`}
+                {`\nmean predicted = ${(b.meanPred * 100).toFixed(1)}%`}
+                {`\nobserved win rate = ${(b.observedRate * 100).toFixed(1)}%`}
+              </title>
+            </circle>
+          </g>
+        )
+      })}
+    </svg>
   )
 }
