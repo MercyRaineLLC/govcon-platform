@@ -4,6 +4,7 @@ import fs from 'fs';
 import { prisma } from '../config/database';
 import { redis } from '../config/redis';
 import { extractRequirementsFromPDF } from '../services/requirementExtractor';
+import { writeFarApplicabilities } from '../services/far/farApplicabilityWriter';
 import { logger } from '../utils/logger';
 
 // BullMQ 4.x requires an IORedis instance, not { url }. Use the
@@ -153,17 +154,38 @@ export function startRequirementExtractionWorker(): Worker {
         },
       });
 
+      // 8. Persist FarClauseApplicability rows so the opp's regulatory
+      //    coverage is queryable from the FE without rebuilding the
+      //    context. Non-fatal — a failure here doesn't invalidate
+      //    the requirements that were just extracted.
+      let farWriteCount = 0;
+      try {
+        const farResult = await writeFarApplicabilities(
+          document.opportunityId,
+          document.opportunity.consultingFirmId,
+        );
+        farWriteCount = farResult.written;
+      } catch (farErr) {
+        logger.warn('FAR applicability write failed (non-fatal)', {
+          documentId,
+          opportunityId: document.opportunityId,
+          error: String(farErr),
+        });
+      }
+
       logger.info('Requirement extraction completed successfully', {
         jobId: job.id,
         documentId,
         requirementCount: createdReqs.length,
         confidence: result.extractionConfidence.toFixed(2),
+        farApplicabilityRows: farWriteCount,
       });
 
       return {
         success: true,
         requirementCount: createdReqs.length,
         confidence: result.extractionConfidence,
+        farApplicabilityRows: farWriteCount,
       };
     } catch (error) {
       logger.error('Requirement extraction failed', {
