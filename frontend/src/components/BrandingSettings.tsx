@@ -23,7 +23,7 @@ export function BrandingSettings() {
   const { firm, user } = useAuth()
   const [form, setForm] = useState<BrandingForm>({
     displayName: firm?.name || '',
-    tagline: 'Transporting Goods, Transforming Lives',
+    tagline: 'Bid Smarter. Win Bigger.',
     primaryColor: '#fbbf24',
     secondaryColor: '#f59e0b',
     logoUrl: '',

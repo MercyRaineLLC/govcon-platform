@@ -1,6 +1,6 @@
 # MrGovCon - BANKV Engine
 ## Bid Analytics, Nexus Knowledge Vault
-### Transporting Goods, Transforming Lives
+### Bid Smarter. Win Bigger.
 
 [![CI](https://github.com/MercyRaineLLC/govcon-platform/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/MercyRaineLLC/govcon-platform/actions/workflows/ci.yml)
 

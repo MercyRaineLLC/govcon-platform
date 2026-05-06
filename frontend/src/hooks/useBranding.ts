@@ -17,7 +17,7 @@ const DEFAULT_BRANDING: BrandingConfig = {
   firmId: 'default',
   firmName: 'MrGovCon',
   displayName: 'MrGovCon',
-  tagline: 'Transporting Goods, Transforming Lives',
+  tagline: 'Bid Smarter. Win Bigger.',
   logoUrl: null,
   primaryColor: '#fbbf24',
   secondaryColor: '#f59e0b',

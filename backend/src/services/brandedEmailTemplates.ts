@@ -42,7 +42,7 @@ async function getFirmBranding(firmId: string): Promise<FirmBranding> {
 
   return {
     displayName: firm?.brandingDisplayName || firm?.name || 'MrGovCon',
-    tagline: firm?.brandingTagline || 'Transporting Goods, Transforming Lives',
+    tagline: firm?.brandingTagline || 'Bid Smarter. Win Bigger.',
     logoUrl: firm?.brandingLogoUrl || null,
     primaryColor: firm?.brandingPrimaryColor || '#fbbf24',
     secondaryColor: firm?.brandingSecondaryColor || '#f59e0b',

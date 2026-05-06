@@ -1,6 +1,6 @@
 # MrGovCon Platform — Program Vision & Strategic Roadmap
 ## Powered by BANKV Engine (Bid Analytics, Nexus Knowledge Vault)
-### "Transporting Goods, Transforming Lives"
+### "Bid Smarter. Win Bigger."
 
 **Document Owner:** Mercy Raine LLC
 **Last Updated:** 2026-04-23
