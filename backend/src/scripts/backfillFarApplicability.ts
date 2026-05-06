@@ -4,19 +4,19 @@
  * writeFarApplicabilities deletes existing AI_EXTRACTED + INFERRED
  * rows for an opp before re-inserting.
  *
- * Usage (from repo root, on droplet):
- *   docker exec govcon_backend node dist/prisma/scripts/backfillFarApplicability.js
+ * Usage (on droplet):
+ *   docker exec govcon_backend node dist/scripts/backfillFarApplicability.js
  *
  * Or for a dry run that prints what would be written without doing it:
- *   docker exec govcon_backend node dist/prisma/scripts/backfillFarApplicability.js --dry
+ *   docker exec govcon_backend node dist/scripts/backfillFarApplicability.js --dry
  *
  * Optional flags:
  *   --firm=<consultingFirmId>   restrict to one firm
  *   --limit=<N>                 process at most N opportunities (smoke test)
  *   --concurrency=<N>           parallel writes (default 5)
  */
-import { prisma } from '../../src/config/database'
-import { writeFarApplicabilities } from '../../src/services/far/farApplicabilityWriter'
+import { prisma } from '../config/database'
+import { writeFarApplicabilities } from '../services/far/farApplicabilityWriter'
 
 interface Args {
   dry: boolean
