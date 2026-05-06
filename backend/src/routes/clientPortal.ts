@@ -10,6 +10,7 @@ import { enforceTenantScope, getTenantId } from '../middleware/tenant'
 import { UnauthorizedError, ValidationError, NotFoundError } from '../utils/errors'
 import { logger } from '../utils/logger'
 import { upload } from '../middleware/upload'
+import { normalizeEmail } from '../utils/email'
 
 const router = Router()
 
@@ -55,10 +56,11 @@ router.post(
   requireRole('ADMIN'),
   async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { clientCompanyId, email, password, firstName, lastName } = req.body
-    if (!clientCompanyId || !email || !password || !firstName || !lastName) {
+    const { clientCompanyId, email: rawEmail, password, firstName, lastName } = req.body
+    if (!clientCompanyId || !rawEmail || !password || !firstName || !lastName) {
       throw new ValidationError('clientCompanyId, email, password, firstName, lastName all required')
     }
+    const email = normalizeEmail(rawEmail)
 
     const consultingFirmId = getTenantId(req as any)
     const client = await prisma.clientCompany.findFirst({
@@ -87,8 +89,9 @@ router.post(
 // -------------------------------------------------------------
 router.post('/auth/login', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { email, password } = req.body
-    if (!email || !password) throw new ValidationError('email and password required')
+    const { email: rawEmail, password } = req.body
+    if (!rawEmail || !password) throw new ValidationError('email and password required')
+    const email = normalizeEmail(rawEmail)
 
     const user = await prisma.clientPortalUser.findUnique({ where: { email } })
     if (!user || !user.isActive) throw new UnauthorizedError('Invalid credentials')

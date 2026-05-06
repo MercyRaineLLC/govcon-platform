@@ -22,6 +22,7 @@ export type AuditAction =
   | 'LOGIN'
   | 'LOGOUT'
   | 'EMAIL_VERIFIED'
+  | 'EMAIL_DELIVERY_FAILED'
   | 'AGREEMENT_ACCEPTED'
 
 export interface AuditLogInput {

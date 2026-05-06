@@ -11,8 +11,9 @@ import { enforceTenantScope, getTenantId } from '../middleware/tenant';
 import { AuthenticatedRequest } from '../types';
 import { UnauthorizedError, NotFoundError, ConflictError } from '../utils/errors';
 import { logger } from '../utils/logger';
-import { sendEmail, buildEmailVerificationUrl } from '../services/mailer';
+import { sendEmail, buildEmailVerificationUrl, buildPasswordResetUrl } from '../services/mailer';
 import { logAudit } from '../services/auditService';
+import { EmailField, OptionalEmailField } from '../utils/email';
 
 // -------------------------------------------------------------
 // Helpers — email verification + current legal versions
@@ -107,23 +108,23 @@ const passwordSchema = z
   .regex(/[^A-Za-z0-9]/, 'Must include symbol')
 
 const LoginSchema = z.object({
-  email: z.string().email(),
+  email: EmailField,
   password: z.string().min(1),
 });
 
 const RegisterFirmSchema = z.object({
   firmName: z.string().min(2).max(120),
-  contactEmail: z.string().email(),
+  contactEmail: EmailField,
   firstName: z.string().min(1).max(60),
   lastName: z.string().min(1).max(60),
-  email: z.string().email().optional(),
+  email: OptionalEmailField,
   password: passwordSchema,
   acceptedTosVersion: z.string().min(1),
   acceptedBetaNdaVersion: z.string().min(1),
 });
 
 const RegisterUserSchema = z.object({
-  email: z.string().email(),
+  email: EmailField,
   password: passwordSchema,
   firstName: z.string().min(1).max(60),
   lastName: z.string().min(1).max(60),
@@ -261,15 +262,29 @@ router.post('/register-firm', async (req: Request, res: Response, next: NextFunc
       return { firm, user };
     });
 
-    // Issue a verification token and "send" the email (dev mode logs).
+    // Issue a verification token and send the email. In dev (no mail
+    // provider configured) the URL is logged to the server log only —
+    // never returned in the response, so this endpoint is safe to expose.
     const verificationToken = await issueEmailVerificationToken(created.user.id);
     const verificationUrl = buildEmailVerificationUrl(verificationToken);
-    await sendEmail({
+    const mailResult = await sendEmail({
       to: adminEmail,
       subject: 'Verify your Mercy Raine GovCon account',
       category: 'EMAIL_VERIFICATION',
       textBody: `Welcome ${created.user.firstName},\n\nVerify your email to activate your Mercy Raine GovCon account:\n\n${verificationUrl}\n\nThis link expires in 24 hours.`,
+      consultingFirmId: created.firm.id,
+      actorUserId: created.user.id,
     });
+    if (!mailResult.delivered && !mailResult.devFallback) {
+      logger.warn('Registration verification email failed to send', {
+        userId: created.user.id,
+        provider: mailResult.provider,
+        error: mailResult.error,
+      });
+    }
+    if (mailResult.devFallback && process.env.NODE_ENV !== 'production') {
+      logger.info('Dev mailer fallback — verification URL', { userId: created.user.id, url: verificationUrl });
+    }
 
     void logAudit({
       consultingFirmId: created.firm.id,
@@ -288,10 +303,6 @@ router.post('/register-firm', async (req: Request, res: Response, next: NextFunc
         requiresEmailVerification: true,
         email: created.user.email,
         firmName: created.firm.name,
-        // Dev mode only — production should rely on the email link.
-        // Remove once a real mail provider is wired up.
-        verificationToken,
-        verificationUrl,
       },
     });
   } catch (err) {
@@ -477,15 +488,28 @@ router.post(
       });
 
       // Email-verify the new tenant user. They will also be prompted to
-      // accept the current ToS + Beta NDA on first sign-in.
+      // accept the current ToS + Beta NDA on first sign-in. In dev (no
+      // mail provider configured) the URL is logged server-side only.
       const verificationToken = await issueEmailVerificationToken(user.id);
       const verificationUrl = buildEmailVerificationUrl(verificationToken);
-      await sendEmail({
+      const mailResult = await sendEmail({
         to: user.email,
         subject: 'You have been added to a Mercy Raine GovCon workspace',
         category: 'EMAIL_VERIFICATION',
         textBody: `Hi ${user.firstName},\n\nYou were invited to a Mercy Raine GovCon workspace. Verify your email to activate your account:\n\n${verificationUrl}\n\nThis link expires in 24 hours.`,
+        consultingFirmId,
+        actorUserId: user.id,
       });
+      if (!mailResult.delivered && !mailResult.devFallback) {
+        logger.warn('Invite verification email failed to send', {
+          userId: user.id,
+          provider: mailResult.provider,
+          error: mailResult.error,
+        });
+      }
+      if (mailResult.devFallback && process.env.NODE_ENV !== 'production') {
+        logger.info('Dev mailer fallback — verification URL', { userId: user.id, url: verificationUrl });
+      }
 
       logger.info('User registered (verification pending)', {
         consultingFirmId,
@@ -513,9 +537,6 @@ router.post(
           lastName: user.lastName,
           role: user.role,
           requiresEmailVerification: true,
-          // Dev only — remove once a real mail provider is wired up.
-          verificationToken,
-          verificationUrl,
         },
       });
     } catch (err) {
@@ -570,11 +591,11 @@ router.put(
  */
 router.post('/forgot-password', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { email } = z.object({ email: z.string().email() }).parse(req.body);
+    const { email } = z.object({ email: EmailField }).parse(req.body);
 
     const user = await prisma.user.findUnique({
       where: { email },
-      select: { id: true, email: true, firstName: true },
+      select: { id: true, email: true, firstName: true, consultingFirmId: true },
     });
 
     // Always return success to prevent email enumeration
@@ -597,15 +618,31 @@ router.post('/forgot-password', async (req: Request, res: Response, next: NextFu
       data: { userId: user.id, token, expiresAt },
     });
 
-    logger.info('Password reset token generated', { userId: user.id, email });
+    logger.info('Password reset token generated', { userId: user.id });
 
-    // In production: send email with reset link
-    // For now: return token so frontend can use it
+    const resetUrl = buildPasswordResetUrl(token);
+    const mailResult = await sendEmail({
+      to: user.email,
+      subject: 'Mercy Raine GovCon — password reset link',
+      category: 'PASSWORD_RESET',
+      textBody: `Hi ${user.firstName},\n\nReset your password using this link:\n\n${resetUrl}\n\nThis link expires in 1 hour. If you didn't request a reset, ignore this email.`,
+      consultingFirmId: user.consultingFirmId,
+      actorUserId: user.id,
+    });
+    if (!mailResult.delivered && !mailResult.devFallback) {
+      logger.warn('Password-reset email failed to send', {
+        userId: user.id,
+        provider: mailResult.provider,
+        error: mailResult.error,
+      });
+    }
+    if (mailResult.devFallback && process.env.NODE_ENV !== 'production') {
+      logger.info('Dev mailer fallback — password reset URL', { userId: user.id, url: resetUrl });
+    }
+
     res.json({
       success: true,
       message: 'If that email exists, a reset link has been sent.',
-      // Remove resetToken from response once email service is configured
-      resetToken: token,
     });
   } catch (err) {
     next(err);
@@ -748,10 +785,10 @@ router.post(
   }),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { email } = z.object({ email: z.string().email() }).parse(req.body);
+      const { email } = z.object({ email: EmailField }).parse(req.body);
       const user = await prisma.user.findUnique({
         where: { email },
-        select: { id: true, firstName: true, isEmailVerified: true, email: true },
+        select: { id: true, firstName: true, isEmailVerified: true, email: true, consultingFirmId: true },
       });
 
       // Always respond success to avoid revealing whether the email exists.
@@ -761,14 +798,33 @@ router.post(
 
       const token = await issueEmailVerificationToken(user.id);
       const url = buildEmailVerificationUrl(token);
-      await sendEmail({
+      const result = await sendEmail({
         to: user.email,
         subject: 'Mercy Raine GovCon — new verification link',
         category: 'EMAIL_VERIFICATION',
         textBody: `Hi ${user.firstName},\n\nHere is a new verification link:\n\n${url}\n\nThis link expires in 24 hours.`,
+        consultingFirmId: user.consultingFirmId,
+        actorUserId: user.id,
       });
 
-      res.json({ success: true, message: 'If an unverified account exists, a new link has been sent.', verificationUrl: url });
+      // Surface delivery failure in logs so operators see broken-mailer
+      // states immediately. Public response stays anti-enumeration-safe.
+      if (!result.delivered && !result.devFallback) {
+        logger.warn('Verification email failed to send', {
+          userId: user.id,
+          provider: result.provider,
+          error: result.error,
+        });
+      }
+
+      // Dev fallback: surface the URL only when we know we did not send,
+      // and only in non-production. Production never leaks the token.
+      const includeDevUrl = result.devFallback && process.env.NODE_ENV !== 'production';
+      if (includeDevUrl) {
+        logger.info('Dev mailer fallback — verification URL', { userId: user.id, url });
+      }
+
+      res.json({ success: true, message: 'If an unverified account exists, a new link has been sent.' });
     } catch (err) {
       next(err);
     }

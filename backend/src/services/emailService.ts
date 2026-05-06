@@ -1,9 +1,14 @@
 // =============================================================
-// Email Service - SMTP-based email sending with branded templates
+// Email Service — branded notifications for client-portal flows.
+//
+// All transport now flows through services/mailer.ts (Resend) —
+// nodemailer/SMTP is gone. Public exports keep their existing shape
+// so callers (routes/clientDeliverables.ts, workers/deadlineNotificationWorker.ts)
+// don't need updating.
 // =============================================================
 
-import nodemailer from 'nodemailer'
 import { logger } from '../utils/logger'
+import { sendEmail as transportSend, DeliveryResult } from './mailer'
 import {
   renderBrandedEmail,
   deliverableReadyEmail,
@@ -13,77 +18,40 @@ import {
 } from './brandedEmailTemplates'
 
 // -------------------------------------------------------------
-// Transport configuration
-// -------------------------------------------------------------
-// In production: set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS env vars.
-// In development: emails are logged but not sent (unless SMTP_HOST is set).
-// -------------------------------------------------------------
-
-let transporter: nodemailer.Transporter | null = null
-
-function getTransporter(): nodemailer.Transporter | null {
-  if (transporter) return transporter
-
-  const host = process.env.SMTP_HOST
-  if (!host) {
-    logger.warn('SMTP_HOST not configured — emails will be logged only')
-    return null
-  }
-
-  transporter = nodemailer.createTransport({
-    host,
-    port: parseInt(process.env.SMTP_PORT || '587', 10),
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: process.env.SMTP_USER ? {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    } : undefined,
-  })
-
-  return transporter
-}
-
-// -------------------------------------------------------------
-// Send email helper
+// Internal — delegate to mailer.ts and translate shape for callers
 // -------------------------------------------------------------
 async function sendEmail(opts: {
   to: string
   subject: string
   html: string
   text: string
+  firmId?: string
+  // fromName is honored at the mailer level via EMAIL_FROM_NAME env;
+  // the brandedEmailTemplates already render firm-specific branding
+  // into the body, so per-call overrides are not needed.
   fromName?: string
-}) {
-  const fromAddress = process.env.SMTP_FROM || 'noreply@mrgovcon.com'
-  const fromHeader = opts.fromName ? `"${opts.fromName}" <${fromAddress}>` : fromAddress
+}): Promise<{ success: boolean; messageId?: string | null; error?: string }> {
+  const result: DeliveryResult = await transportSend({
+    to: opts.to,
+    subject: opts.subject,
+    textBody: opts.text,
+    htmlBody: opts.html,
+    category: 'TRANSACTIONAL',
+    consultingFirmId: opts.firmId ?? null,
+  })
 
-  const tx = getTransporter()
-  if (!tx) {
-    logger.info('Email (dev mode, not sent)', {
-      to: opts.to,
-      subject: opts.subject,
-      from: fromHeader,
-    })
+  if (result.delivered) {
+    return { success: true, messageId: result.providerMessageId }
+  }
+  if (result.devFallback) {
+    logger.info('Email (dev mode, not sent)', { to: opts.to, subject: opts.subject })
     return { success: true, messageId: 'dev-mode-not-sent' }
   }
-
-  try {
-    const info = await tx.sendMail({
-      from: fromHeader,
-      to: opts.to,
-      subject: opts.subject,
-      html: opts.html,
-      text: opts.text,
-    })
-    logger.info('Email sent', { to: opts.to, subject: opts.subject, messageId: info.messageId })
-    return { success: true, messageId: info.messageId }
-  } catch (err: any) {
-    logger.error('Email send failed', { to: opts.to, subject: opts.subject, error: err.message })
-    return { success: false, error: err.message }
-  }
+  return { success: false, error: result.error }
 }
 
 // -------------------------------------------------------------
-// Public API: Branded notifications
+// Public API: branded notifications
 // -------------------------------------------------------------
 
 export async function notifyDeliverableReady(opts: {
@@ -106,6 +74,7 @@ export async function notifyDeliverableReady(opts: {
     subject: email.subject,
     html: email.html,
     text: email.text,
+    firmId: opts.firmId,
     fromName: opts.fromName,
   })
 }
@@ -132,6 +101,7 @@ export async function notifyDeadlineApproaching(opts: {
     subject: email.subject,
     html: email.html,
     text: email.text,
+    firmId: opts.firmId,
     fromName: opts.fromName,
   })
 }
@@ -156,6 +126,7 @@ export async function notifyApprovalReceived(opts: {
     subject: email.subject,
     html: email.html,
     text: email.text,
+    firmId: opts.firmId,
     fromName: opts.fromName,
   })
 }
@@ -170,6 +141,7 @@ export async function sendCustomBrandedEmail(opts: BrandedTemplateData & {
     subject: email.subject,
     html: email.html,
     text: email.text,
+    firmId: opts.firmId,
     fromName: opts.fromName,
   })
 }

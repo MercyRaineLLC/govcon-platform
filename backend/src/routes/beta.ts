@@ -16,6 +16,7 @@ import { authenticateJWT, requireRole } from '../middleware/auth'
 import { enforceTenantScope, getTenantId } from '../middleware/tenant'
 import { AuthenticatedRequest } from '../types'
 import { ValidationError } from '../utils/errors'
+import { EmailField } from '../utils/email'
 
 const router = Router()
 
@@ -23,7 +24,7 @@ const router = Router()
 // POST /api/beta/request — public waitlist signup
 // ---------------------------------------------------------------
 const RequestSchema = z.object({
-  email: z.string().email().max(254),
+  email: EmailField.refine((s) => s.length <= 254, 'Email too long'),
   firmName: z.string().max(200).optional(),
   contactName: z.string().max(200).optional(),
   naicsFocus: z.string().max(20).optional(),

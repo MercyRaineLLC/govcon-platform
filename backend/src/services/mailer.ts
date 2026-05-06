@@ -1,25 +1,26 @@
 // =============================================================
-// Mailer — SendGrid in production, dev-log fallback otherwise.
+// Mailer — Resend in production, dev-log fallback otherwise.
 //
 // Behavior:
-//   - If SENDGRID_API_KEY is set: sends via SendGrid HTTPS API.
+//   - If RESEND_API_KEY is set: sends via Resend HTTPS API.
 //   - Else: logs the email payload to the backend logs and returns
 //     `{ delivered: false, devFallback: true }`. Dev workflow that
 //     reads the verification URL out of the response (mirroring the
 //     forgot-password pattern) keeps working unchanged.
 //
 // Env vars (set in .env.prod):
-//   SENDGRID_API_KEY  — full key, starts with "SG."
-//   EMAIL_FROM        — verified single-sender address (e.g. no-reply@mrgovcon.co)
+//   RESEND_API_KEY    — full key, starts with "re_"
+//   EMAIL_FROM        — domain-authenticated address (e.g. noreply@mrgovcon.co)
 //   EMAIL_FROM_NAME   — optional display name (default "Mr GovCon")
 //   PUBLIC_APP_URL    — base for verification / reset links
 //
-// SendGrid sender authentication: domain auth on mrgovcon.co OR
-// single-sender verification on EMAIL_FROM. Domain auth is preferred
-// (DKIM + SPF) because Gmail will otherwise mark single-sender mail
-// as suspicious. See https://docs.sendgrid.com/ui/sending-email/sender-verification
+// Resend domain authentication: add the MX/TXT/DKIM records Resend
+// issues for the EMAIL_FROM domain. Without domain auth Gmail will
+// spam-folder the message even if the API accepts it. See
+// https://resend.com/docs/dashboard/domains/introduction
 // =============================================================
 import { logger } from '../utils/logger'
+import { logAudit } from './auditService'
 
 export interface EmailMessage {
   to: string
@@ -27,6 +28,10 @@ export interface EmailMessage {
   textBody: string
   htmlBody?: string
   category?: 'EMAIL_VERIFICATION' | 'PASSWORD_RESET' | 'TRANSACTIONAL' | 'BETA_QUESTIONNAIRE'
+  // When provided and a permanent (4xx) failure occurs, an
+  // EMAIL_DELIVERY_FAILED audit row is written under this firm.
+  consultingFirmId?: string | null
+  actorUserId?: string | null
 }
 
 export interface DeliveryResult {
@@ -37,34 +42,32 @@ export interface DeliveryResult {
   error?: string
 }
 
-const SENDGRID_API = 'https://api.sendgrid.com/v3/mail/send'
+const RESEND_API = 'https://api.resend.com/emails'
 
 function getEnv() {
-  const apiKey = process.env.SENDGRID_API_KEY?.trim() || null
-  const from = process.env.EMAIL_FROM?.trim() || 'no-reply@mrgovcon.co'
+  const apiKey = process.env.RESEND_API_KEY?.trim() || null
+  const from = process.env.EMAIL_FROM?.trim() || 'noreply@mrgovcon.co'
   const fromName = process.env.EMAIL_FROM_NAME?.trim() || 'Mr GovCon'
   return { apiKey, from, fromName }
 }
 
 /**
- * Send via SendGrid v3 mail API. Retries once on transient (5xx, network)
+ * Send via Resend mail API. Retries once on transient (5xx, network)
  * failures. Returns delivered:false on permanent failure (4xx) so the
  * caller can decide whether to surface to the user.
  */
-async function sendViaSendGrid(msg: EmailMessage, apiKey: string, from: string, fromName: string): Promise<DeliveryResult> {
+async function sendViaResend(msg: EmailMessage, apiKey: string, from: string, fromName: string): Promise<DeliveryResult> {
   const body = {
-    personalizations: [{ to: [{ email: msg.to }] }],
-    from: { email: from, name: fromName },
+    from: `${fromName} <${from}>`,
+    to: [msg.to],
     subject: msg.subject,
-    content: [
-      { type: 'text/plain', value: msg.textBody },
-      ...(msg.htmlBody ? [{ type: 'text/html', value: msg.htmlBody }] : []),
-    ],
-    categories: msg.category ? [msg.category] : undefined,
+    text: msg.textBody,
+    ...(msg.htmlBody ? { html: msg.htmlBody } : {}),
+    ...(msg.category ? { tags: [{ name: 'category', value: msg.category }] } : {}),
   }
 
   const attempt = async (): Promise<{ ok: boolean; status: number; messageId: string | null; errorBody?: string }> => {
-    const res = await fetch(SENDGRID_API, {
+    const res = await fetch(RESEND_API, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -72,9 +75,9 @@ async function sendViaSendGrid(msg: EmailMessage, apiKey: string, from: string, 
       },
       body: JSON.stringify(body),
     })
-    const messageId = res.headers.get('x-message-id')
     if (res.status >= 200 && res.status < 300) {
-      return { ok: true, status: res.status, messageId }
+      const json = (await res.json().catch(() => ({}))) as { id?: string }
+      return { ok: true, status: res.status, messageId: json.id ?? null }
     }
     const errorBody = await res.text().catch(() => '')
     return { ok: false, status: res.status, messageId: null, errorBody: errorBody.slice(0, 500) }
@@ -82,23 +85,23 @@ async function sendViaSendGrid(msg: EmailMessage, apiKey: string, from: string, 
 
   try {
     let result = await attempt()
-    // Retry once on 5xx — transient SendGrid blips happen
+    // Retry once on 5xx — transient provider blips happen
     if (!result.ok && result.status >= 500) {
       await new Promise((r) => setTimeout(r, 750))
       result = await attempt()
     }
 
     if (result.ok) {
-      logger.info('Mailer (sendgrid) — delivered', {
+      logger.info('Mailer (resend) — delivered', {
         to: msg.to,
         subject: msg.subject,
         category: msg.category,
         messageId: result.messageId,
       })
-      return { delivered: true, provider: 'sendgrid', providerMessageId: result.messageId }
+      return { delivered: true, provider: 'resend', providerMessageId: result.messageId }
     }
 
-    logger.warn('Mailer (sendgrid) — failed', {
+    logger.warn('Mailer (resend) — failed', {
       to: msg.to,
       subject: msg.subject,
       status: result.status,
@@ -106,12 +109,12 @@ async function sendViaSendGrid(msg: EmailMessage, apiKey: string, from: string, 
     })
     return {
       delivered: false,
-      provider: 'sendgrid',
-      error: `sendgrid status=${result.status}: ${result.errorBody ?? ''}`,
+      provider: 'resend',
+      error: `resend status=${result.status}: ${result.errorBody ?? ''}`,
     }
   } catch (err) {
-    logger.error('Mailer (sendgrid) — exception', { error: (err as Error).message, to: msg.to })
-    return { delivered: false, provider: 'sendgrid', error: (err as Error).message }
+    logger.error('Mailer (resend) — exception', { error: (err as Error).message, to: msg.to })
+    return { delivered: false, provider: 'resend', error: (err as Error).message }
   }
 }
 
@@ -119,7 +122,7 @@ export async function sendEmail(msg: EmailMessage): Promise<DeliveryResult> {
   const { apiKey, from, fromName } = getEnv()
 
   if (!apiKey) {
-    logger.info('Mailer (dev) — would send email (SENDGRID_API_KEY not set)', {
+    logger.info('Mailer (dev) — would send email (RESEND_API_KEY not set)', {
       to: msg.to,
       subject: msg.subject,
       category: msg.category ?? 'TRANSACTIONAL',
@@ -128,7 +131,22 @@ export async function sendEmail(msg: EmailMessage): Promise<DeliveryResult> {
     return { delivered: false, devFallback: true }
   }
 
-  return sendViaSendGrid(msg, apiKey, from, fromName)
+  const result = await sendViaResend(msg, apiKey, from, fromName)
+
+  // Surface non-dev permanent failures: write an audit row so operators
+  // see "EMAIL_DELIVERY_FAILED" rows when a provider key is revoked,
+  // quota is exhausted, or a recipient is hard-bounced.
+  if (!result.delivered && msg.consultingFirmId) {
+    void logAudit({
+      consultingFirmId: msg.consultingFirmId,
+      actorUserId: msg.actorUserId ?? null,
+      action: 'EMAIL_DELIVERY_FAILED',
+      entityType: 'EmailMessage',
+      rationale: `${msg.category ?? 'TRANSACTIONAL'} to ${msg.to}: ${result.error ?? 'unknown'}`,
+    })
+  }
+
+  return result
 }
 
 /**

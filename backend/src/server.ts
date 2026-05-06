@@ -59,6 +59,7 @@ import backtestRoutes from './routes/backtest'
 import betaRoutes from './routes/beta'
 import farClausesRoutes from './routes/farClauses'
 import betaQuestionnaireRoutes from './routes/betaQuestionnaire'
+import healthAdminRoutes from './routes/health'
 import { getVerifiedCustomDomains, PLATFORM_ROOT_DOMAIN } from './services/hostResolver'
 
 async function bootstrap(): Promise<void> {
@@ -222,6 +223,7 @@ async function bootstrap(): Promise<void> {
   apiRouter.use('/admin/backtest', backtestRoutes)
   apiRouter.use('/far/clauses', farClausesRoutes)
   apiRouter.use('/beta/questionnaire', betaQuestionnaireRoutes)
+  apiRouter.use('/health', healthAdminRoutes)
   apiRouter.use('/beta', betaRoutes)
 
   app.use('/api', apiRouter)
