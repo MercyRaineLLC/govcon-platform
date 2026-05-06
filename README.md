@@ -1,6 +1,11 @@
 # MrGovCon - BANKV Engine
 ## Bid Analytics, Nexus Knowledge Vault
 ### Transporting Goods, Transforming Lives
+
+[![CI](https://github.com/MercyRaineLLC/govcon-platform/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/MercyRaineLLC/govcon-platform/actions/workflows/ci.yml)
+
+CI runs on every PR and push to main: backend typecheck + Vitest (with Postgres + Redis service containers), frontend typecheck + Vitest + production build. Branch protection on `main` requires both jobs to pass before merge.
+
 ## Installation & Operations Guide
 
 ---
