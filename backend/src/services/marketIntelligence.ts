@@ -5,10 +5,14 @@ export interface NaicsSectorTrend {
   naicsCode: string
   sector: string
   opportunityCount: number
-  avgEstimatedValue: number
+  /** Average estimatedValue across opps WITH a price; null if none have one. */
+  avgEstimatedValue: number | null
+  /** Count of opps in this sector that have an estimatedValue set. */
+  pricedOpportunityCount: number
   avgCompetitionCount: number
   avgIncumbentDominance: number
-  trend: 'growing' | 'declining' | 'stable'
+  /** "insufficient_data" when fewer than 3 months × ≥10 opps to compute a trustworthy slope. */
+  trend: 'growing' | 'declining' | 'stable' | 'insufficient_data'
 }
 
 export interface AgencyProfile {
@@ -63,14 +67,16 @@ export async function getNaicsTrends(consultingFirmId: string): Promise<NaicsSec
     const raw: {
       naics: string
       count: bigint
-      avg_value: number
+      priced_count: bigint
+      avg_value: number | null
       avg_competition: number
       avg_incumbent: number
     }[] = await prisma.$queryRaw`
       SELECT
         LEFT("naicsCode", 2) as naics,
         COUNT(*)::bigint as count,
-        COALESCE(AVG("estimatedValue"::float), 0) as avg_value,
+        COUNT("estimatedValue")::bigint as priced_count,
+        AVG("estimatedValue"::float) as avg_value,
         COALESCE(AVG("competitionCount"::float), 0) as avg_competition,
         COALESCE(AVG("incumbentProbability"::float), 0) as avg_incumbent
       FROM opportunities
@@ -115,16 +121,32 @@ export async function getNaicsTrends(consultingFirmId: string): Promise<NaicsSec
 
     return raw.map((r) => {
       const values = monthlyBySector.get(r.naics) || []
-      const slope = linearSlope(values)
-      let trend: 'growing' | 'declining' | 'stable' = 'stable'
-      if (slope > 0.5) trend = 'growing'
-      else if (slope < -0.5) trend = 'declining'
+      // Trend signal needs at least 3 monthly buckets with ≥10 opps each
+      // before we trust the slope. A single big-burst sync (e.g. one
+      // 26K-opp month followed by a partial month) otherwise reads as
+      // "declining" for every sector — false-positive that misled users.
+      const sufficientMonths = values.filter((v) => v >= 10).length
+      let trend: 'growing' | 'declining' | 'stable' | 'insufficient_data'
+      if (sufficientMonths < 3) {
+        trend = 'insufficient_data'
+      } else {
+        const slope = linearSlope(values)
+        if (slope > 0.5) trend = 'growing'
+        else if (slope < -0.5) trend = 'declining'
+        else trend = 'stable'
+      }
+
+      const pricedCount = Number(r.priced_count)
+      const avgValue = r.avg_value === null || pricedCount === 0
+        ? null
+        : Math.round(Number(r.avg_value))
 
       return {
         naicsCode: r.naics,
         sector: NAICS_SECTORS[r.naics] || 'Other',
         opportunityCount: Number(r.count),
-        avgEstimatedValue: Math.round(Number(r.avg_value)),
+        avgEstimatedValue: avgValue,
+        pricedOpportunityCount: pricedCount,
         avgCompetitionCount: Math.round(Number(r.avg_competition) * 10) / 10,
         avgIncumbentDominance: Math.round(Number(r.avg_incumbent) * 100) / 100,
         trend,

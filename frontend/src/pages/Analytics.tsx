@@ -239,6 +239,7 @@ export function AnalyticsPage() {
   const trendIcon = (trend: string) => {
     if (trend === 'growing') return <TrendingUp className="w-3.5 h-3.5 text-green-400" />
     if (trend === 'declining') return <TrendingDown className="w-3.5 h-3.5 text-red-400" />
+    if (trend === 'insufficient_data') return <Minus className="w-3.5 h-3.5 text-gray-600" />
     return <Minus className="w-3.5 h-3.5 text-gray-400" />
   }
 
@@ -350,7 +351,11 @@ export function AnalyticsPage() {
                       <span className="text-xs text-gray-500">NAICS {s.naicsCode}xx</span>
                     </div>
                     <p className="text-xs text-gray-400">
-                      {s.opportunityCount} opps · Avg {formatCurrency(s.avgEstimatedValue)} · {s.avgCompetitionCount} competitors
+                      {s.opportunityCount} opps · {
+                        s.avgEstimatedValue !== null && s.avgEstimatedValue !== undefined
+                          ? `Avg ${formatCurrency(s.avgEstimatedValue)} (${s.pricedOpportunityCount} priced)`
+                          : 'No price data'
+                      } · {s.avgCompetitionCount} competitors
                     </p>
                   </div>
                   <span
@@ -359,10 +364,13 @@ export function AnalyticsPage() {
                         ? 'bg-green-900/40 text-green-300'
                         : s.trend === 'declining'
                         ? 'bg-red-900/40 text-red-300'
+                        : s.trend === 'insufficient_data'
+                        ? 'bg-gray-800 text-gray-500'
                         : 'bg-gray-700 text-gray-400'
                     }`}
+                    title={s.trend === 'insufficient_data' ? 'Need ≥3 months with ≥10 opps each to compute a trend' : undefined}
                   >
-                    {s.trend}
+                    {s.trend === 'insufficient_data' ? 'new sync' : s.trend}
                   </span>
                 </div>
               ))}
