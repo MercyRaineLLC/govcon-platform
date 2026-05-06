@@ -4,6 +4,11 @@
 // =============================================================
 
 import 'dotenv/config'
+// Observability — Sentry must initialize before other modules import
+// so unhandled exceptions during boot are captured.
+import { initSentry, Sentry, metricsMiddleware, metricsHandler } from './config/observability'
+initSentry()
+
 import express from 'express'
 import helmet from 'helmet'
 import cors from 'cors'
@@ -164,6 +169,13 @@ async function bootstrap(): Promise<void> {
   )
 
   // -------------------------------------------------------------
+  // Observability — must run early so all routes are observed.
+  // /metrics serves Prometheus exposition; Sentry auto-instruments.
+  // -------------------------------------------------------------
+  app.use(metricsMiddleware)
+  app.get('/metrics', metricsHandler)
+
+  // -------------------------------------------------------------
   // Health Check
   // -------------------------------------------------------------
   app.get('/health', async (_req, res) => {
@@ -231,6 +243,11 @@ async function bootstrap(): Promise<void> {
   // -------------------------------------------------------------
   // Error Handling
   // -------------------------------------------------------------
+  // Sentry's Express integration — captures errors thrown in any
+  // route + logs them with request context. No-op when SENTRY_DSN
+  // is unset. Must come BEFORE the app's errorHandler so Sentry
+  // sees the error before the response is sent.
+  Sentry.setupExpressErrorHandler(app)
   app.use(notFoundHandler)
   app.use(errorHandler)
 

@@ -3,9 +3,21 @@ import React from "react"
 import ReactDOM from "react-dom/client"
 import { BrowserRouter } from "react-router-dom"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import * as Sentry from "@sentry/react"
 import { AuthProvider } from "./hooks/useAuth"
 import { ToastProvider } from "./components/Toast"
 import App from "./App"
+
+// Sentry — enabled when VITE_SENTRY_DSN is set, no-op otherwise.
+const sentryDsn = (import.meta as any).env?.VITE_SENTRY_DSN
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: (import.meta as any).env?.MODE || 'development',
+    tracesSampleRate: 0.1,
+    integrations: [Sentry.browserTracingIntegration()],
+  })
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
