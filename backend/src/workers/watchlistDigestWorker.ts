@@ -4,11 +4,11 @@
 // For each firm with watchlist entries, sends a single digest email
 // summarizing recent BigQuery activity for the watched NAICS / agencies.
 // =============================================================
-import nodemailer from 'nodemailer'
 import { Worker, Queue, Job } from 'bullmq'
 import { redis } from '../config/redis'
 import { prisma } from '../config/database'
 import { logger } from '../utils/logger'
+import { sendEmail } from '../services/mailer'
 import { getCompetitionProfile, getAgencyProfile } from '../services/bigquery/analyticsService'
 import { renderWatchlistDigestEmail, DigestRow } from '../services/watchlistDigestEmail'
 
@@ -72,37 +72,26 @@ function formatBigDollars(n: number): string {
   return `$${Math.round(n)}`
 }
 
-let mailer: nodemailer.Transporter | null = null
-function getMailer(): nodemailer.Transporter | null {
-  if (mailer) return mailer
-  const host = process.env.SMTP_HOST
-  if (!host) return null
-  mailer = nodemailer.createTransport({
-    host,
-    port: parseInt(process.env.SMTP_PORT || '587', 10),
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined,
-  })
-  return mailer
-}
-
-async function sendDigestEmail(opts: { to: string; firmName: string; subject: string; html: string; text: string }) {
-  const tx = getMailer()
-  const fromAddress = process.env.SMTP_FROM || 'noreply@mrgovcon.co'
-  if (!tx) {
-    logger.warn('SMTP not configured — digest email logged instead', {
-      to: opts.to, subject: opts.subject, firmName: opts.firmName,
-    })
-    return
-  }
-  await tx.sendMail({
-    from: `"${opts.firmName}" <${fromAddress}>`,
+async function sendDigestEmail(opts: { to: string; firmId: string; firmName: string; subject: string; html: string; text: string }) {
+  const result = await sendEmail({
     to: opts.to,
     subject: opts.subject,
-    html: opts.html,
-    text: opts.text,
+    htmlBody: opts.html,
+    textBody: opts.text,
+    category: 'TRANSACTIONAL',
+    consultingFirmId: opts.firmId,
   })
-  logger.info('Digest email sent', { to: opts.to, subject: opts.subject })
+  if (result.delivered) {
+    logger.info('Digest email sent', { to: opts.to, subject: opts.subject, messageId: result.providerMessageId })
+  } else if (result.devFallback) {
+    logger.warn('Mailer not configured — digest email logged instead', {
+      to: opts.to, subject: opts.subject, firmName: opts.firmName,
+    })
+  } else {
+    logger.error('Watchlist digest email failed', {
+      to: opts.to, firmId: opts.firmId, error: result.error,
+    })
+  }
 }
 
 async function runWatchlistDigest(): Promise<void> {
@@ -142,10 +131,11 @@ async function runWatchlistDigest(): Promise<void> {
         appUrl,
       })
 
-      // Send (or log if SMTP not configured)
+      // Send (or log if mailer not configured)
       if (firm.contactEmail) {
         await sendDigestEmail({
           to: firm.contactEmail,
+          firmId: firm.id,
           firmName: firm.name,
           subject,
           html,

@@ -18,7 +18,7 @@
 import { Queue, Worker } from 'bullmq'
 import { logger } from '../utils/logger'
 import { config } from '../config/config'
-import nodemailer from 'nodemailer'
+import { sendEmail } from '../services/mailer'
 
 const QUEUE_NAME = 'stripe-webhook-rotation'
 const WARN_AT_DAYS = 75    // first reminder at day 75
@@ -41,25 +41,12 @@ const connection = parseRedisUrl(config.redis.url)
 
 const queue = new Queue(QUEUE_NAME, { connection })
 
-// -------------------------------------------------------------
-// Local SMTP transport. Doesn't go through brandedEmailTemplates
-// because this is platform-operator email, not tenant-facing.
-// -------------------------------------------------------------
-function getTransporter(): nodemailer.Transporter | null {
-  const host = process.env.SMTP_HOST
-  const user = process.env.SMTP_USER
-  const pass = process.env.SMTP_PASS
-  if (!host || !user || !pass) return null
-  return nodemailer.createTransport({
-    host,
-    port: parseInt(process.env.SMTP_PORT || '587', 10),
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: { user, pass },
-  })
-}
+// Platform-operator email (not tenant-facing) — flows through the
+// shared Resend mailer; brandedEmailTemplates is intentionally skipped
+// because this is for ops, not customers.
 
 function getAdminEmail(): string | null {
-  return process.env.PLATFORM_ADMIN_EMAIL || process.env.SMTP_FROM || null
+  return process.env.PLATFORM_ADMIN_EMAIL || process.env.EMAIL_FROM || null
 }
 
 // -------------------------------------------------------------
@@ -121,36 +108,33 @@ async function sendRotationReminder(ageDays: number, urgent: boolean) {
   const text = lines.join('\n')
   const html = `<pre style="font-family: monospace; line-height: 1.5;">${text.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</pre>`
 
-  const tx = getTransporter()
-  if (!tx) {
-    logger.info('Stripe rotation reminder (dev mode, not sent)', { to: adminEmail, subject, ageDays })
-    return { sent: true, mode: 'dev' }
-  }
+  const result = await sendEmail({
+    to: adminEmail,
+    subject,
+    textBody: text,
+    htmlBody: html,
+    category: 'TRANSACTIONAL',
+  })
 
-  try {
-    const fromAddress = process.env.SMTP_FROM || 'noreply@mrgovcon.com'
-    const info = await tx.sendMail({
-      from: `"MrGovCon Platform Ops" <${fromAddress}>`,
-      to: adminEmail,
-      subject,
-      text,
-      html,
-    })
+  if (result.delivered) {
     logger.info('Stripe webhook rotation reminder sent', {
       to: adminEmail,
       ageDays,
       urgent,
-      messageId: info.messageId,
+      messageId: result.providerMessageId,
     })
-    return { sent: true, messageId: info.messageId }
-  } catch (err: any) {
-    logger.error('Stripe webhook rotation reminder failed to send', {
-      to: adminEmail,
-      ageDays,
-      error: err.message,
-    })
-    return { sent: false, error: err.message }
+    return { sent: true, messageId: result.providerMessageId }
   }
+  if (result.devFallback) {
+    logger.info('Stripe rotation reminder (dev mode, not sent)', { to: adminEmail, subject, ageDays })
+    return { sent: true, mode: 'dev' }
+  }
+  logger.error('Stripe webhook rotation reminder failed to send', {
+    to: adminEmail,
+    ageDays,
+    error: result.error,
+  })
+  return { sent: false, error: result.error }
 }
 
 // -------------------------------------------------------------
