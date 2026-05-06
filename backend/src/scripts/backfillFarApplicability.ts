@@ -55,10 +55,8 @@ async function processInBatches<T>(
 async function main() {
   const args = parseArgs()
 
-  // Prisma 5.22 rejects { not: null } on this field — use top-level NOT.
-  // Also filter empty strings so opps with NAICS '' don't get picked up.
+  // naicsCode is non-nullable in the schema; just drop opps that have ''.
   const where: any = {
-    NOT: { naicsCode: null },
     naicsCode: { not: '' },
   }
   if (args.firmId) where.consultingFirmId = args.firmId
