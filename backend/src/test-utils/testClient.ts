@@ -30,6 +30,7 @@ import stripeWebhookRoutes from '../routes/stripeWebhook'
 import betaRoutes from '../routes/beta'
 import submissionRoutes from '../routes/submissions'
 import healthAdminRoutes from '../routes/health'
+import { metricsMiddleware, metricsHandler } from '../config/observability'
 
 export function buildTestApp(): Express {
   const app = express()
@@ -42,6 +43,10 @@ export function buildTestApp(): Express {
   app.use('/api/webhooks', stripeWebhookRoutes)
 
   app.use(express.json({ limit: '10mb' }))
+
+  // Observability — same as production server
+  app.use(metricsMiddleware)
+  app.get('/metrics', metricsHandler)
 
   app.get('/health', (_req, res) => res.json({ status: 'healthy' }))
 
