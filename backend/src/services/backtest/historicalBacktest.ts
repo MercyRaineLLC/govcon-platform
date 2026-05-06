@@ -48,7 +48,7 @@ interface SyntheticProfile {
 }
 
 /** Produces up to `count` deliberately-mismatched profiles for a given award. */
-function buildSyntheticNegatives(
+export function buildSyntheticNegatives(
   awardNaics: string,
   winner: SyntheticProfile,
   count: number,

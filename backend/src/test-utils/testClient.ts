@@ -28,6 +28,8 @@ import clientPortalRoutes from '../routes/clientPortal'
 import complianceMatrixRoutes from '../routes/complianceMatrix'
 import stripeWebhookRoutes from '../routes/stripeWebhook'
 import betaRoutes from '../routes/beta'
+import submissionRoutes from '../routes/submissions'
+import healthAdminRoutes from '../routes/health'
 
 export function buildTestApp(): Express {
   const app = express()
@@ -54,6 +56,8 @@ export function buildTestApp(): Express {
   apiRouter.use('/client-portal', clientPortalRoutes)
   apiRouter.use('/compliance-matrix', complianceMatrixRoutes)
   apiRouter.use('/beta', betaRoutes)
+  apiRouter.use('/submissions', submissionRoutes)
+  apiRouter.use('/health', healthAdminRoutes)
   app.use('/api', apiRouter)
 
   app.use(notFoundHandler)
