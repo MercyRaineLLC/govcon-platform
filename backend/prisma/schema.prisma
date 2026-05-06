@@ -547,17 +547,23 @@ model IngestionJob {
 //////////////////////////////////////////////////////////////
 
 model SubmissionRecord {
-  id               String           @id @default(uuid())
-  consultingFirmId String
-  clientCompanyId  String
-  opportunityId    String
-  submittedById    String?
-  submittedAt      DateTime?
-  wasOnTime        Boolean          @default(true)
-  penaltyAmount    Decimal          @default(0) @db.Decimal(14, 2)
-  notes            String?
-  status           ComplianceStatus @default(PENDING)
-  createdAt        DateTime         @default(now())
+  id                String             @id @default(uuid())
+  consultingFirmId  String
+  clientCompanyId   String
+  opportunityId     String
+  submittedById     String?
+  submittedAt       DateTime?
+  wasOnTime         Boolean            @default(true)
+  penaltyAmount     Decimal            @default(0) @db.Decimal(14, 2)
+  notes             String?
+  status            ComplianceStatus   @default(PENDING)
+  // Outcome tracking — set when the agency announces the award (or the
+  // bid is withdrawn). Drives win-rate KPIs and feeds the calibration
+  // backtest's real-bid label source (replaces synthetic negatives).
+  outcome           SubmissionOutcome?
+  outcomeRecordedAt DateTime?
+  outcomeNotes      String?
+  createdAt         DateTime           @default(now())
 
   consultingFirm     ConsultingFirm     @relation(fields: [consultingFirmId], references: [id], onDelete: Cascade)
   clientCompany      ClientCompany      @relation(fields: [clientCompanyId], references: [id], onDelete: Cascade)
@@ -567,7 +573,15 @@ model SubmissionRecord {
 
   @@index([consultingFirmId])
   @@index([clientCompanyId])
+  @@index([outcome])
   @@map("submission_records")
+}
+
+enum SubmissionOutcome {
+  WON           // award notice received, our bid won
+  LOST          // award notice received, awarded to a competitor
+  NO_AWARD      // solicitation cancelled or no award made
+  WITHDRAWN     // we withdrew the bid before evaluation
 }
 
 //////////////////////////////////////////////////////////////

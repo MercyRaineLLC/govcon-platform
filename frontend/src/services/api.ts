@@ -195,6 +195,7 @@ export const clientsApi = {
 };
 
 // ---- Submissions ----
+export type SubmissionOutcome = 'WON' | 'LOST' | 'NO_AWARD' | 'WITHDRAWN';
 export const submissionsApi = {
   list: (params?: any) =>
     api.get('/submissions', { params }).then((r) => r.data),
@@ -202,6 +203,8 @@ export const submissionsApi = {
     api.post('/submissions', data).then((r) => r.data),
   getById: (id: string) =>
     api.get(`/submissions/${id}`).then((r) => r.data),
+  recordOutcome: (id: string, outcome: SubmissionOutcome, notes?: string) =>
+    api.patch(`/submissions/${id}/outcome`, { outcome, notes }).then((r) => r.data),
 };
 
 // ---- Penalties ----

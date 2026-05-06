@@ -18,6 +18,7 @@ import {
   ComplianceStatus,
 } from '../services/complianceStateMachine';
 import { logger } from '../utils/logger';
+import { logAudit } from '../services/auditService';
 
 const router = Router();
 router.use(authenticateJWT, enforceTenantScope);
@@ -227,6 +228,76 @@ router.patch(
       }
 
       res.json({ success: true, data: { id: req.params.id, status } });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+/**
+ * PATCH /api/submissions/:id/outcome  (ADMIN only)
+ * Record the post-evaluation result of a submission. Drives win-rate
+ * KPIs and provides labels for the calibration backtest's real-bid
+ * source. Idempotent — re-recording overwrites prior outcome.
+ */
+const OutcomeSchema = z.object({
+  outcome: z.enum(['WON', 'LOST', 'NO_AWARD', 'WITHDRAWN']),
+  notes: z.string().max(2000).optional(),
+});
+
+router.patch(
+  '/:id/outcome',
+  requireRole('ADMIN'),
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const consultingFirmId = getTenantId(req);
+      const { outcome, notes } = OutcomeSchema.parse(req.body);
+
+      const submission = await prisma.submissionRecord.findFirst({
+        where: { id: req.params.id, consultingFirmId },
+        select: { id: true, clientCompanyId: true, outcome: true },
+      });
+      if (!submission) throw new NotFoundError('Submission record');
+
+      const updated = await prisma.submissionRecord.update({
+        where: { id: req.params.id },
+        data: {
+          outcome,
+          outcomeRecordedAt: new Date(),
+          outcomeNotes: notes ?? null,
+        },
+        select: { id: true, outcome: true, outcomeRecordedAt: true, clientCompanyId: true },
+      });
+
+      void logAudit({
+        consultingFirmId,
+        actorUserId: req.user?.userId ?? null,
+        action: 'UPDATE',
+        entityType: 'SubmissionRecord',
+        entityId: updated.id,
+        rationale: `Outcome ${submission.outcome ?? 'unset'} → ${outcome}${notes ? `: ${notes.slice(0, 200)}` : ''}`,
+        sourceIp: req.ip ?? null,
+        userAgent: req.get('user-agent') ?? null,
+      });
+
+      // Recalculate the client's win-rate KPIs now that outcome changed.
+      try {
+        await recalculateClientStats(updated.clientCompanyId, consultingFirmId);
+      } catch (statsErr) {
+        logger.warn('PerformanceStats recalc failed after outcome change', {
+          submissionId: updated.id,
+          error: (statsErr as Error).message,
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          id: updated.id,
+          outcome: updated.outcome,
+          outcomeRecordedAt: updated.outcomeRecordedAt,
+        },
+      });
     } catch (err) {
       next(err);
     }
