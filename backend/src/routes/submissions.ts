@@ -251,7 +251,13 @@ router.patch(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const consultingFirmId = getTenantId(req);
-      const { outcome, notes } = OutcomeSchema.parse(req.body);
+      // Use safeParse + explicit ValidationError so the global handler
+      // returns 422 instead of treating raw ZodError as 500.
+      const parsed = OutcomeSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new ValidationError(parsed.error.errors[0]?.message ?? 'Invalid outcome payload');
+      }
+      const { outcome, notes } = parsed.data;
 
       const submission = await prisma.submissionRecord.findFirst({
         where: { id: req.params.id, consultingFirmId },
