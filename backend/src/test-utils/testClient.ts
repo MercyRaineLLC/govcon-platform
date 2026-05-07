@@ -44,9 +44,10 @@ export function buildTestApp(): Express {
 
   app.use(express.json({ limit: '10mb' }))
 
-  // Observability — same as production server
+  // Observability — same as production server (mounted under /api/
+  // so reverse-proxy routing works in prod)
   app.use(metricsMiddleware)
-  app.get('/metrics', metricsHandler)
+  app.get('/api/metrics', metricsHandler)
 
   app.get('/health', (_req, res) => res.json({ status: 'healthy' }))
 

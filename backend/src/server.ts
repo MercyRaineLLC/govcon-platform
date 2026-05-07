@@ -170,10 +170,12 @@ async function bootstrap(): Promise<void> {
 
   // -------------------------------------------------------------
   // Observability — must run early so all routes are observed.
-  // /metrics serves Prometheus exposition; Sentry auto-instruments.
+  // Metrics endpoint mounted under /api/ so Caddy/nginx forward
+  // it to the backend (root-level paths fall through to the SPA).
+  // Sentry auto-instruments errors.
   // -------------------------------------------------------------
   app.use(metricsMiddleware)
-  app.get('/metrics', metricsHandler)
+  app.get('/api/metrics', metricsHandler)
 
   // -------------------------------------------------------------
   // Health Check
